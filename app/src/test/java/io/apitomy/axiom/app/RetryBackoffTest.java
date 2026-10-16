@@ -7,9 +7,6 @@ import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
-import io.apitomy.axiom.manager.ManagerDecision;
-import io.apitomy.axiom.manager.ManagerEvaluationResult;
-import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
@@ -52,7 +49,7 @@ class RetryBackoffTest {
     AgentPool agentPool;
 
     @InjectMock
-    ManagerService managerService;
+    WorkflowEventDispatcher workflowEventDispatcher;
 
     @InjectMock
     SubscriptionFilterEvaluator filterEvaluator;
@@ -64,10 +61,8 @@ class RetryBackoffTest {
 
     @BeforeEach
     void setUp() {
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
-        Mockito.when(managerService.meetsConfidenceThreshold(ArgumentMatchers.any()))
-                .thenReturn(true);
         Mockito.when(filterEvaluator.matches(ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(true);
     }
@@ -89,7 +84,7 @@ class RetryBackoffTest {
 
     @Test
     void oneTickAttemptsANewEntryOnlyOnce() {
-        failManager();
+        failRouting();
         UUID eventId = createEventAndSubscription();
         Instant before = Instant.now();
 
@@ -107,7 +102,7 @@ class RetryBackoffTest {
 
     @Test
     void entryIsNotRetriedBeforeNextAttemptAt() {
-        failManager();
+        failRouting();
         UUID eventId = createEventAndSubscription();
         orchestrator.processNewEvents();
         orchestrator.processNewEvents();
@@ -138,7 +133,7 @@ class RetryBackoffTest {
 
     @Test
     void entryIsExhaustedAtTheCap() {
-        failManager();
+        failRouting();
         UUID eventId = createEventAndSubscription();
 
         for (int i = 0; i < 6; i++) {
@@ -207,14 +202,11 @@ class RetryBackoffTest {
 
     @Test
     void attemptNumbersAreRecordedOnOutcomesAndExposedByTheApi() {
-        failManager();
+        failRouting();
         UUID eventId = createEventAndSubscription();
         orchestrator.processNewEvents();
         makeDue();
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(ManagerEvaluationResult.success(List.of(
-                        new ManagerDecision("ignore", null, null, null, 0.9, "fine", null, null)),
-                        null));
+        succeedRouting();
         orchestrator.processNewEvents();
 
         List<RoutingOutcomeEntity> outcomes = outcomes();
@@ -244,7 +236,7 @@ class RetryBackoffTest {
 
     @Test
     void failedEntryExposesItsNextAttemptInTheApi() {
-        failManager();
+        failRouting();
         UUID eventId = createEventAndSubscription();
         orchestrator.processNewEvents();
 
@@ -261,7 +253,7 @@ class RetryBackoffTest {
 
     @Test
     void manualRetryAllowsOneMoreAttemptOfAnExhaustedEntry() {
-        failManager();
+        failRouting();
         UUID eventId = createEventAndSubscription();
         for (int i = 0; i < 4; i++) {
             orchestrator.processNewEvents();
@@ -294,7 +286,7 @@ class RetryBackoffTest {
 
     @Test
     void manualRetryCanSucceed() {
-        failManager();
+        failRouting();
         UUID eventId = createEventAndSubscription();
         for (int i = 0; i < 4; i++) {
             orchestrator.processNewEvents();
@@ -304,8 +296,7 @@ class RetryBackoffTest {
         given().when()
                 .post("/api/v1/stream/events/" + eventId + "/processing/" + ledgerId + "/retry")
                 .then().statusCode(200);
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(ManagerEvaluationResult.success(List.of(), null));
+        succeedRouting();
 
         orchestrator.processNewEvents();
 
@@ -314,8 +305,7 @@ class RetryBackoffTest {
 
     @Test
     void manualRetryRejectsEntriesThatAreNotFailedOrExhausted() {
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(ManagerEvaluationResult.success(List.of(), null));
+        succeedRouting();
         UUID eventId = createEventAndSubscription();
         orchestrator.processNewEvents();
         Long ledgerId = ledger(eventId).id;
@@ -346,8 +336,7 @@ class RetryBackoffTest {
             entry.createdOn = Instant.now().minusSeconds(300);
             entry.persist();
         });
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(ManagerEvaluationResult.success(List.of(), null));
+        succeedRouting();
         Object bean = ClientProxy.unwrap(orchestrator);
         Field field = EventStreamOrchestrator.class.getDeclaredField("startupRecoveryDone");
         field.setAccessible(true);
@@ -471,9 +460,16 @@ class RetryBackoffTest {
         actor.join(10000);
     }
 
-    private void failManager() {
-        Mockito.when(managerService.evaluateStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any()))
-                .thenReturn(ManagerEvaluationResult.failure("still broken", null));
+    private void failRouting() {
+        Mockito.doThrow(new IllegalStateException("still broken")).when(workflowEventDispatcher)
+                .dispatchStreamEvent(ArgumentMatchers.any(), ArgumentMatchers.any(),
+                        ArgumentMatchers.any());
+    }
+
+    private void succeedRouting() {
+        // doReturn: when(...) would invoke a method currently stubbed to throw
+        Mockito.doReturn(List.of()).when(workflowEventDispatcher).dispatchStreamEvent(
+                ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any());
     }
 
     /** Moves the next attempt of every waiting entry into the past. */
@@ -484,8 +480,8 @@ class RetryBackoffTest {
     }
 
     private long evaluationCalls() {
-        return Mockito.mockingDetails(managerService).getInvocations().stream()
-                .filter(i -> i.getMethod().getName().equals("evaluateStreamEvent"))
+        return Mockito.mockingDetails(workflowEventDispatcher).getInvocations().stream()
+                .filter(i -> i.getMethod().getName().equals("dispatchStreamEvent"))
                 .count();
     }
 
@@ -502,7 +498,7 @@ class RetryBackoffTest {
             event.id = eventId;
             event.sourceEventId = "retry-" + eventId;
             event.source = "github";
-            event.connectionId = "conn-retry";
+            event.eventSourceId = "conn-retry";
             event.type = "issue.created";
             event.ref = "https://github.com/test-org/retry/issues/" + eventId;
             event.timestamp = Instant.now();
@@ -514,7 +510,7 @@ class RetryBackoffTest {
             EventSubscriptionEntity sub = new EventSubscriptionEntity();
             sub.name = "retry-" + eventId;
             sub.enabled = true;
-            sub.routing = "[{\"type\":\"manager\"}]";
+            sub.routing = "[{\"type\":\"workflow-dispatch\"}]";
             sub.createdOn = Instant.now();
             sub.modifiedOn = Instant.now();
             sub.persist();

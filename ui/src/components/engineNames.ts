@@ -15,7 +15,7 @@ const ENGINE_COLORS: Record<string, EngineLabelColor> = {
 
 /**
  * Returns the badge colour for an AI engine id, so each engine is recognisable at a glance.
- * The colours avoid those already used next to engine badges (status, plan mode, project, model).
+ * The colours avoid those already used next to engine badges (status, plan mode, subject, model).
  *
  * @param engine the engine id (e.g. `claude-code`, `opencode`)
  * @returns the label colour; `grey` for unknown or empty engines

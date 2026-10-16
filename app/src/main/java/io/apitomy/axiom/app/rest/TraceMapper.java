@@ -24,8 +24,7 @@ final class TraceMapper {
         bean.setStatus(entity.status);
         bean.setSummary(entity.summary);
         bean.setEventId(entity.eventId);
-        bean.setProjectId(entity.projectId);
-        bean.setReportId(entity.reportId);
+        bean.setSubjectId(entity.subjectId);
         bean.setStartedOn(Date.from(entity.startedOn));
         if (entity.completedOn != null) {
             bean.setCompletedOn(Date.from(entity.completedOn));

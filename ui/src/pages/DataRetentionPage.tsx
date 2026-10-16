@@ -31,18 +31,6 @@ const HISTORY_FIELDS: {
     help: string;
 }[] = [
     {
-        field: "scheduledJobRunRetentionDays",
-        id: "job-run-retention",
-        label: "Scheduled job runs",
-        help: "Days to retain finished scheduled job runs.",
-    },
-    {
-        field: "reportRetentionDays",
-        id: "report-retention",
-        label: "Reports",
-        help: "Days to retain finished reports.",
-    },
-    {
         field: "workflowRunRetentionDays",
         id: "workflow-run-retention",
         label: "Workflow runs",
@@ -149,23 +137,23 @@ export function DataRetentionPage() {
             </p>
 
             <Form style={{ maxWidth: "600px" }}>
-                <FormGroup label="Closed projects" fieldId="closed-project-retention">
+                <FormGroup label="Inactive subjects" fieldId="inactive-subject-retention">
                     <NumberInput
-                        id="closed-project-retention"
-                        value={config.closedProjectRetentionDays ?? 90}
+                        id="inactive-subject-retention"
+                        value={config.inactiveSubjectRetentionDays ?? 90}
                         min={1}
-                        onMinus={() => updateField("closedProjectRetentionDays",
-                            (config.closedProjectRetentionDays ?? 90) - 1)}
-                        onPlus={() => updateField("closedProjectRetentionDays",
-                            (config.closedProjectRetentionDays ?? 90) + 1)}
-                        onChange={(event) => updateField("closedProjectRetentionDays",
+                        onMinus={() => updateField("inactiveSubjectRetentionDays",
+                            (config.inactiveSubjectRetentionDays ?? 90) - 1)}
+                        onPlus={() => updateField("inactiveSubjectRetentionDays",
+                            (config.inactiveSubjectRetentionDays ?? 90) + 1)}
+                        onChange={(event) => updateField("inactiveSubjectRetentionDays",
                             Number((event.target as HTMLInputElement).value))}
                         widthChars={4}
                     />
                     <FormHelperText>
                         <HelperText>
                             <HelperTextItem>
-                                Days to retain closed projects before automatic deletion.
+                                Days to retain a subject after its last workflow run completed (with no run still active) before automatic deletion.
                             </HelperTextItem>
                         </HelperText>
                     </FormHelperText>

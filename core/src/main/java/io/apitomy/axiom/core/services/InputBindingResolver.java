@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -83,6 +84,76 @@ public final class InputBindingResolver {
             return mapper.writeValueAsString(value);
         } catch (Exception ex) {
             LOG.debug("Failed to serialize input value to JSON, using toString()");
+            return String.valueOf(value);
+        }
+    }
+
+    /**
+     * Builds the "## Inputs" prompt section listing every declared input that has a value, in declaration
+     * order. Strings are rendered as-is, numbers and booleans as text, objects and arrays as pretty JSON in a
+     * fenced block. Returns an empty string when no declared input has a value.
+     *
+     * @param inputs declared inputs (may be null)
+     * @param values resolved input values by name
+     * @param mapper object mapper used for JSON rendering
+     * @return the section text, or "" when empty
+     */
+    public static String buildInputsSection(List<ActionTypeField> inputs, Map<String, Object> values,
+                                            ObjectMapper mapper) {
+        if (inputs == null || values == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (ActionTypeField f : inputs) {
+            Object value = values.get(f.name);
+            if (value == null) {
+                continue;
+            }
+            sb.append("- **").append(f.name).append("** (").append(f.type).append(")");
+            if (f.description != null && !f.description.isBlank()) {
+                sb.append(" — ").append(f.description);
+            }
+            sb.append("\n");
+            if (value instanceof Map || value instanceof Collection || value.getClass().isArray()) {
+                sb.append("  ```json\n");
+                prettyJson(value, mapper).lines()
+                        .forEach(line -> sb.append("  ").append(line).append("\n"));
+                sb.append("  ```\n");
+            } else {
+                sb.append("  ").append(String.valueOf(value)).append("\n");
+            }
+        }
+        return sb.isEmpty() ? "" : "## Inputs\n" + sb;
+    }
+
+    /**
+     * Returns the names of required declared inputs that have no value (absent, null or a blank string).
+     *
+     * @param inputs declared inputs (may be null)
+     * @param values resolved input values by name
+     * @return missing required input names, in declaration order
+     */
+    public static List<String> missingRequiredInputs(List<ActionTypeField> inputs, Map<String, Object> values) {
+        if (inputs == null) {
+            return List.of();
+        }
+        return inputs.stream()
+                .filter(f -> f.required)
+                .filter(f -> values == null || isAbsent(values.get(f.name)))
+                .map(f -> f.name)
+                .toList();
+    }
+
+    /** A value is absent when it is null or a blank string (e.g. an empty context key mapped onto the input). */
+    private static boolean isAbsent(Object value) {
+        return value == null || (value instanceof String text && text.isBlank());
+    }
+
+    private static String prettyJson(Object value, ObjectMapper mapper) {
+        try {
+            return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(value);
+        } catch (Exception ex) {
+            LOG.debug("Failed to pretty-print input value as JSON, using toString()");
             return String.valueOf(value);
         }
     }

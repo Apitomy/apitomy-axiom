@@ -8,9 +8,7 @@ import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -69,7 +67,7 @@ class TraceCleanupTest {
                     .firstResult();
             if (config == null) {
                 config = new RetentionConfigEntity();
-                config.closedProjectRetentionDays = 30;
+                config.inactiveSubjectRetentionDays = 30;
                 config.eventRetentionDays = 30;
                 config.traceRetentionDays = 30;
                 config.persist();
@@ -116,65 +114,6 @@ class TraceCleanupTest {
         });
     }
 
-    @Test
-    void cleanupClearsTriggeringTraceReferences() {
-        UUID traceId = UUID.randomUUID();
-        Long[] ids = new Long[2];
-
-        QuarkusTransaction.requiringNew().run(() -> {
-            RetentionConfigEntity config = RetentionConfigEntity.<RetentionConfigEntity>findAll()
-                    .firstResult();
-            if (config == null) {
-                config = new RetentionConfigEntity();
-                config.closedProjectRetentionDays = 30;
-                config.eventRetentionDays = 30;
-                config.traceRetentionDays = 30;
-                config.persist();
-            }
-            originalRetentionDays = config.traceRetentionDays;
-            config.traceRetentionDays = 1;
-
-            TraceEntity trace = new TraceEntity();
-            trace.traceId = traceId;
-            trace.traceType = "test";
-            trace.status = "completed";
-            trace.summary = "trigger-cleanup-" + traceId;
-            trace.startedOn = Instant.now().minus(5, ChronoUnit.DAYS);
-            trace.persist();
-
-            ScheduledJobRunEntity run = new ScheduledJobRunEntity();
-            run.jobId = -1L;
-            run.status = "Completed";
-            run.trigger = "manual";
-            run.triggeredBy = "manual";
-            run.triggeredByTraceId = traceId;
-            run.createdOn = Instant.now();
-            run.persist();
-            ids[0] = run.id;
-
-            ReportEntity report = new ReportEntity();
-            report.definitionId = -1L;
-            report.status = "Completed";
-            report.trigger = "manual";
-            report.triggeredBy = "manual";
-            report.triggeredByTraceId = traceId;
-            report.createdOn = Instant.now();
-            report.persist();
-            ids[1] = report.id;
-        });
-
-        QuarkusTransaction.requiringNew().run(() -> traceCleanup.doCleanup());
-
-        QuarkusTransaction.requiringNew().run(() -> {
-            ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(ids[0]);
-            ReportEntity report = ReportEntity.findById(ids[1]);
-            assertNull(run.triggeredByTraceId);
-            assertNull(report.triggeredByTraceId);
-            run.delete();
-            report.delete();
-        });
-    }
-
     /**
      * Every column (as {@code table.column}) that references a trace or a trace node, and how
      * {@link TraceCleanup} handles it. Adding a new trace column to an entity makes
@@ -188,10 +127,6 @@ class TraceCleanupTest {
             "tool_execution.trace_id",
             // Cleared (set to null) when the trace is deleted.
             "task.trace_id",
-            "scheduled_job_run.trace_id",
-            "scheduled_job_run.triggered_by_trace_id",
-            "report.trace_id",
-            "report.triggered_by_trace_id",
             "activity_log.trace_id",
             "ai_usage.trace_id",
             "workflow_run.trace_id",
@@ -227,7 +162,7 @@ class TraceCleanupTest {
     @Test
     void cleanupClearsRunOutcomeAndTaskTraceReferences() {
         UUID traceId = UUID.randomUUID();
-        Long[] ids = new Long[7];
+        Long[] ids = new Long[5];
 
         QuarkusTransaction.requiringNew().run(() -> {
             shortenTraceRetention();
@@ -242,7 +177,8 @@ class TraceCleanupTest {
             node.persist();
 
             WorkflowRunEntity run = new WorkflowRunEntity();
-            run.projectId = -1L;
+            run.title = "Test run";
+            run.subjectId = -1L;
             run.definitionId = -1L;
             run.definitionVersion = 1;
             run.instanceState = "{}";
@@ -254,7 +190,7 @@ class TraceCleanupTest {
 
             RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
             outcome.ledgerId = -1L;
-            outcome.routingType = "manager";
+            outcome.routingType = "workflow-dispatch";
             outcome.status = "succeeded";
             outcome.traceId = traceId;
             outcome.createdOn = Instant.now();
@@ -280,7 +216,7 @@ class TraceCleanupTest {
             ids[3] = resume.id;
 
             TaskEntity task = new TaskEntity();
-            task.projectId = -1L;
+            task.subjectId = -1L;
             task.actionType = "test";
             task.createdBy = "test";
             task.status = "Completed";
@@ -288,23 +224,6 @@ class TraceCleanupTest {
             task.createdOn = Instant.now();
             task.persist();
             ids[4] = task.id;
-
-            ScheduledJobRunEntity jobRun = new ScheduledJobRunEntity();
-            jobRun.jobId = -1L;
-            jobRun.status = "Completed";
-            jobRun.trigger = "manual";
-            jobRun.traceId = traceId;
-            jobRun.createdOn = Instant.now();
-            jobRun.persist();
-            ids[5] = jobRun.id;
-
-            ReportEntity report = new ReportEntity();
-            report.definitionId = -1L;
-            report.status = "Completed";
-            report.traceId = traceId;
-            report.createdOn = Instant.now();
-            report.persist();
-            ids[6] = report.id;
         });
 
         QuarkusTransaction.requiringNew().run(() -> traceCleanup.doCleanup());
@@ -316,22 +235,16 @@ class TraceCleanupTest {
             RoutingOutcomeItemEntity item = RoutingOutcomeItemEntity.findById(ids[2]);
             WorkflowRunResumeEntity resume = WorkflowRunResumeEntity.findById(ids[3]);
             TaskEntity task = TaskEntity.findById(ids[4]);
-            ScheduledJobRunEntity jobRun = ScheduledJobRunEntity.findById(ids[5]);
-            ReportEntity report = ReportEntity.findById(ids[6]);
             assertNull(run.traceId);
             assertNull(outcome.traceId);
             assertNull(item.traceNodeId);
             assertNull(resume.traceNodeId);
             assertNull(task.traceId);
-            assertNull(jobRun.traceId);
-            assertNull(report.traceId);
             item.delete();
             outcome.delete();
             resume.delete();
             run.delete();
             task.delete();
-            jobRun.delete();
-            report.delete();
         });
     }
 

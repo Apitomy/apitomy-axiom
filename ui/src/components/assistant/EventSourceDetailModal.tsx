@@ -7,6 +7,8 @@ import {
     DescriptionListTerm,
     DescriptionListDescription,
     Label,
+    List,
+    ListItem,
     Tab,
     Tabs,
     TabTitleText,
@@ -34,6 +36,7 @@ export function EventSourceDetailModal({ isOpen, onClose, name, content, errors 
     const description = (content.description as string) || "";
     const sourceType = (content.sourceType as string) || "";
     const enabled = content.enabled as boolean ?? false;
+    const baseUrl = (content.baseUrl as string) || "";
     const pollInterval = content.pollInterval as number | undefined;
     const secretName = (content.secretName as string) || "";
     const configuration = content.configuration as Record<string, unknown> | undefined;
@@ -71,6 +74,10 @@ export function EventSourceDetailModal({ isOpen, onClose, name, content, errors 
                                     </DescriptionListDescription>
                                 </DescriptionListGroup>
                                 <DescriptionListGroup>
+                                    <DescriptionListTerm>Base URL</DescriptionListTerm>
+                                    <DescriptionListDescription>{baseUrl || "—"}</DescriptionListDescription>
+                                </DescriptionListGroup>
+                                <DescriptionListGroup>
                                     <DescriptionListTerm>Enabled</DescriptionListTerm>
                                     <DescriptionListDescription>{enabled ? "Yes" : "No"}</DescriptionListDescription>
                                 </DescriptionListGroup>
@@ -86,14 +93,38 @@ export function EventSourceDetailModal({ isOpen, onClose, name, content, errors 
                                         <DescriptionListDescription>{secretName}</DescriptionListDescription>
                                     </DescriptionListGroup>
                                 )}
-                                {configuration && (
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm>Configuration</DescriptionListTerm>
-                                        <DescriptionListDescription>
-                                            <code>{JSON.stringify(configuration)}</code>
-                                        </DescriptionListDescription>
-                                    </DescriptionListGroup>
-                                )}
+                                {configuration && (() => {
+                                    const listKey = sourceType === "jira" ? "projects" : "repositories";
+                                    const listLabel = sourceType === "jira" ? "Projects" : "Repositories";
+                                    const entries = Array.isArray(configuration[listKey])
+                                        ? (configuration[listKey] as unknown[]).map(String) : [];
+                                    const others = Object.entries(configuration).filter(([k]) => k !== listKey);
+                                    return (
+                                        <>
+                                            <DescriptionListGroup>
+                                                <DescriptionListTerm>{listLabel}</DescriptionListTerm>
+                                                <DescriptionListDescription>
+                                                    {entries.length === 0 ? "—" : (
+                                                        <List aria-label={listLabel} isPlain>
+                                                            {entries.map((e) => (
+                                                                <ListItem key={e}><code>{e}</code></ListItem>
+                                                            ))}
+                                                        </List>
+                                                    )}
+                                                </DescriptionListDescription>
+                                            </DescriptionListGroup>
+                                            {others.map(([k, v]) => (
+                                                <DescriptionListGroup key={k}>
+                                                    <DescriptionListTerm>{k}</DescriptionListTerm>
+                                                    <DescriptionListDescription>
+                                                        {typeof v === "object" && v !== null
+                                                            ? <code>{JSON.stringify(v)}</code> : String(v)}
+                                                    </DescriptionListDescription>
+                                                </DescriptionListGroup>
+                                            ))}
+                                        </>
+                                    );
+                                })()}
                                 {labels.length > 0 && (
                                     <DescriptionListGroup>
                                         <DescriptionListTerm>Labels</DescriptionListTerm>

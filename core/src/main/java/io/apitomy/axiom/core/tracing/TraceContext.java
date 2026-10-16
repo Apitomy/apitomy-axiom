@@ -5,7 +5,7 @@ import java.util.Deque;
 import java.util.UUID;
 
 /**
- * Mutable context threaded through pipeline and report processing to track the
+ * Mutable context threaded through pipeline processing to track the
  * current position in the trace tree. Uses an internal stack so callers can
  * {@link #push(Long)} when descending into a child scope and {@link #pop()}
  * when returning to the parent.

@@ -50,6 +50,7 @@ nav:
     - Navigating the UI: user-guide/navigating-the-ui.md
     - Usage Examples: user-guide/usage-examples.md
     - Workflows: user-guide/workflows.md
+    - Workflow Workbench: user-guide/workbench.md
     - AI Assistant: user-guide/ai-assistant.md
     - Logging and Debugging: user-guide/logging-and-debugging.md
   - Developer Guide:
@@ -68,6 +69,8 @@ nav:
     - Data Retention: developer-guide/data-retention.md
     - UI Development: developer-guide/ui-development.md
     - Extending Axiom: developer-guide/extending-axiom.md
+  - Release Notes:
+    - "3.0.0": release-notes/v3.0.0.md
 
 docs_dir: ./docs
 site_dir: ./site

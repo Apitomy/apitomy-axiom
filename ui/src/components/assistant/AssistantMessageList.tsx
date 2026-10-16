@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button, Content, ExpandableSection, Spinner, Tooltip } from "@patternfly/react-core";
@@ -39,6 +39,17 @@ export interface ChatMessage {
     elapsedSeconds?: number;
     rawPayload?: string;
     thinkingId?: string;
+}
+
+/** A rendered tool call: the message plus the generic block, so a custom renderer can embed it. */
+export interface ToolUseRenderContext { message: ChatMessage; genericBlock: ReactNode }
+
+/** Optional replacement renderer for runs of consecutive tool_use messages. Return null to use the default. */
+export type ToolUseGroupRenderer = (group: ToolUseRenderContext[]) => ReactNode | null;
+
+/** True when the message is a tool call still waiting for a permission decision. */
+function isPendingPermission(msg: ChatMessage): boolean {
+    return !!msg.permissionId && !msg.permissionResolved;
 }
 
 function ThinkingBlock({ text }: { text: string }) {
@@ -223,9 +234,36 @@ interface AssistantMessageListProps {
     processingText?: string;
     onSubagentClick?: (toolUseId: string) => void;
     highlightedAgentBlockId?: string;
+    /** When set, runs of consecutive tool calls may be rendered by this function instead of the generic blocks. */
+    renderToolUseGroup?: ToolUseGroupRenderer;
 }
 
-export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText, onSubagentClick, highlightedAgentBlockId }: AssistantMessageListProps) {
+type MessageSegment = { kind: "single"; msg: ChatMessage } | { kind: "group"; msgs: ChatMessage[] };
+
+/** Splits messages into single messages and runs of groupable (non-pending) tool calls. */
+function segmentMessages(messages: ChatMessage[]): MessageSegment[] {
+    const segments: MessageSegment[] = [];
+    let current: ChatMessage[] | null = null;
+    for (const msg of messages) {
+        if (msg.type === "tool_use" && !isPendingPermission(msg)) {
+            if (!current) {
+                current = [];
+                segments.push({ kind: "group", msgs: current });
+            }
+            current.push(msg);
+        } else {
+            current = null;
+            segments.push({ kind: "single", msg });
+        }
+    }
+    return segments;
+}
+
+/**
+ * Renders the chat transcript. With `renderToolUseGroup`, consecutive tool calls are offered to the renderer
+ * as one group; calls waiting for permission are never grouped.
+ */
+export function AssistantMessageList({ messages, onPermissionRespond, onCreateAutoApproval, isProcessing, processingText, onSubagentClick, highlightedAgentBlockId, renderToolUseGroup }: AssistantMessageListProps) {
     const endRef = useRef<HTMLDivElement>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -250,24 +288,39 @@ export function AssistantMessageList({ messages, onPermissionRespond, onCreateAu
         };
     }, []);
 
+    const renderItem = (msg: ChatMessage): ReactNode => (
+        <MessageItem
+            key={msg.id}
+            msg={msg}
+            isCopied={copiedId === msg.id}
+            onCopyMarkdown={handleCopyMarkdown}
+            onPermissionRespond={onPermissionRespond}
+            onCreateAutoApproval={onCreateAutoApproval}
+            onSubagentClick={onSubagentClick}
+            isHighlighted={msg.type === "tool_use" && msg.toolUseId === highlightedAgentBlockId}
+        />
+    );
+
     useEffect(() => {
         endRef.current?.scrollIntoView({ behavior: "auto" });
     }, [messages.length]);
 
     return (
         <div className="axiom-message-list">
-            {messages.map((msg) => (
-                <MessageItem
-                    key={msg.id}
-                    msg={msg}
-                    isCopied={copiedId === msg.id}
-                    onCopyMarkdown={handleCopyMarkdown}
-                    onPermissionRespond={onPermissionRespond}
-                    onCreateAutoApproval={onCreateAutoApproval}
-                    onSubagentClick={onSubagentClick}
-                    isHighlighted={msg.type === "tool_use" && msg.toolUseId === highlightedAgentBlockId}
-                />
-            ))}
+            {renderToolUseGroup
+                ? segmentMessages(messages).map((segment) => {
+                    if (segment.kind === "single") {
+                        return renderItem(segment.msg);
+                    }
+                    const items: ReactNode[] = segment.msgs.map(renderItem);
+                    const custom: ReactNode | null = renderToolUseGroup(segment.msgs.map((m, i) => (
+                        { message: m, genericBlock: items[i] })));
+                    if (custom === null || custom === undefined) {
+                        return <Fragment key={`group-${segment.msgs[0].id}`}>{items}</Fragment>;
+                    }
+                    return <Fragment key={`group-${segment.msgs[0].id}`}>{custom}</Fragment>;
+                })
+                : messages.map(renderItem)}
             {isProcessing && (
                 <div className="axiom-message-list__processing">
                     <Spinner size="md" />

@@ -12,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class ValidationFeedbackTracker {
 
     private final Map<Path, String> lastFeedback = new ConcurrentHashMap<>();
+    private boolean hadProblems;
 
     /**
      * Returns whether the given feedback should be sent for the file. Returns {@code true} (and records the
@@ -33,5 +34,18 @@ public final class ValidationFeedbackTracker {
      */
     public void markValid(Path file) {
         lastFeedback.remove(file);
+    }
+
+    /**
+     * Reports, once per transition, that every file is now valid. Call after a full validation pass. Returns
+     * {@code true} only if at least one file had problems after the previous call and none has problems now.
+     *
+     * @return {@code true} if the session just transitioned from having problems to all items valid
+     */
+    public synchronized boolean transitionedToAllValid() {
+        boolean hasProblems = !lastFeedback.isEmpty();
+        boolean transitioned = hadProblems && !hasProblems;
+        hadProblems = hasProblems;
+        return transitioned;
     }
 }

@@ -7,31 +7,45 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
-import io.apitomy.axiom.core.entities.EventSourceConnectionEntity;
+import io.apitomy.axiom.core.entities.ActionTypeField;
+import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
-import io.apitomy.axiom.core.entities.ReportDefinitionEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.SessionTemplateEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.app.assistant.SessionTemplateService;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.ConfigValidationException;
+import io.apitomy.axiom.app.validation.SubscriptionRoutingResolver;
+import io.apitomy.axiom.app.validation.ValidationContext;
+import io.apitomy.axiom.app.validation.ValidationContextFactory;
+import io.apitomy.axiom.app.validation.WorkflowPublisher;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Service for exporting and importing configuration packs.
  * Packs bundle related configuration items (action types, tools, toolsets,
- * MCP servers, report definitions) into a portable JSON format.
+ * MCP servers, and more) into a portable JSON format.
  */
 @ApplicationScoped
 public class ImportExportService {
@@ -43,6 +57,28 @@ public class ImportExportService {
 
     @Inject
     SessionTemplateService sessionTemplateService;
+
+    @Inject
+    ValidationContextFactory contextFactory;
+
+    @Inject
+    ConfigItemValidationService validationService;
+
+    @Inject
+    WorkflowPublisher workflowPublisher;
+
+    @Inject
+    SubscriptionRoutingResolver routingResolver;
+
+    /** Pack array names paired with their item types, in apply order. */
+    private static final List<Map.Entry<String, ConfigItemType>> PACK_ARRAYS = List.of(
+            Map.entry("tools", ConfigItemType.TOOL),
+            Map.entry("toolsets", ConfigItemType.TOOLSET),
+            Map.entry("actionTypes", ConfigItemType.ACTION_TYPE),
+            Map.entry("sessionTemplates", ConfigItemType.SESSION_TEMPLATE),
+            Map.entry("workflowDefinitions", ConfigItemType.WORKFLOW),
+            Map.entry("eventSources", ConfigItemType.EVENT_SOURCE),
+            Map.entry("subscriptions", ConfigItemType.SUBSCRIPTION));
 
     /**
      * Exports a configuration pack containing the selected items.
@@ -58,7 +94,7 @@ public class ImportExportService {
         if (request.getDescription() != null) {
             metadata.put("description", request.getDescription());
         }
-        metadata.put("version", "2.0");
+        metadata.put("version", "3.0");
         metadata.put("exportedAt", Instant.now().toString());
 
         if (request.getToolIds() != null && !request.getToolIds().isEmpty()) {
@@ -93,14 +129,6 @@ public class ImportExportService {
             }
         }
 
-        if (request.getReportDefinitionIds() != null && !request.getReportDefinitionIds().isEmpty()) {
-            ArrayNode arr = pack.putArray("reportDefinitions");
-            for (Number id : request.getReportDefinitionIds()) {
-                ReportDefinitionEntity entity = ReportDefinitionEntity.findById(id.longValue());
-                if (entity != null) arr.add(serializeReportDefinition(entity));
-            }
-        }
-
         if (request.getSessionTemplateIds() != null && !request.getSessionTemplateIds().isEmpty()) {
             ArrayNode arr = pack.putArray("sessionTemplates");
             for (String templateId : request.getSessionTemplateIds()) {
@@ -109,19 +137,11 @@ public class ImportExportService {
             }
         }
 
-        if (request.getScheduledJobIds() != null && !request.getScheduledJobIds().isEmpty()) {
-            ArrayNode arr = pack.putArray("scheduledJobs");
-            for (Number id : request.getScheduledJobIds()) {
-                ScheduledJobEntity entity = ScheduledJobEntity.findById(id.longValue());
-                if (entity != null) arr.add(serializeScheduledJob(entity));
-            }
-        }
-
-        if (request.getConnectionIds() != null && !request.getConnectionIds().isEmpty()) {
-            ArrayNode arr = pack.putArray("connections");
-            for (String id : request.getConnectionIds()) {
-                EventSourceConnectionEntity entity = EventSourceConnectionEntity.findById(id);
-                if (entity != null) arr.add(serializeConnection(entity));
+        if (request.getEventSourceIds() != null && !request.getEventSourceIds().isEmpty()) {
+            ArrayNode arr = pack.putArray("eventSources");
+            for (String id : request.getEventSourceIds()) {
+                EventSourceEntity entity = EventSourceEntity.findById(id);
+                if (entity != null) arr.add(serializeEventSource(entity));
             }
         }
 
@@ -146,24 +166,24 @@ public class ImportExportService {
     }
 
     /**
-     * Imports a configuration pack. Checks for name conflicts first and
-     * fails fast if any are detected.
+     * Imports a configuration pack. Validates every item and checks for name
+     * conflicts first, failing fast if any are detected.
      *
      * @param pack the pack JSON
      * @return summary of what was imported
+     * @throws ConfigValidationException if any item is invalid (nothing is written)
      */
     @Transactional
     public ImportResult importPack(JsonNode pack) {
+        validatePack(pack);
         List<String> conflicts = new ArrayList<>();
 
         checkConflicts(pack, "tools", "name", "tool", conflicts);
         checkConflicts(pack, "toolsets", "name", "toolset", conflicts);
         checkConflicts(pack, "mcpServers", "name", "mcpServer", conflicts);
         checkConflicts(pack, "actionTypes", "name", "actionType", conflicts);
-        checkConflicts(pack, "reportDefinitions", "name", "reportDefinition", conflicts);
         checkConflicts(pack, "sessionTemplates", "templateId", "sessionTemplate", conflicts);
-        checkConflicts(pack, "scheduledJobs", "name", "scheduledJob", conflicts);
-        checkConflicts(pack, "connections", "id", "connection", conflicts);
+        checkConflicts(pack, "eventSources", "id", "eventSource", conflicts);
         checkConflicts(pack, "subscriptions", "name", "subscription", conflicts);
         checkConflicts(pack, "workflowDefinitions", "name", "workflowDefinition", conflicts);
 
@@ -177,27 +197,25 @@ public class ImportExportService {
                 conflict.put("name", parts[1]);
             }
             throw new WebApplicationException(
-                    jakarta.ws.rs.core.Response.status(409).entity(error).build());
+                    Response.status(409).entity(error).build());
         }
 
         int tools = importTools(pack.path("tools"));
         int toolsets = importToolsets(pack.path("toolsets"));
         int mcpServers = importMcpServers(pack.path("mcpServers"));
         int actionTypes = importActionTypes(pack.path("actionTypes"));
-        int reportDefinitions = importReportDefinitions(pack.path("reportDefinitions"));
         int sessionTemplates = importSessionTemplates(pack.path("sessionTemplates"));
-        int scheduledJobs = importScheduledJobs(pack.path("scheduledJobs"));
-        int connections = importConnections(pack.path("connections"));
-        int subscriptions = importSubscriptions(pack.path("subscriptions"));
         int workflowDefinitions = importWorkflowDefinitions(pack.path("workflowDefinitions"));
+        int eventSources = importEventSources(pack.path("eventSources"));
+        int subscriptions = importSubscriptions(pack.path("subscriptions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
-                        + "%d action types, %d report definitions, %d session templates, "
-                        + "%d scheduled jobs, %d connections, %d subscriptions, "
+                        + "%d action types, %d session templates, "
+                        + "%d event sources, %d subscriptions, "
                         + "%d workflow definitions",
-                packName, tools, toolsets, mcpServers, actionTypes, reportDefinitions,
-                sessionTemplates, scheduledJobs, connections, subscriptions,
+                packName, tools, toolsets, mcpServers, actionTypes,
+                sessionTemplates, eventSources, subscriptions,
                 workflowDefinitions);
 
         ImportResult result = new ImportResult();
@@ -205,10 +223,8 @@ public class ImportExportService {
         result.setToolsets(toolsets);
         result.setMcpServers(mcpServers);
         result.setActionTypes(actionTypes);
-        result.setReportDefinitions(reportDefinitions);
         result.setSessionTemplates(sessionTemplates);
-        result.setScheduledJobs(scheduledJobs);
-        result.setConnections(connections);
+        result.setEventSources(eventSources);
         result.setSubscriptions(subscriptions);
         result.setWorkflowDefinitions(workflowDefinitions);
         return result;
@@ -220,11 +236,9 @@ public class ImportExportService {
     public record UpsertResult(
             int toolsCreated, int toolsUpdated,
             int actionTypesCreated, int actionTypesUpdated,
-            int reportDefinitionsCreated, int reportDefinitionsUpdated,
             int toolsetsCreated, int toolsetsUpdated,
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
-            int scheduledJobsCreated, int scheduledJobsUpdated,
-            int connectionsCreated, int connectionsUpdated,
+            int eventSourcesCreated, int eventSourcesUpdated,
             int subscriptionsCreated, int subscriptionsUpdated,
             int workflowDefinitionsCreated, int workflowDefinitionsUpdated
     ) {}
@@ -232,64 +246,120 @@ public class ImportExportService {
     /**
      * Imports a configuration pack with upsert semantics: items whose name
      * matches an existing entity are updated in place; new names are created.
-     * Used by the assistant apply flow.
+     * Used by the assistant apply flow. Every item is validated first; if any item has errors a
+     * {@link ConfigValidationException} is thrown before anything is written. Items are applied in dependency
+     * order (tools, toolsets, action types, session templates, workflows, event sources, subscriptions);
+     * workflows are published and subscription routing names are resolved within the same transaction.
      *
      * @param pack the pack JSON
      * @return summary with created and updated counts per category
+     * @throws ConfigValidationException if any item is invalid
      */
     @Transactional
     public UpsertResult importOrUpdatePack(JsonNode pack) {
+        validatePack(pack);
+
         int[] tools = upsertTools(pack.path("tools"));
-        int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
-        int[] reportDefinitions = upsertReportDefinitions(pack.path("reportDefinitions"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
+        int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
-        int[] scheduledJobs = upsertScheduledJobs(pack.path("scheduledJobs"));
-        int[] connections = upsertConnections(pack.path("connections"));
-        int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
         int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
+        int[] eventSources = upsertEventSources(pack.path("eventSources"));
+        int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
                         + "%d action types created, %d updated; "
-                        + "%d report definitions created, %d updated; "
                         + "%d toolsets created, %d updated; "
                         + "%d session templates created, %d updated; "
-                        + "%d scheduled jobs created, %d updated; "
-                        + "%d connections created, %d updated; "
+                        + "%d event sources created, %d updated; "
                         + "%d subscriptions created, %d updated; "
                         + "%d workflow definitions created, %d updated",
                 packName,
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
-                reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                scheduledJobs[0], scheduledJobs[1],
-                connections[0], connections[1],
+                eventSources[0], eventSources[1],
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1]);
 
         return new UpsertResult(
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
-                reportDefinitions[0], reportDefinitions[1],
                 toolsets[0], toolsets[1],
                 sessionTemplates[0], sessionTemplates[1],
-                scheduledJobs[0], scheduledJobs[1],
-                connections[0], connections[1],
+                eventSources[0], eventSources[1],
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1]
         );
     }
 
+    // ── Validation ───────────────────────────────────────────────────
+
+    /**
+     * Validates every item of every known pack array against the database plus the pack's own items.
+     * Workflow {@code content} given as a JSON string is parsed into an object in place.
+     *
+     * @param pack the pack JSON
+     * @throws ConfigValidationException if any item has errors
+     */
+    private void validatePack(JsonNode pack) {
+        normalizeWorkflowContent(pack.path("workflowDefinitions"));
+        ValidationContext ctx = contextFactory.forPack(pack);
+        Map<String, List<ConfigProblem>> problemsByItem = new LinkedHashMap<>();
+        for (Map.Entry<String, ConfigItemType> entry : PACK_ARRAYS) {
+            ConfigItemType type = entry.getValue();
+            for (JsonNode item : pack.path(entry.getKey())) {
+                List<ConfigProblem> errors = validationService.validate(type, item, ctx).stream()
+                        .filter(ConfigProblem::isError)
+                        .toList();
+                if (!errors.isEmpty()) {
+                    String key = type.jsonName() + "/" + itemName(item);
+                    problemsByItem.computeIfAbsent(key, k -> new ArrayList<>()).addAll(errors);
+                }
+            }
+        }
+        if (!problemsByItem.isEmpty()) {
+            throw new ConfigValidationException(problemsByItem);
+        }
+    }
+
+    private static String itemName(JsonNode item) {
+        String name = item.path("name").asText("");
+        if (name.isBlank()) {
+            name = item.path("id").asText("");
+        }
+        if (name.isBlank()) {
+            name = item.path("templateId").asText("");
+        }
+        return name;
+    }
+
+    /** Parses string-valued workflow {@code content} (as written by older exports) into a JSON object. */
+    private void normalizeWorkflowContent(JsonNode workflows) {
+        for (JsonNode item : workflows) {
+            JsonNode content = item.path("content");
+            if (item instanceof ObjectNode obj && content.isTextual()) {
+                try {
+                    JsonNode parsed = objectMapper.readTree(content.asText());
+                    if (parsed != null && parsed.isObject()) {
+                        obj.set("content", parsed);
+                    }
+                } catch (Exception ignored) {
+                    // Left as a string; validation reports it as invalid content
+                }
+            }
+        }
+    }
+
     // ── Conflict detection ───────────────────────────────────────────
 
-    private static final java.util.Set<String> VALID_FIELD_TYPES =
-            java.util.Set.of("string", "number", "boolean", "object");
+    private static final Set<String> VALID_FIELD_TYPES =
+            Set.of("string", "number", "boolean", "object");
 
-    private static final java.util.regex.Pattern VALID_FIELD_NAME_PATTERN =
-            java.util.regex.Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    private static final Pattern VALID_FIELD_NAME_PATTERN =
+            Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     /**
      * Reads and validates the {@code inputs}/{@code outputs} field list from an
@@ -304,11 +374,11 @@ public class ImportExportService {
      * @param key  either {@code "inputs"} or {@code "outputs"}
      * @return the parsed, validated field list
      */
-    private List<io.apitomy.axiom.core.entities.ActionTypeField> importFields(JsonNode item, String key) {
-        List<io.apitomy.axiom.core.entities.ActionTypeField> out = new java.util.ArrayList<>();
+    private List<ActionTypeField> importFields(JsonNode item, String key) {
+        List<ActionTypeField> out = new ArrayList<>();
         JsonNode arr = item.path(key);
         if (arr.isArray()) {
-            java.util.Set<String> seen = new java.util.HashSet<>();
+            Set<String> seen = new HashSet<>();
             for (JsonNode f : arr) {
                 String name = f.path("name").asText(null);
                 if (name == null || name.isBlank()) {
@@ -327,7 +397,7 @@ public class ImportExportService {
                             type, name);
                     type = "string";
                 }
-                out.add(new io.apitomy.axiom.core.entities.ActionTypeField(
+                out.add(new ActionTypeField(
                         name,
                         type,
                         f.path("required").asBoolean(false),
@@ -348,7 +418,7 @@ public class ImportExportService {
         ObjectNode error = objectMapper.createObjectNode();
         error.put("message", message);
         return new WebApplicationException(
-                jakarta.ws.rs.core.Response.status(400).entity(error).build());
+                Response.status(400).entity(error).build());
     }
 
     private void checkConflicts(JsonNode pack, String section, String nameField,
@@ -363,10 +433,8 @@ public class ImportExportService {
                 case "toolset" -> ToolsetEntity.count("name", name) > 0;
                 case "mcpServer" -> McpServerEntity.count("name", name) > 0;
                 case "actionType" -> ActionTypeEntity.count("name", name) > 0;
-                case "reportDefinition" -> ReportDefinitionEntity.count("name", name) > 0;
                 case "sessionTemplate" -> SessionTemplateEntity.count("templateId", name) > 0;
-                case "scheduledJob" -> ScheduledJobEntity.count("name", name) > 0;
-                case "connection" -> EventSourceConnectionEntity.findById(name) != null;
+                case "eventSource" -> EventSourceEntity.findById(name) != null;
                 case "subscription" -> EventSubscriptionEntity.count("name", name) > 0;
                 case "workflowDefinition" -> WorkflowDefinitionEntity.count("name", name) > 0;
                 default -> false;
@@ -439,15 +507,12 @@ public class ImportExportService {
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
             entity.executionMode = item.path("executionMode").asText("agent");
-            entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
-            entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
-            entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
             entity.inputs.addAll(importFields(item, "inputs"));
             entity.outputs.addAll(importFields(item, "outputs"));
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            entity.codeTemplate = textOrNull(item, "codeTemplate");
             entity.model = textOrNull(item, "model");
             entity.engine = textOrNull(item, "engine");
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
@@ -466,42 +531,13 @@ public class ImportExportService {
         return count;
     }
 
-    private int importReportDefinitions(JsonNode items) {
-        if (!items.isArray()) return 0;
-        int count = 0;
-        for (JsonNode item : items) {
-            ReportDefinitionEntity entity = new ReportDefinitionEntity();
-            entity.name = item.path("name").asText();
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.timeWindow = item.path("timeWindow").asText("last-7d");
-            entity.promptTemplate = item.path("promptTemplate").asText("");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            entity.environment = jsonOrNull(item, "environment");
-            entity.engine = textOrNull(item, "engine");
-            entity.model = textOrNull(item, "model");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            entity.timeoutSeconds = item.has("timeoutSeconds")
-                    ? item.path("timeoutSeconds").asInt() : null;
-            entity.enabled = false;
-            entity.createdOn = Instant.now();
-            entity.updatedOn = Instant.now();
-            entity.persist();
-            count++;
-        }
-        return count;
-    }
-
     private int importSessionTemplates(JsonNode items) {
         if (!items.isArray()) return 0;
         int count = 0;
         for (JsonNode item : items) {
             String templateId = item.path("templateId").asText(null);
             if (templateId == null || templateId.isBlank()) {
-                templateId = java.util.UUID.randomUUID().toString();
+                templateId = UUID.randomUUID().toString();
             }
             if (sessionTemplateService.isBuiltIn(templateId)) {
                 LOG.warnf("Skipping built-in session template '%s' — cannot be imported", templateId);
@@ -582,10 +618,6 @@ public class ImportExportService {
             }
             entity.description = textOrNull(item, "description");
             entity.executionMode = item.path("executionMode").asText("agent");
-            entity.userTriggerable = item.path("userTriggerable").asBoolean(false);
-            entity.managerTriggerable = item.path("managerTriggerable").asBoolean(false);
-            entity.emitsEvent = item.path("emitsEvent").asBoolean(false);
-            entity.workflowEnabled = item.path("workflowEnabled").asBoolean(false);
             entity.inputs.clear();
             entity.inputs.addAll(importFields(item, "inputs"));
             entity.outputs.clear();
@@ -593,6 +625,7 @@ public class ImportExportService {
             entity.allowedTools = csvOrNull(item, "allowedTools");
             entity.promptTemplate = textOrNull(item, "promptTemplate");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            entity.codeTemplate = textOrNull(item, "codeTemplate");
             entity.model = textOrNull(item, "model");
             entity.engine = textOrNull(item, "engine");
             entity.maxSteps = item.has("maxSteps") ? item.path("maxSteps").asInt() : null;
@@ -606,41 +639,6 @@ public class ImportExportService {
                     entity.labels.add(l.asText());
                 }
             }
-            entity.persist();
-            if (isNew) created++;
-            else updated++;
-        }
-        return new int[]{created, updated};
-    }
-
-    private int[] upsertReportDefinitions(JsonNode items) {
-        if (!items.isArray()) return new int[]{0, 0};
-        int created = 0, updated = 0;
-        for (JsonNode item : items) {
-            String name = item.path("name").asText();
-            ReportDefinitionEntity entity = ReportDefinitionEntity.find("name", name).firstResult();
-            boolean isNew = (entity == null);
-            if (isNew) {
-                entity = new ReportDefinitionEntity();
-                entity.name = name;
-                entity.enabled = false;
-                entity.createdOn = Instant.now();
-            }
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.timeWindow = item.path("timeWindow").asText("last-7d");
-            entity.promptTemplate = item.path("promptTemplate").asText("");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            entity.environment = jsonOrNull(item, "environment");
-            entity.engine = textOrNull(item, "engine");
-            entity.model = textOrNull(item, "model");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            entity.timeoutSeconds = item.has("timeoutSeconds")
-                    ? item.path("timeoutSeconds").asInt() : null;
-            entity.updatedOn = Instant.now();
             entity.persist();
             if (isNew) created++;
             else updated++;
@@ -674,7 +672,7 @@ public class ImportExportService {
         for (JsonNode item : items) {
             String templateId = item.path("templateId").asText(null);
             if (templateId == null || templateId.isBlank()) {
-                templateId = java.util.UUID.randomUUID().toString();
+                templateId = UUID.randomUUID().toString();
             }
 
             // Guard against overwriting built-in templates
@@ -724,7 +722,13 @@ public class ImportExportService {
 
     // ── Serialization helpers ────────────────────────────────────────
 
-    private ObjectNode serializeTool(ToolDefinitionEntity e) {
+    /**
+     * Serializes a tool to its configuration-pack item JSON.
+     *
+     * @param e the entity
+     * @return the item JSON
+     */
+    public ObjectNode serializeTool(ToolDefinitionEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
@@ -756,15 +760,17 @@ public class ImportExportService {
         return n;
     }
 
-    private ObjectNode serializeActionType(ActionTypeEntity e) {
+    /**
+     * Serializes an action type to its configuration-pack item JSON.
+     *
+     * @param e the entity
+     * @return the item JSON
+     */
+    public ObjectNode serializeActionType(ActionTypeEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
         n.put("executionMode", e.executionMode);
-        n.put("userTriggerable", e.userTriggerable);
-        n.put("managerTriggerable", e.managerTriggerable);
-        n.put("emitsEvent", e.emitsEvent);
-        n.put("workflowEnabled", e.workflowEnabled);
         if (e.inputs != null && !e.inputs.isEmpty()) {
             var inputsArr = n.putArray("inputs");
             e.inputs.forEach(f -> serializeField(inputsArr.addObject(), f));
@@ -776,6 +782,7 @@ public class ImportExportService {
         putIfNotNull(n, "allowedTools", e.allowedTools);
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
+        putIfNotNull(n, "codeTemplate", e.codeTemplate);
         putIfNotNull(n, "model", e.model);
         putIfNotNull(n, "engine", e.engine);
         if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
@@ -789,30 +796,11 @@ public class ImportExportService {
         return n;
     }
 
-    private void serializeField(ObjectNode n, io.apitomy.axiom.core.entities.ActionTypeField f) {
+    private void serializeField(ObjectNode n, ActionTypeField f) {
         n.put("name", f.name);
         n.put("type", f.type);
         n.put("required", f.required);
         putIfNotNull(n, "description", f.description);
-    }
-
-    private ObjectNode serializeReportDefinition(ReportDefinitionEntity e) {
-        ObjectNode n = objectMapper.createObjectNode();
-        n.put("name", e.name);
-        putIfNotNull(n, "description", e.description);
-        n.put("schedule", e.schedule);
-        putIfNotNull(n, "scheduleTime", e.scheduleTime);
-        putIfNotNull(n, "scheduleDayOfWeek", e.scheduleDayOfWeek);
-        n.put("timeWindow", e.timeWindow);
-        putIfNotNull(n, "promptTemplate", e.promptTemplate);
-        putIfNotNull(n, "allowedTools", e.allowedTools);
-        putJsonIfPossible(n, "environment", e.environment);
-        putIfNotNull(n, "engine", e.engine);
-        putIfNotNull(n, "model", e.model);
-        if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
-        if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
-        if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
-        return n;
     }
 
     private ObjectNode serializeSessionTemplate(SessionTemplateEntity e) {
@@ -840,104 +828,7 @@ public class ImportExportService {
         return n;
     }
 
-    private int importScheduledJobs(JsonNode items) {
-        if (!items.isArray()) return 0;
-        int count = 0;
-        for (JsonNode item : items) {
-            ScheduledJobEntity entity = new ScheduledJobEntity();
-            entity.name = item.path("name").asText();
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.executionMode = item.path("executionMode").asText("agent");
-            entity.promptTemplate = textOrNull(item, "promptTemplate");
-            entity.scriptTemplate = textOrNull(item, "scriptTemplate");
-            entity.model = textOrNull(item, "model");
-            entity.engine = textOrNull(item, "engine");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            if (item.has("timeoutSeconds")) entity.timeoutSeconds = item.path("timeoutSeconds").asInt();
-            entity.environment = jsonOrNull(item, "environment");
-            entity.enabled = false;
-            entity.createdOn = Instant.now();
-            entity.updatedOn = Instant.now();
-            JsonNode labelsNode = item.path("labels");
-            if (labelsNode.isArray()) {
-                for (JsonNode l : labelsNode) entity.labels.add(l.asText());
-            }
-            entity.persist();
-            count++;
-        }
-        return count;
-    }
-
-    private int[] upsertScheduledJobs(JsonNode items) {
-        if (!items.isArray()) return new int[]{0, 0};
-        int created = 0, updated = 0;
-        for (JsonNode item : items) {
-            String name = item.path("name").asText();
-            ScheduledJobEntity entity = ScheduledJobEntity.find("name", name).firstResult();
-            boolean isNew = (entity == null);
-            if (isNew) {
-                entity = new ScheduledJobEntity();
-                entity.name = name;
-                entity.enabled = false;
-                entity.createdOn = Instant.now();
-            }
-            entity.description = textOrNull(item, "description");
-            entity.schedule = item.path("schedule").asText("none");
-            entity.scheduleTime = textOrNull(item, "scheduleTime");
-            entity.scheduleDayOfWeek = textOrNull(item, "scheduleDayOfWeek");
-            entity.executionMode = item.path("executionMode").asText("agent");
-            entity.promptTemplate = textOrNull(item, "promptTemplate");
-            entity.scriptTemplate = textOrNull(item, "scriptTemplate");
-            entity.model = textOrNull(item, "model");
-            entity.engine = textOrNull(item, "engine");
-            entity.allowedTools = csvOrNull(item, "allowedTools");
-            if (item.has("maxSteps")) entity.maxSteps = item.path("maxSteps").asInt();
-            if (item.has("maxBudgetUsd")) entity.maxBudgetUsd = item.path("maxBudgetUsd").asDouble();
-            if (item.has("timeoutSeconds")) entity.timeoutSeconds = item.path("timeoutSeconds").asInt();
-            entity.environment = jsonOrNull(item, "environment");
-            entity.labels.clear();
-            JsonNode labelsNode = item.path("labels");
-            if (labelsNode.isArray()) {
-                for (JsonNode l : labelsNode) entity.labels.add(l.asText());
-            }
-            entity.updatedOn = Instant.now();
-            entity.persist();
-            if (isNew) created++;
-            else updated++;
-        }
-        return new int[]{created, updated};
-    }
-
-    private ObjectNode serializeScheduledJob(ScheduledJobEntity e) {
-        ObjectNode n = objectMapper.createObjectNode();
-        n.put("name", e.name);
-        putIfNotNull(n, "description", e.description);
-        n.put("schedule", e.schedule);
-        putIfNotNull(n, "scheduleTime", e.scheduleTime);
-        putIfNotNull(n, "scheduleDayOfWeek", e.scheduleDayOfWeek);
-        n.put("executionMode", e.executionMode);
-        putIfNotNull(n, "promptTemplate", e.promptTemplate);
-        putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
-        putIfNotNull(n, "model", e.model);
-        putIfNotNull(n, "engine", e.engine);
-        putIfNotNull(n, "allowedTools", e.allowedTools);
-        if (e.maxSteps != null) n.put("maxSteps", e.maxSteps);
-        if (e.maxBudgetUsd != null) n.put("maxBudgetUsd", e.maxBudgetUsd);
-        if (e.timeoutSeconds != null) n.put("timeoutSeconds", e.timeoutSeconds);
-        putJsonIfPossible(n, "environment", e.environment);
-        if (e.labels != null && !e.labels.isEmpty()) {
-            ArrayNode arr = n.putArray("labels");
-            e.labels.forEach(arr::add);
-        }
-        return n;
-    }
-
-    private ObjectNode serializeConnection(EventSourceConnectionEntity e) {
+    private ObjectNode serializeEventSource(EventSourceEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("id", e.id);
         n.put("name", e.name);
@@ -959,7 +850,13 @@ public class ImportExportService {
         return n;
     }
 
-    private ObjectNode serializeSubscription(EventSubscriptionEntity e) {
+    /**
+     * Serializes a subscription in configuration-pack form.
+     *
+     * @param e the subscription
+     * @return the pack item
+     */
+    public ObjectNode serializeSubscription(EventSubscriptionEntity e) {
         ObjectNode n = objectMapper.createObjectNode();
         n.put("name", e.name);
         putIfNotNull(n, "description", e.description);
@@ -984,11 +881,11 @@ public class ImportExportService {
         return n;
     }
 
-    private int importConnections(JsonNode items) {
+    private int importEventSources(JsonNode items) {
         if (!items.isArray()) return 0;
         int count = 0;
         for (JsonNode item : items) {
-            EventSourceConnectionEntity entity = new EventSourceConnectionEntity();
+            EventSourceEntity entity = new EventSourceEntity();
             entity.id = item.path("id").asText();
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
@@ -1016,8 +913,9 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.enabled = item.path("enabled").asBoolean(false);
             entity.filters = textOrNull(item, "filterExpression");
-            entity.routing = jsonOrNull(item, "routing");
-            entity.labels = new java.util.ArrayList<>();
+            JsonNode routing = routingResolver.resolve(item.get("routing"));
+            entity.routing = routing != null ? routing.toString() : null;
+            entity.labels = new ArrayList<>();
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
                 for (JsonNode l : labelsNode) entity.labels.add(l.asText());
@@ -1032,15 +930,15 @@ public class ImportExportService {
         return count;
     }
 
-    private int[] upsertConnections(JsonNode items) {
+    private int[] upsertEventSources(JsonNode items) {
         if (!items.isArray()) return new int[]{0, 0};
         int created = 0, updated = 0;
         for (JsonNode item : items) {
             String id = item.path("id").asText();
-            EventSourceConnectionEntity entity = EventSourceConnectionEntity.findById(id);
+            EventSourceEntity entity = EventSourceEntity.findById(id);
             boolean isNew = (entity == null);
             if (isNew) {
-                entity = new EventSourceConnectionEntity();
+                entity = new EventSourceEntity();
                 entity.id = id;
                 entity.createdOn = Instant.now();
             }
@@ -1075,7 +973,8 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.enabled = item.path("enabled").asBoolean(false);
             entity.filters = textOrNull(item, "filterExpression");
-            entity.routing = jsonOrNull(item, "routing");
+            JsonNode routing = routingResolver.resolve(item.get("routing"));
+            entity.routing = routing != null ? routing.toString() : null;
             entity.labels.clear();
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
@@ -1118,23 +1017,11 @@ public class ImportExportService {
             WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
             entity.name = item.path("name").asText();
             entity.description = textOrNull(item, "description");
+            entity.content = jsonOrNull(item, "content");
             entity.createdOn = Instant.now();
             entity.updatedOn = Instant.now();
             entity.persist();
-
-            JsonNode content = item.path("content");
-            if (!content.isMissingNode() && !content.isNull()) {
-                String contentStr = content.isObject() ? content.toString() : content.asText();
-                entity.content = contentStr;
-
-                WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
-                version.definitionId = entity.id;
-                version.version = 1;
-                version.content = contentStr;
-                version.createdOn = Instant.now();
-                version.persist();
-                entity.currentVersion = 1;
-            }
+            workflowPublisher.publish(entity);
             count++;
         }
         return count;
@@ -1154,27 +1041,35 @@ public class ImportExportService {
             }
             entity.description = textOrNull(item, "description");
             entity.updatedOn = Instant.now();
-
-            JsonNode content = item.path("content");
-            if (!content.isMissingNode() && !content.isNull()) {
-                String contentStr = content.isObject() ? content.toString() : content.asText();
-                entity.content = contentStr;
-                int nextVersion = (entity.currentVersion != null ? entity.currentVersion : 0) + 1;
-                entity.persist();
-
-                WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
-                version.definitionId = entity.id;
-                version.version = nextVersion;
-                version.content = contentStr;
-                version.createdOn = Instant.now();
-                version.persist();
-                entity.currentVersion = nextVersion;
-            } else {
-                entity.persist();
+            entity.content = jsonOrNull(item, "content");
+            entity.persist();
+            if (isNew || !sameAsPublished(entity)) {
+                workflowPublisher.publish(entity);
             }
             if (isNew) created++; else updated++;
         }
         return new int[]{created, updated};
+    }
+
+    /**
+     * Returns true when the entity's draft content is JSON-equal to its currently published version, so that
+     * re-applying an unchanged workflow does not create a redundant version.
+     */
+    private boolean sameAsPublished(WorkflowDefinitionEntity entity) {
+        if (entity.currentVersion == null || entity.content == null) {
+            return false;
+        }
+        WorkflowDefinitionVersionEntity version = WorkflowDefinitionVersionEntity
+                .find("definitionId = ?1 and version = ?2", entity.id, entity.currentVersion)
+                .firstResult();
+        if (version == null || version.content == null) {
+            return false;
+        }
+        try {
+            return objectMapper.readTree(version.content).equals(objectMapper.readTree(entity.content));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void putIfNotNull(ObjectNode node, String field, String value) {

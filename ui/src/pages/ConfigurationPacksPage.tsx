@@ -30,16 +30,15 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import DownloadIcon from "@patternfly/react-icons/dist/esm/icons/download-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
+import { executionModeColor } from "../components/executionModeColor";
 import UploadIcon from "@patternfly/react-icons/dist/esm/icons/upload-icon";
 import {
     type ActionType,
     type ToolDefinition,
     type Toolset,
     type McpServer,
-    type ReportDefinition,
-    type ScheduledJob,
     type SessionTemplate,
-    type Connection,
+    type EventSourceConfig,
     type Subscription,
     type WorkflowDefinition,
     type PackExportRequest,
@@ -48,14 +47,13 @@ import {
     fetchTools,
     fetchToolsets,
     fetchMcpServers,
-    fetchReportDefinitions,
-    fetchScheduledJobs,
     fetchAssistantTemplates,
-    fetchConnections,
+    fetchEventSources,
     fetchSubscriptions,
     fetchWorkflowDefinitions,
     exportPack,
     importPack,
+    type PackImportProblem,
 } from "../config/api";
 
 export function ConfigurationPacksPage() {
@@ -63,10 +61,8 @@ export function ConfigurationPacksPage() {
     const [tools, setTools] = useState<ToolDefinition[]>([]);
     const [toolsets, setToolsets] = useState<Toolset[]>([]);
     const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
-    const [reportDefs, setReportDefs] = useState<ReportDefinition[]>([]);
-    const [scheduledJobs, setScheduledJobs] = useState<ScheduledJob[]>([]);
     const [sessionTemplates, setSessionTemplates] = useState<SessionTemplate[]>([]);
-    const [connections, setConnections] = useState<Connection[]>([]);
+    const [eventSources, setEventSources] = useState<EventSourceConfig[]>([]);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
     const [loading, setLoading] = useState(true);
@@ -79,10 +75,8 @@ export function ConfigurationPacksPage() {
     const [selectedTools, setSelectedTools] = useState<Set<number>>(new Set());
     const [selectedToolsets, setSelectedToolsets] = useState<Set<number>>(new Set());
     const [selectedMcpServers, setSelectedMcpServers] = useState<Set<number>>(new Set());
-    const [selectedReportDefs, setSelectedReportDefs] = useState<Set<number>>(new Set());
-    const [selectedScheduledJobs, setSelectedScheduledJobs] = useState<Set<number>>(new Set());
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
-    const [selectedConnections, setSelectedConnections] = useState<Set<string>>(new Set());
+    const [selectedEventSources, setSelectedEventSources] = useState<Set<string>>(new Set());
     const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<number>>(new Set());
     const [selectedWorkflowDefs, setSelectedWorkflowDefs] = useState<Set<number>>(new Set());
     const [exporting, setExporting] = useState(false);
@@ -95,6 +89,7 @@ export function ConfigurationPacksPage() {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<ImportResult | null>(null);
     const [importError, setImportError] = useState<string | null>(null);
+    const [importProblems, setImportProblems] = useState<Record<string, PackImportProblem[]> | null>(null);
     const [importConflicts, setImportConflicts] = useState<Array<{ type: string; name: string }> | null>(null);
 
     const loadData = useCallback(() => {
@@ -104,22 +99,18 @@ export function ConfigurationPacksPage() {
             fetchTools(1, 1000),
             fetchToolsets(),
             fetchMcpServers(),
-            fetchReportDefinitions(),
-            fetchScheduledJobs(),
             fetchAssistantTemplates(),
-            fetchConnections(1, 100),
+            fetchEventSources(1, 100),
             fetchSubscriptions(1, 100),
             fetchWorkflowDefinitions(1, 1000),
         ])
-            .then(([at, t, ts, mcp, rd, sj, st, conn, sub, wd]) => {
+            .then(([at, t, ts, mcp, st, eventSourceResults, sub, wd]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
                 setMcpServers(mcp);
-                setReportDefs(rd);
-                setScheduledJobs(sj);
                 setSessionTemplates(st.filter((s: SessionTemplate) => !s.builtIn));
-                setConnections(conn.items);
+                setEventSources(eventSourceResults.items);
                 setSubscriptions(sub.items);
                 setWorkflowDefs(wd.items);
             })
@@ -130,9 +121,9 @@ export function ConfigurationPacksPage() {
     useEffect(() => { loadData(); }, [loadData]);
 
     const totalSelected = selectedActionTypes.size + selectedTools.size
-        + selectedToolsets.size + selectedMcpServers.size + selectedReportDefs.size
-        + selectedScheduledJobs.size + selectedSessionTemplates.size
-        + selectedConnections.size + selectedSubscriptions.size
+        + selectedToolsets.size + selectedMcpServers.size
+        + selectedSessionTemplates.size
+        + selectedEventSources.size + selectedSubscriptions.size
         + selectedWorkflowDefs.size;
 
     const handleExport = async () => {
@@ -145,10 +136,8 @@ export function ConfigurationPacksPage() {
                 toolIds: [...selectedTools],
                 toolsetIds: [...selectedToolsets],
                 mcpServerIds: [...selectedMcpServers],
-                reportDefinitionIds: [...selectedReportDefs],
-                scheduledJobIds: [...selectedScheduledJobs],
                 sessionTemplateIds: [...selectedSessionTemplates],
-                connectionIds: [...selectedConnections],
+                eventSourceIds: [...selectedEventSources],
                 subscriptionIds: [...selectedSubscriptions],
                 workflowDefinitionIds: [...selectedWorkflowDefs],
             };
@@ -171,6 +160,7 @@ export function ConfigurationPacksPage() {
         setImportFilename(file.name);
         setImportResult(null);
         setImportError(null);
+        setImportProblems(null);
         setImportConflicts(null);
         if (file) {
             file.text().then((text) => {
@@ -181,10 +171,8 @@ export function ConfigurationPacksPage() {
                     if (json.tools?.length) preview["Tools"] = json.tools.length;
                     if (json.toolsets?.length) preview["Toolsets"] = json.toolsets.length;
                     if (json.mcpServers?.length) preview["MCP Servers"] = json.mcpServers.length;
-                    if (json.reportDefinitions?.length) preview["Report Definitions"] = json.reportDefinitions.length;
-                    if (json.scheduledJobs?.length) preview["Scheduled Jobs"] = json.scheduledJobs.length;
                     if (json.sessionTemplates?.length) preview["Session Templates"] = json.sessionTemplates.length;
-                    if (json.connections?.length) preview["Connections"] = json.connections.length;
+                    if (json.eventSources?.length) preview["Event Sources"] = json.eventSources.length;
                     if (json.subscriptions?.length) preview["Subscriptions"] = json.subscriptions.length;
                     if (json.workflowDefinitions?.length) preview["Workflow Definitions"] = json.workflowDefinitions.length;
                     setImportPreview(preview);
@@ -207,6 +195,7 @@ export function ConfigurationPacksPage() {
         setImportPackName("");
         setImportResult(null);
         setImportError(null);
+        setImportProblems(null);
         setImportConflicts(null);
     };
 
@@ -215,6 +204,7 @@ export function ConfigurationPacksPage() {
         setImporting(true);
         setImportResult(null);
         setImportError(null);
+        setImportProblems(null);
         setImportConflicts(null);
         try {
             const text = await importFile.text();
@@ -228,6 +218,10 @@ export function ConfigurationPacksPage() {
         } catch (e: unknown) {
             if (e && typeof e === "object" && "status" in e && (e as unknown as { status: number }).status === 409) {
                 setImportConflicts((e as unknown as { conflicts: Array<{ type: string; name: string }> }).conflicts);
+            } else if (e && typeof e === "object" && "problems" in e) {
+                const err = e as { message?: string; problems: Record<string, PackImportProblem[]> };
+                setImportError(err.message || "Configuration pack has validation errors");
+                setImportProblems(err.problems);
             } else {
                 setImportError(e instanceof Error ? e.message : String(e));
             }
@@ -310,8 +304,8 @@ export function ConfigurationPacksPage() {
             </Title>
             <p className="axiom-text-subtle" style={{ marginTop: "8px", marginBottom: "16px" }}>
                 Configuration packs bundle related items — action types, tools, toolsets,
-                MCP servers, report definitions, scheduled jobs, session templates,
-                connections, subscriptions, and workflow definitions — into a portable JSON
+                MCP servers, session templates,
+                event sources, subscriptions, and workflow definitions — into a portable JSON
                 file. Create a pack to share your setup with others, or import one to quickly
                 add pre-configured functionality to your Axiom instance.
             </p>
@@ -325,7 +319,7 @@ export function ConfigurationPacksPage() {
                                 <FormGroup label="Pack Name" isRequired fieldId="packName">
                                     <TextInput id="packName" isRequired value={packName}
                                         onChange={(_e, v) => setPackName(v)}
-                                        placeholder="e.g. Weekly Status Report" />
+                                        placeholder="e.g. GitHub Triage" />
                                 </FormGroup>
                                 <FormGroup label="Description" fieldId="packDescription">
                                     <TextArea id="packDescription" value={packDescription}
@@ -350,7 +344,7 @@ export function ConfigurationPacksPage() {
                                             <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
                                                 <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
                                                 <FlexItem>
-                                                    <Label isCompact color={at?.executionMode === "agent" ? "blue" : "orange"}>
+                                                    <Label isCompact color={executionModeColor(at?.executionMode)}>
                                                         {at?.executionMode || "—"}
                                                     </Label>
                                                 </FlexItem>
@@ -406,58 +400,6 @@ export function ConfigurationPacksPage() {
                                 <CheckboxSection title="MCP Servers" items={mcpServers}
                                     selected={selectedMcpServers}
                                     onToggle={(id) => setSelectedMcpServers(toggleSet(selectedMcpServers, id))} />
-                                <SelectedItemsSection title="Report Definitions" allItems={reportDefs}
-                                    selected={selectedReportDefs}
-                                    onAdd={(ids) => {
-                                        setSelectedReportDefs(new Set([...selectedReportDefs, ...ids]));
-                                        autoSelectReferencedItems(
-                                            ids.map((id) => reportDefs.find((r) => r.id === id)?.allowedTools));
-                                    }}
-                                    onRemove={(id) => { const next = new Set(selectedReportDefs); next.delete(id); setSelectedReportDefs(next); }}
-                                    renderItem={(item) => {
-                                        const rd = reportDefs.find((x) => x.id === item.id);
-                                        return (
-                                            <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
-                                                <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact>{rd?.schedule || "—"}</Label>
-                                                </FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact color="grey">{rd?.timeWindow || "—"}</Label>
-                                                </FlexItem>
-                                            </Flex>
-                                        );
-                                    }}
-                                    renderModal={(props) => (
-                                        <ReportDefinitionPickerModal {...props} allReportDefs={reportDefs} />
-                                    )} />
-                                <SelectedItemsSection title="Scheduled Jobs" allItems={scheduledJobs}
-                                    selected={selectedScheduledJobs}
-                                    onAdd={(ids) => {
-                                        setSelectedScheduledJobs(new Set([...selectedScheduledJobs, ...ids]));
-                                        autoSelectReferencedItems(
-                                            ids.map((id) => scheduledJobs.find((sj) => sj.id === id)?.allowedTools));
-                                    }}
-                                    onRemove={(id) => { const next = new Set(selectedScheduledJobs); next.delete(id); setSelectedScheduledJobs(next); }}
-                                    renderItem={(item) => {
-                                        const sj = scheduledJobs.find((x) => x.id === item.id);
-                                        return (
-                                            <Flex alignItems={{ default: "alignItemsCenter" }} style={{ gap: "8px" }}>
-                                                <FlexItem><span style={{ fontWeight: 600 }}>{item.name}</span></FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact>{sj?.schedule || "—"}</Label>
-                                                </FlexItem>
-                                                <FlexItem>
-                                                    <Label isCompact color={sj?.enabled ? "green" : "grey"}>
-                                                        {sj?.enabled ? "enabled" : "disabled"}
-                                                    </Label>
-                                                </FlexItem>
-                                            </Flex>
-                                        );
-                                    }}
-                                    renderModal={(props) => (
-                                        <ScheduledJobPickerModal {...props} allScheduledJobs={scheduledJobs} />
-                                    )} />
                                 <SessionTemplateCheckboxSection
                                     templates={sessionTemplates}
                                     selected={selectedSessionTemplates}
@@ -481,10 +423,10 @@ export function ConfigurationPacksPage() {
                                             autoSelectReferencedItems([st.allowedTools]);
                                         }
                                     }} />
-                                <ConnectionCheckboxSection
-                                    connections={connections}
-                                    selected={selectedConnections}
-                                    onToggle={(id) => setSelectedConnections(toggleStringSet(selectedConnections, id))} />
+                                <EventSourceCheckboxSection
+                                    eventSources={eventSources}
+                                    selected={selectedEventSources}
+                                    onToggle={(id) => setSelectedEventSources(toggleStringSet(selectedEventSources, id))} />
                                 <CheckboxSection title="Subscriptions"
                                     items={subscriptions.map((s) => ({ id: s.id, name: s.name, description: s.description }))}
                                     selected={selectedSubscriptions}
@@ -563,6 +505,17 @@ export function ConfigurationPacksPage() {
                                 <Alert variant="danger" title="Import failed" isInline
                                     style={{ marginBottom: "16px" }}>
                                     {importError}
+                                    {importProblems && (
+                                        <ul style={{ marginTop: "8px" }}>
+                                            {Object.entries(importProblems).flatMap(([key, problems]) =>
+                                                problems.map((p, i) => (
+                                                    <li key={`${key}-${i}`}>
+                                                        <strong>{key}</strong>
+                                                        {p.path ? <code> {p.path}</code> : null}: {p.message}
+                                                    </li>
+                                                )))}
+                                        </ul>
+                                    )}
                                 </Alert>
                             )}
 
@@ -575,10 +528,8 @@ export function ConfigurationPacksPage() {
                                         {importResult.toolsets ? <li>{importResult.toolsets} toolset(s)</li> : null}
                                         {importResult.mcpServers ? <li>{importResult.mcpServers} MCP server(s)</li> : null}
                                         {importResult.actionTypes ? <li>{importResult.actionTypes} action type(s)</li> : null}
-                                        {importResult.reportDefinitions ? <li>{importResult.reportDefinitions} report definition(s)</li> : null}
-                                        {importResult.scheduledJobs ? <li>{importResult.scheduledJobs} scheduled job(s)</li> : null}
                                         {importResult.sessionTemplates ? <li>{importResult.sessionTemplates} session template(s)</li> : null}
-                                        {importResult.connections ? <li>{importResult.connections} connection(s)</li> : null}
+                                        {importResult.eventSources ? <li>{importResult.eventSources} event source(s)</li> : null}
                                         {importResult.subscriptions ? <li>{importResult.subscriptions} subscription(s)</li> : null}
                                         {importResult.workflowDefinitions ? <li>{importResult.workflowDefinitions} workflow definition(s)</li> : null}
                                     </ul>
@@ -873,7 +824,7 @@ function ActionTypePickerModal({ isOpen, onClose, availableItems, modalSelected,
                                     </Td>
                                     <Td>{at.name}</Td>
                                     <Td>
-                                        <Label isCompact color={at.executionMode === "agent" ? "blue" : "orange"}>
+                                        <Label isCompact color={executionModeColor(at.executionMode)}>
                                             {at.executionMode}
                                         </Label>
                                     </Td>
@@ -1090,19 +1041,19 @@ function SessionTemplateCheckboxSection({ templates, selected, onToggle }: {
     );
 }
 
-function ConnectionCheckboxSection({ connections, selected, onToggle }: {
-    connections: Connection[];
+function EventSourceCheckboxSection({ eventSources, selected, onToggle }: {
+    eventSources: EventSourceConfig[];
     selected: Set<string>;
     onToggle: (id: string) => void;
 }) {
-    if (connections.length === 0) return null;
+    if (eventSources.length === 0) return null;
 
-    const selectedCount = connections.filter((c) => selected.has(c.id)).length;
+    const selectedCount = eventSources.filter((c) => selected.has(c.id)).length;
 
     return (
         <div style={{ marginBottom: "16px" }}>
             <div style={{ fontWeight: 600, marginBottom: "8px", fontSize: "14px" }}>
-                Connections
+                Event Sources
                 {selectedCount > 0 && (
                     <Label isCompact color="blue" style={{ marginLeft: "8px" }}>
                         {selectedCount} selected
@@ -1116,9 +1067,9 @@ function ConnectionCheckboxSection({ connections, selected, onToggle }: {
                 backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
                 borderRadius: "4px",
             }}>
-                {connections.map((c) => (
+                {eventSources.map((c) => (
                     <Checkbox key={c.id}
-                        id={`connection-${c.id}`}
+                        id={`event-source-${c.id}`}
                         label={c.name}
                         description={c.description}
                         isChecked={selected.has(c.id)}
@@ -1126,157 +1077,5 @@ function ConnectionCheckboxSection({ connections, selected, onToggle }: {
                 ))}
             </div>
         </div>
-    );
-}
-
-function ReportDefinitionPickerModal({ isOpen, onClose, availableItems, modalSelected, toggleItem, selectAll, onConfirm, allReportDefs }: {
-    isOpen: boolean;
-    onClose: () => void;
-    availableItems: Array<{ id: number; name: string }>;
-    modalSelected: Set<number>;
-    toggleItem: (id: number) => void;
-    selectAll: (ids: number[]) => void;
-    onConfirm: () => void;
-    allReportDefs: ReportDefinition[];
-}) {
-    const [filter, setFilter] = useState("");
-
-    const available = allReportDefs.filter((rd) => availableItems.some((i) => i.id === rd.id));
-    const filtered = filter
-        ? available.filter((rd) =>
-            rd.name.toLowerCase().includes(filter.toLowerCase())
-            || (rd.description && rd.description.toLowerCase().includes(filter.toLowerCase())))
-        : available;
-
-    const allFilteredSelected = filtered.length > 0 && filtered.every((rd) => modalSelected.has(rd.id));
-    const handleSelectAll = () => {
-        if (allFilteredSelected) {
-            selectAll([...modalSelected].filter((id) => !filtered.some((rd) => rd.id === id)));
-        } else {
-            selectAll([...new Set([...modalSelected, ...filtered.map((rd) => rd.id)])]);
-        }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} variant="large" aria-label="Add Report Definitions">
-            <ModalHeader title="Add Report Definitions" />
-            <ModalBody>
-                <TextInput placeholder="Filter report definitions..." value={filter}
-                    onChange={(_e, v) => setFilter(v)} aria-label="Filter report definitions"
-                    style={{ marginBottom: "16px" }} />
-                {filtered.length === 0 ? (
-                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
-                        {available.length === 0 ? "All report definitions are already selected." : "No report definitions match the filter."}
-                    </p>
-                ) : (
-                    <Table aria-label="Report Definitions" variant="compact">
-                        <Thead>
-                            <Tr>
-                                <Th style={{ width: "40px" }}><Checkbox id="select-all-reportdefs" isChecked={allFilteredSelected}
-                                    onChange={handleSelectAll} aria-label="Select all" /></Th>
-                                <Th>Name</Th>
-                                <Th>Schedule</Th>
-                                <Th>Time Window</Th>
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {filtered.map((rd) => (
-                                <Tr key={rd.id}>
-                                    <Td><Checkbox id={`rd-pick-${rd.id}`} isChecked={modalSelected.has(rd.id)}
-                                        onChange={() => toggleItem(rd.id)} aria-label={`Select ${rd.name}`} /></Td>
-                                    <Td>{rd.name}</Td>
-                                    <Td><Label isCompact>{rd.schedule}</Label></Td>
-                                    <Td><Label isCompact color="grey">{rd.timeWindow}</Label></Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
-            </ModalBody>
-            <ModalFooter>
-                <Button variant="primary" onClick={onConfirm} isDisabled={modalSelected.size === 0}>
-                    Add {modalSelected.size > 0 ? `(${modalSelected.size})` : ""}
-                </Button>
-                <Button variant="link" onClick={onClose}>Cancel</Button>
-            </ModalFooter>
-        </Modal>
-    );
-}
-
-function ScheduledJobPickerModal({ isOpen, onClose, availableItems, modalSelected, toggleItem, selectAll, onConfirm, allScheduledJobs }: {
-    isOpen: boolean;
-    onClose: () => void;
-    availableItems: Array<{ id: number; name: string }>;
-    modalSelected: Set<number>;
-    toggleItem: (id: number) => void;
-    selectAll: (ids: number[]) => void;
-    onConfirm: () => void;
-    allScheduledJobs: ScheduledJob[];
-}) {
-    const [filter, setFilter] = useState("");
-
-    const available = allScheduledJobs.filter((sj) => availableItems.some((i) => i.id === sj.id));
-    const filtered = filter
-        ? available.filter((sj) =>
-            sj.name.toLowerCase().includes(filter.toLowerCase())
-            || (sj.description && sj.description.toLowerCase().includes(filter.toLowerCase())))
-        : available;
-
-    const allFilteredSelected = filtered.length > 0 && filtered.every((sj) => modalSelected.has(sj.id));
-    const handleSelectAll = () => {
-        if (allFilteredSelected) {
-            selectAll([...modalSelected].filter((id) => !filtered.some((sj) => sj.id === id)));
-        } else {
-            selectAll([...new Set([...modalSelected, ...filtered.map((sj) => sj.id)])]);
-        }
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} variant="large" aria-label="Add Scheduled Jobs">
-            <ModalHeader title="Add Scheduled Jobs" />
-            <ModalBody>
-                <TextInput placeholder="Filter scheduled jobs..." value={filter}
-                    onChange={(_e, v) => setFilter(v)} aria-label="Filter scheduled jobs"
-                    style={{ marginBottom: "16px" }} />
-                {filtered.length === 0 ? (
-                    <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
-                        {available.length === 0 ? "All scheduled jobs are already selected." : "No scheduled jobs match the filter."}
-                    </p>
-                ) : (
-                    <Table aria-label="Scheduled Jobs" variant="compact">
-                        <Thead>
-                            <Tr>
-                                <Th style={{ width: "40px" }}><Checkbox id="select-all-scheduledjobs" isChecked={allFilteredSelected}
-                                    onChange={handleSelectAll} aria-label="Select all" /></Th>
-                                <Th>Name</Th>
-                                <Th>Schedule</Th>
-                                <Th>Status</Th>
-                            </Tr>
-                        </Thead>
-                        <Tbody>
-                            {filtered.map((sj) => (
-                                <Tr key={sj.id}>
-                                    <Td><Checkbox id={`sj-pick-${sj.id}`} isChecked={modalSelected.has(sj.id)}
-                                        onChange={() => toggleItem(sj.id)} aria-label={`Select ${sj.name}`} /></Td>
-                                    <Td>{sj.name}</Td>
-                                    <Td><Label isCompact>{sj.schedule}</Label></Td>
-                                    <Td>
-                                        <Label isCompact color={sj.enabled ? "green" : "grey"}>
-                                            {sj.enabled ? "enabled" : "disabled"}
-                                        </Label>
-                                    </Td>
-                                </Tr>
-                            ))}
-                        </Tbody>
-                    </Table>
-                )}
-            </ModalBody>
-            <ModalFooter>
-                <Button variant="primary" onClick={onConfirm} isDisabled={modalSelected.size === 0}>
-                    Add {modalSelected.size > 0 ? `(${modalSelected.size})` : ""}
-                </Button>
-                <Button variant="link" onClick={onClose}>Cancel</Button>
-            </ModalFooter>
-        </Modal>
     );
 }

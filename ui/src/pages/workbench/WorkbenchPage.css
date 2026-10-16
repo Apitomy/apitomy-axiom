@@ -1,0 +1,636 @@
+/* PageSection (isFilled, no body wrapper): a flex column filling the page's main area. */
+.axiom-workbench-page {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.axiom-workbench {
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.axiom-workbench__toolbar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--md, 16px);
+    padding: var(--pf-t--global--spacer--sm, 8px) var(--pf-t--global--spacer--md, 16px);
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+/* Extra room between the breadcrumb and the toolbar's first toggle group. */
+.axiom-workbench__toolbar > .axiom-workbench__name {
+    margin-right: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-workbench__spacer {
+    flex: 1;
+}
+
+.axiom-workbench__notice {
+    grid-column: 1 / -1;
+}
+
+.axiom-workbench__left,
+.axiom-workbench__right,
+.axiom-workbench__centre {
+    grid-row: 4;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+}
+
+/* Explicit columns: placement never depends on DOM order or on which panes are collapsed. */
+.axiom-workbench__left {
+    grid-column: 1;
+    border-right: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+.axiom-workbench__splitter--left { grid-column: 2; }
+.axiom-workbench__centre { grid-column: 3; }
+.axiom-workbench__splitter--right { grid-column: 4; }
+.axiom-workbench__right {
+    grid-column: 5;
+    border-left: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-workbench__centre {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.axiom-workbench__tabs.pf-v6-c-tabs {
+    flex: 0 0 auto;
+}
+
+/* The active tab's content fills the centre column below the tab bar. */
+.axiom-workbench__centre > .pf-v6-c-tab-content:not([hidden]) {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+/* Workflow tab: alerts at natural height, the Flow editor takes the rest (no scroll). */
+.axiom-workbench__workflow-tab {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.axiom-workbench__workflow-tab > .pf-v6-c-alert {
+    flex: 0 0 auto;
+}
+
+.axiom-workbench__workflow-editor {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.axiom-workbench__placeholder {
+    padding: var(--pf-t--global--spacer--md, 16px);
+}
+
+
+.axiom-workbench__item {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs, 4px);
+    min-width: 0;
+}
+
+.axiom-workbench__item-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.axiom-workbench__item-markers {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs, 4px);
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+.axiom-workbench__marker {
+    display: inline-flex;
+    align-items: center;
+}
+
+
+
+.axiom-workbench__splitter {
+    grid-row: 4;
+    cursor: col-resize;
+    /* Zero-width grid column: the 7px drag handle overlaps the pane border, so the centre runs flush. */
+    position: relative;
+    width: 7px;
+    left: -3px;
+    z-index: 2;
+}
+
+.axiom-workbench__splitter:hover,
+.axiom-workbench__splitter:active {
+    background-color: var(--pf-t--global--color--brand--default, #0066cc);
+    opacity: 0.4;
+}
+
+.axiom-workbench__pulse {
+    display: block;
+    width: 10px;
+    height: 10px;
+    margin: 8px auto;
+    border-radius: 50%;
+    background-color: var(--pf-t--global--color--brand--default, #0066cc);
+    animation: axiom-workbench-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes axiom-workbench-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.axiom-workbench__right {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.axiom-workbench__right > .pf-v6-c-button {
+    align-self: flex-start;
+}
+
+.axiom-workbench__chat {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+
+.axiom-workbench__chat-toolbar,
+.axiom-workbench__pane-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs, 4px);
+    padding: 0 var(--pf-t--global--spacer--xs, 4px);
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    /* Same height as the centre editor tabs (39px), so the side panels' borders line up with the tab bar's. */
+    min-height: 39px;
+    flex: 0 0 auto;
+}
+
+.axiom-workbench__chat-toolbar-end,
+.axiom-workbench__pane-toolbar-end {
+    margin-left: auto;
+}
+
+/* The left toolbar holds only the collapse button; no side padding so it also fits the 32px rail. */
+.axiom-workbench__pane-toolbar {
+    padding: 0;
+}
+
+.axiom-workbench__pane-toolbar > .axiom-workbench__session-badge {
+    margin-left: var(--pf-t--global--spacer--sm, 8px);
+    min-width: 0;
+}
+
+.axiom-workbench__pane-title {
+    margin-left: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__pane-title {
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Compact centre tabs: default PatternFly tabs with tighter vertical padding. */
+.axiom-workbench__tabs.pf-v6-c-tabs {
+    --pf-v6-c-tabs__item--PaddingBlockStart: var(--pf-t--global--spacer--xs, 4px);
+    --pf-v6-c-tabs__item--PaddingBlockEnd: var(--pf-t--global--spacer--xs, 4px);
+    --pf-v6-c-tabs__link--PaddingBlockStart: 2px;
+    --pf-v6-c-tabs__link--PaddingBlockEnd: 2px;
+}
+
+.axiom-workbench__tabs.pf-v6-c-tabs .pf-v6-c-tabs__item-action .pf-v6-c-button {
+    padding-block: var(--pf-t--global--spacer--xs, 4px);
+}
+
+/* Action type / tool editors: pad their inner tab panels (Info, Environment, Inputs, ...) away from the borders.
+   The standalone detail pages get this from the page section padding. */
+.axiom-workbench__item-tab .pf-v6-c-tab-content {
+    padding: 0 var(--pf-t--global--spacer--md, 16px) var(--pf-t--global--spacer--md, 16px);
+}
+
+/* The subscription editor has no inner tabs, so it gets the same padding as the editors' tab panels, and scrolls
+   when taller than the centre pane. */
+.axiom-workbench__item-tab > .axiom-subscription-item-editor {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--pf-t--global--spacer--md, 16px);
+}
+
+/* Action type / tool tabs fill the centre; their active inner panel scrolls, and the Code tab's editor
+   fills the remaining height so only the editor's content scrolls. */
+.axiom-workbench__item-tab {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+.axiom-workbench__item-tab > .pf-v6-c-tabs {
+    flex: 0 0 auto;
+}
+
+.axiom-workbench__item-tab > .pf-v6-c-tab-content:not([hidden]) {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.axiom-workbench__item-tab .axiom-action-type-editor__code-tab:not([hidden]),
+.axiom-workbench__item-tab .axiom-action-type-editor__code-tab > fieldset,
+.axiom-workbench__item-tab .axiom-tool-editor__script-tab:not([hidden]),
+.axiom-workbench__item-tab .axiom-node-code--fill {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.axiom-workbench__item-tab .axiom-node-code--fill > .pf-v6-c-code-editor {
+    flex: 1 1 0;
+    min-height: 200px;
+}
+
+/* Component rows: the select button fills the row; the actions menu sits at the end. */
+.axiom-workbench__row {
+    display: flex;
+    align-items: center;
+}
+
+.axiom-workbench__row > .pf-v6-c-simple-list__item-link {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.axiom-workbench__row-menu {
+    flex: 0 0 auto;
+}
+
+/* Keeps the workflow row's markers aligned with the rows that have an actions menu. */
+span.axiom-workbench__row-menu {
+    width: 29px;
+}
+
+/* Drafts with unpublished changes are shown in blue (as IntelliJ shows modified files); published items keep
+   the regular text colour. The list link's own colour is "subtle", so published names set the regular colour
+   explicitly. */
+.axiom-workbench__item-name {
+    color: var(--pf-t--global--text--color--regular);
+}
+
+.axiom-workbench__item-name.axiom-workbench__item-name--unpublished {
+    color: var(--pf-t--color--blue--50);
+}
+
+:root:where(.pf-v6-theme-dark) .axiom-workbench__item-name.axiom-workbench__item-name--unpublished {
+    color: var(--pf-t--color--blue--30);
+}
+
+/* Test output strip at the bottom of the centre pane. */
+.axiom-test-strip {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-test-strip__header {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm, 8px);
+    padding: 2px var(--pf-t--global--spacer--sm, 8px);
+}
+
+/* Separates the toolbar from the run list (only when expanded; collapsed it sits at the pane's bottom edge). */
+.axiom-test-strip__header:not(:last-child) {
+    border-bottom: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+}
+
+.axiom-test-strip__body {
+    height: min(220px, 40vh);
+    overflow: auto;
+    padding: 0 var(--pf-t--global--spacer--sm, 8px) var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-test-strip__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.axiom-test-strip__row {
+    display: flex;
+    cursor: pointer;
+    padding: 2px var(--pf-t--global--spacer--xs, 4px);
+    border-radius: var(--pf-t--global--border--radius--small, 4px);
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm, 8px);
+    min-width: 0;
+}
+
+.axiom-test-strip__row > :not(.axiom-test-strip__summary) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.axiom-test-strip__summary {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.axiom-test-strip__empty {
+    margin: var(--pf-t--global--spacer--sm, 8px) 0;
+}
+
+.axiom-test-strip__row:hover,
+.axiom-test-strip__row:focus-visible {
+    background: var(--pf-t--global--background--color--primary--hover);
+}
+
+/* Test run details dialog. */
+.axiom-test-run__section {
+    margin-top: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-test-run__section > h3 {
+    margin-bottom: var(--pf-t--global--spacer--xs, 4px);
+}
+
+/* Pane toolbars (Components, AI Assistant, Test output) share a subtle tinted background, like the Flow
+   canvas palette bar; the centre tab bar stays on the regular background. */
+.axiom-workbench__pane-toolbar,
+.axiom-workbench__chat-toolbar,
+.axiom-test-strip__header {
+    background-color: var(--pf-t--global--background--color--secondary--default);
+}
+
+/* Test run metadata on one wrapping line of compact "term value" pairs. */
+.axiom-test-run__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs, 4px) var(--pf-t--global--spacer--lg, 24px);
+    margin: 0;
+}
+
+.axiom-test-run__meta > div {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-test-run__meta dt {
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+}
+
+.axiom-test-run__meta dd {
+    margin: 0;
+}
+
+/* Workbench tool calls in the chat: PatternFly disclosure sections (ExpandableSection displaySize="lg").
+   The header text may wrap (the chat pane is narrow); a card's link sits beside the toggle, top right. */
+.axiom-workbench__tool-card {
+    position: relative;
+    margin: 4px 0;
+    font-size: var(--pf-t--global--font--size--sm);
+}
+
+/* The toggle is a PatternFly link button (nowrap); let the card header wrap inside the narrow chat pane. */
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__toggle {
+    min-width: 0;
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__toggle > .pf-v6-c-button {
+    max-width: 100%;
+    white-space: normal;
+    align-items: flex-start;
+    text-align: start;
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__toggle .pf-v6-c-button__text {
+    min-width: 0;
+}
+
+/* Tighter than PatternFly's disclosure defaults (16px sides, 30px content indent) for the narrow chat pane. */
+.axiom-workbench__tool-card .pf-v6-c-expandable-section.pf-m-display-lg {
+    padding-inline: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section.pf-m-display-lg.pf-m-expanded {
+    padding-block-end: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__tool-card .pf-v6-c-expandable-section__content {
+    padding-inline-start: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__tool-card-actions {
+    margin-top: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-workbench__tool-card-entry + .axiom-workbench__tool-card-entry {
+    margin-top: var(--pf-t--global--spacer--md, 16px);
+}
+
+.axiom-workbench__tool-card-entry-title {
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+    margin-bottom: 2px;
+}
+
+/* Unpacked tool call details inside a card. */
+.axiom-tool-details__section + .axiom-tool-details__section {
+    margin-top: var(--pf-t--global--spacer--sm, 8px);
+}
+
+.axiom-tool-details__label {
+    font-size: var(--pf-t--global--font--size--xs);
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+    color: var(--pf-t--global--text--color--subtle);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.axiom-tool-details__label--danger,
+.axiom-tool-details__text--danger {
+    color: var(--pf-t--global--text--color--status--danger--default);
+}
+
+.axiom-tool-details__code {
+    max-height: 240px;
+    overflow: auto;
+    border-radius: var(--pf-t--global--border--radius--small, 4px);
+}
+
+.axiom-tool-details__text {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 12px;
+}
+
+.axiom-tool-details__list {
+    margin: 0 0 0 18px;
+}
+
+.axiom-tool-details__list--mono {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.axiom-workbench__tool-card-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    text-align: start;
+    font-weight: var(--pf-t--global--font--weight--body--default, 400);
+}
+
+.axiom-workbench__tool-card-row > :not(.axiom-workbench__tool-card-text) {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.axiom-workbench__tool-card-icon {
+    display: inline-flex;
+    padding-top: 2px;
+    color: var(--pf-t--global--icon--color--subtle);
+}
+
+.axiom-workbench__tool-card-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--pf-t--global--text--color--regular);
+}
+
+.axiom-workbench__tool-card--quiet .axiom-workbench__tool-card-text {
+    color: var(--pf-t--global--text--color--subtle);
+}
+
+.axiom-workbench__tool-card--danger .axiom-workbench__tool-card-text,
+.axiom-workbench__tool-card--danger .axiom-workbench__tool-card-icon {
+    color: var(--pf-t--global--text--color--status--danger--default);
+}
+
+.axiom-workbench__tool-card-list {
+    margin: 0 0 4px 24px;
+    color: var(--pf-t--global--text--color--subtle);
+}
+
+/* Code blocks in the test run dialog: highlighted with SyntaxHighlighter, scroll when long, copy at top right. */
+.axiom-test-run__code {
+    position: relative;
+    max-height: 400px;
+    overflow: auto;
+    border: 1px solid var(--pf-t--global--border--color--default, #d2d2d2);
+    border-radius: var(--pf-t--global--border--radius--small, 4px);
+}
+
+.axiom-test-run__code > .pf-v6-c-button.axiom-test-run__copy {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 1;
+}
+
+.axiom-test-run__plain {
+    margin: 0;
+    padding: 8px 40px 8px 12px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 13px;
+}
+
+.axiom-test-run__tabs {
+    margin-top: var(--pf-t--global--spacer--md, 16px);
+}
+
+/* Every tab gets the same fixed height so the dialog doesn't resize when switching tabs; long content scrolls. */
+.pf-v6-c-tab-content__body.axiom-test-run__tab-body {
+    padding-top: var(--pf-t--global--spacer--md, 16px);
+    height: min(55vh, 520px);
+    overflow: auto;
+    box-sizing: border-box;
+}
+
+.axiom-test-run__tab-body > .axiom-test-run__code {
+    max-height: 100%;
+}
+
+.axiom-test-run__tab-body > .axiom-test-run__section:first-child {
+    margin-top: 0;
+}
+
+/* Inputs/Parameters/Outputs as a field list (or JSON) in the test run dialog. */
+.axiom-test-run__values-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--pf-t--global--spacer--sm, 8px);
+}
+
+/* Read-only form fields show values in monospace, like the code blocks. */
+.axiom-test-run__fields .pf-v6-c-form-control input,
+.axiom-test-run__fields .pf-v6-c-form-control textarea {
+    font-family: var(--pf-t--global--font--family--mono);
+}
+
+.axiom-test-run__value {
+    font-family: var(--pf-t--global--font--family--mono);
+    font-size: 13px;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+code.axiom-test-run__value {
+    font-weight: normal;
+}
+
+.axiom-test-run__fields .axiom-test-run__code {
+    max-height: 240px;
+}
+
+/* The graph of the run dialog fills its fixed-height tab. */
+.pf-v6-c-tab-content__body.axiom-run-detail__graph {
+    overflow: hidden;
+}
+
+.axiom-run-detail__graph > * {
+    height: 100%;
+}
+
+/* Separates the subscription editor's form from its Matching events preview. */
+.axiom-subscription-item-editor__divider {
+    margin-block: var(--pf-t--global--spacer--lg, 24px) var(--pf-t--global--spacer--md, 16px);
+}

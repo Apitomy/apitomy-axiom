@@ -1,7 +1,7 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.agents.spi.AgentResult;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
@@ -67,14 +67,13 @@ class WorkflowExecutionServiceTest {
     @Test
     void completingActionTaskAdvancesLinearRunToCompleted() {
         long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Linear Run Project";
-            project.type = "other";
-            project.status = "new";
-            project.ref = "test/linear-run";
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Linear Run Subject";
+            subject.type = "other";
+            subject.ref = "test/linear-run";
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Linear Run WF";
@@ -92,7 +91,7 @@ class WorkflowExecutionServiceTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
@@ -129,14 +128,13 @@ class WorkflowExecutionServiceTest {
     @Test
     void failingActionTaskAdvancesLinearRunToFailed() {
         long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Linear Failure Project";
-            project.type = "other";
-            project.status = "new";
-            project.ref = "test/linear-failure";
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Linear Failure Subject";
+            subject.type = "other";
+            subject.ref = "test/linear-failure";
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Linear Failure WF";
@@ -154,7 +152,7 @@ class WorkflowExecutionServiceTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
@@ -210,7 +208,7 @@ class WorkflowExecutionServiceTest {
      */
     @Test
     void triggeringWaitWorkflowParksWithoutCreatingATask() {
-        long[] ids = createProjectAndDefinition("Wait Run Project", WAIT_CONTENT);
+        long[] ids = createSubjectAndDefinition("Wait Run Subject", WAIT_CONTENT);
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
@@ -237,7 +235,7 @@ class WorkflowExecutionServiceTest {
      */
     @Test
     void onWaitElapsedAdvancesRunToCompleted() {
-        long[] ids = createProjectAndDefinition("Wait Elapsed Project", WAIT_CONTENT);
+        long[] ids = createSubjectAndDefinition("Wait Elapsed Subject", WAIT_CONTENT);
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
@@ -278,12 +276,12 @@ class WorkflowExecutionServiceTest {
     /**
      * Triggering a workflow that parks on a receive-event node should create a
      * {@link WorkflowEventSubscriptionEntity} (not a {@link TaskEntity})
-     * addressed to the node, with the denormalized eventType and projectId.
+     * addressed to the node, with the denormalized eventType and subjectId.
      */
     @Test
     void triggeringReceiveEventWorkflowParksWithoutCreatingATask() {
-        long[] ids = createProjectAndDefinition(
-                "Receive Event Park Project", RECEIVE_EVENT_CONTENT);
+        long[] ids = createSubjectAndDefinition(
+                "Receive Event Park Subject", RECEIVE_EVENT_CONTENT);
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
@@ -299,7 +297,7 @@ class WorkflowExecutionServiceTest {
             assertNotNull(sub, "A subscription should be created for the receive-event node");
             assertEquals("r1", sub.nodeId);
             assertEquals("pr-merged", sub.eventType);
-            assertEquals(ids[0], sub.projectId);
+            assertEquals(ids[0], sub.subjectId);
         });
     }
 
@@ -311,8 +309,8 @@ class WorkflowExecutionServiceTest {
      */
     @Test
     void onEventReceivedAdvancesRunToCompleted() {
-        long[] ids = createProjectAndDefinition(
-                "Receive Event Resume Project", RECEIVE_EVENT_CONTENT);
+        long[] ids = createSubjectAndDefinition(
+                "Receive Event Resume Subject", RECEIVE_EVENT_CONTENT);
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
@@ -339,14 +337,14 @@ class WorkflowExecutionServiceTest {
      */
     @Test
     void cancellingRunDeletesEventSubscriptions() {
-        long[] ids = createProjectAndDefinition(
-                "Receive Event Cancel Project", RECEIVE_EVENT_CONTENT);
+        long[] ids = createSubjectAndDefinition(
+                "Receive Event Cancel Subject", RECEIVE_EVENT_CONTENT);
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
 
         QuarkusTransaction.requiringNew().run(() ->
-                workflowExecutionService.cancelWorkflow(ids[0]));
+                workflowExecutionService.cancelWorkflowRun(run.id));
 
         QuarkusTransaction.requiringNew().run(() -> {
             long count = WorkflowEventSubscriptionEntity.count("runId", run.id);
@@ -356,22 +354,21 @@ class WorkflowExecutionServiceTest {
     }
 
     /**
-     * Creates a project and a published single-version workflow definition
-     * from the given content, returning {id[0]=projectId, id[1]=definitionId}.
+     * Creates a subject and a published single-version workflow definition
+     * from the given content, returning {id[0]=subjectId, id[1]=definitionId}.
      */
-    private long[] createProjectAndDefinition(String projectName, String content) {
+    private long[] createSubjectAndDefinition(String subjectName, String content) {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = projectName;
-            project.type = "other";
-            project.status = "new";
-            project.ref = "test/" + projectName.toLowerCase().replace(" ", "-");
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = subjectName;
+            subject.type = "other";
+            subject.ref = "test/" + subjectName.toLowerCase().replace(" ", "-");
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
-            def.name = projectName + " WF";
+            def.name = subjectName + " WF";
             def.content = content;
             def.currentVersion = 1;
             def.createdOn = Instant.now();
@@ -386,7 +383,7 @@ class WorkflowExecutionServiceTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
     }
 

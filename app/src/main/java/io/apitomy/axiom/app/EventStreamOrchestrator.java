@@ -2,27 +2,21 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
-import io.apitomy.axiom.core.lifecycle.ProjectStatus;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceContext;
-import io.apitomy.axiom.manager.ManagerDecision;
-import io.apitomy.axiom.manager.ManagerEvaluationResult;
-import io.apitomy.axiom.manager.ManagerService;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
@@ -37,10 +31,8 @@ import org.jboss.logging.Logger;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -79,9 +71,6 @@ public class EventStreamOrchestrator {
     WorkflowEventDispatcher workflowEventDispatcher;
 
     @Inject
-    ManagerService managerService;
-
-    @Inject
     WorkflowExecutionService workflowExecutionService;
 
     @Inject
@@ -95,9 +84,6 @@ public class EventStreamOrchestrator {
 
     @Inject
     io.apitomy.axiom.core.tracing.TraceService traceService;
-
-    @Inject
-    ManagerTraceRecorder managerTraceRecorder;
 
     /**
      * Maximum routing attempts per ledger entry, the first try included. The entry is
@@ -585,7 +571,7 @@ public class EventStreamOrchestrator {
             }
             // Each rule starts its own trace: a per-rule context scopes the trace ID to it.
             try (LogContext ruleLog = LogContext.create()) {
-                routeRule(event, sub, rule, eventMap, ledgerId, attempt, ruleLog);
+                routeRule(event, sub, rule, eventMap, ledgerId, attempt);
             }
         }
     }
@@ -594,21 +580,15 @@ public class EventStreamOrchestrator {
      * Runs a single routing rule and persists its outcome (completed or failed).
      */
     private void routeRule(StreamEventEntity event, SubscriptionWithFilters sub, RoutingRule rule,
-                           Map<String, Object> eventMap, Long ledgerId, int attempt,
-                           LogContext ruleLog) {
+                           Map<String, Object> eventMap, Long ledgerId, int attempt) {
         try {
             RoutingOutcomeEntity outcome = switch (rule.type()) {
-                case RoutingRule.TYPE_MANAGER -> routeToManager(event, ruleLog);
                 case RoutingRule.TYPE_WORKFLOW_DISPATCH ->
                         routeToWorkflowDispatch(event, eventMap, ledgerId);
                 case RoutingRule.TYPE_CREATE_WORKFLOW ->
                         routeToCreateWorkflow(event, rule, ledgerId);
-                case RoutingRule.TYPE_INVOKE_ACTION -> routeToInvokeAction(event, rule, ruleLog);
-                default -> {
-                    LOG.warnf("Unknown routing type '%s' in subscription %d",
-                            rule.type(), sub.id);
-                    yield null;
-                }
+                default -> throw new IllegalStateException(
+                        "Unsupported routing type: " + rule.type());
             };
             if (outcome != null) {
                 outcome.ledgerId = ledgerId;
@@ -618,19 +598,15 @@ public class EventStreamOrchestrator {
                 QuarkusTransaction.requiringNew().run(() -> persistOutcome(outcome));
             }
         } catch (Exception e) {
-            // Record failed outcome (routing types may supply a pre-filled one, e.g.
-            // with the trace ID of the failed Manager evaluation)
+            // Record failed outcome
             QuarkusTransaction.requiringNew().run(() -> {
-                RoutingOutcomeEntity failedOutcome = e instanceof RoutingFailedException rfe
-                        ? rfe.outcome() : new RoutingOutcomeEntity();
+                RoutingOutcomeEntity failedOutcome = new RoutingOutcomeEntity();
                 failedOutcome.ledgerId = ledgerId;
                 failedOutcome.attemptNumber = attempt;
                 failedOutcome.routingType = rule.type();
                 failedOutcome.status = "failed";
-                if (failedOutcome.errorMessage == null) {
-                    failedOutcome.errorMessage = e.getMessage() != null
-                            ? truncate(e.getMessage(), 2000) : "Unknown error";
-                }
+                failedOutcome.errorMessage = e.getMessage() != null
+                        ? truncate(e.getMessage(), 2000) : "Unknown error";
                 failedOutcome.createdOn = Instant.now();
                 persistOutcome(failedOutcome);
             });
@@ -667,173 +643,6 @@ public class EventStreamOrchestrator {
         return item;
     }
 
-    /**
-     * Item type recorded for a Manager decision: a decision below the confidence threshold
-     * is escalated whatever it asked for.
-     */
-    private String decisionItemType(ManagerDecision decision) {
-        if (!managerService.meetsConfidenceThreshold(decision)) {
-            return RoutingOutcomeItemEntity.TYPE_ESCALATED;
-        }
-        return switch (decision.decision() != null ? decision.decision() : "") {
-            case "create_task", "script_action" -> RoutingOutcomeItemEntity.TYPE_TASK;
-            case "ignore" -> RoutingOutcomeItemEntity.TYPE_IGNORED;
-            case "escalate" -> RoutingOutcomeItemEntity.TYPE_ESCALATED;
-            default -> RoutingOutcomeItemEntity.TYPE_DECISION;
-        };
-    }
-
-    private RoutingOutcomeEntity routeToManager(StreamEventEntity event, LogContext ruleLog) {
-        // Trace structure: event-ingested (root) → manager-evaluation → manager-decision
-        // (one per decision) → task (for create_task / script_action decisions)
-        TraceContext traceCtx = managerTraceRecorder.startTrace("manager",
-                "Manager evaluation: " + event.type + " — " + event.ref,
-                "Event: " + event.type + " — " + event.ref, event);
-        if (traceCtx != null) {
-            ruleLog.traceId(traceCtx.traceId());
-        }
-        Long evalNodeId = managerTraceRecorder.addNode(traceCtx, "manager-evaluation",
-                "Manager evaluation: " + event.type);
-
-        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
-        outcome.status = "completed";
-        if (traceCtx != null) {
-            outcome.traceId = traceCtx.traceId();
-        }
-
-        ManagerEvaluationResult evaluation;
-        try {
-            evaluation = managerService.evaluateStreamEvent(event,
-                    traceCtx != null ? traceCtx.traceId() : null);
-        } catch (RuntimeException e) {
-            throw failManagerRouting(outcome, traceCtx, evalNodeId, null,
-                    "Manager evaluation error: " + e.getMessage(), e);
-        }
-        if (evaluation == null || evaluation.failed()) {
-            String error = evaluation != null && evaluation.errorMessage() != null
-                    ? evaluation.errorMessage() : "Manager evaluation failed";
-            throw failManagerRouting(outcome, traceCtx, evalNodeId,
-                    evaluation != null ? evaluation.activityLogId() : null, error, null);
-        }
-        managerTraceRecorder.completeNode(evalNodeId, "completed", evaluation.activityLogId());
-
-        List<ManagerDecision> decisions = evaluation.decisions();
-        if (decisions.isEmpty()) {
-            LOG.debugf("Manager returned no decisions for stream event %s", event.id);
-            outcome.summary = "No decisions";
-            managerTraceRecorder.completeTrace(traceCtx, "completed");
-            return outcome;
-        }
-
-        // Decision nodes are children of the evaluation node; task nodes are children of
-        // the decision that created them.
-        if (traceCtx != null && evalNodeId != null) {
-            traceCtx.push(evalNodeId);
-        }
-        Set<Long> projectIds = new LinkedHashSet<>();
-        StringBuilder summaryBuilder = new StringBuilder();
-        for (ManagerDecision decision : decisions) {
-            String label = ManagerTraceRecorder.decisionLabel(decision);
-            if (summaryBuilder.length() > 0) summaryBuilder.append("; ");
-            summaryBuilder.append(label);
-
-            Long decisionNodeId = managerTraceRecorder.addNode(traceCtx, "manager-decision",
-                    managerTraceRecorder.decisionNodeSummary(decision));
-            RoutingOutcomeItemEntity item = newItem(decisionItemType(decision), "completed",
-                    label + " — " + decision.reasoning());
-            item.traceNodeId = decisionNodeId;
-            outcome.pendingItems.add(item);
-            if (traceCtx != null && decisionNodeId != null) {
-                traceCtx.push(decisionNodeId);
-            }
-            try {
-                ManagerDecisionResult result = processManagerDecision(event, decision, traceCtx);
-                managerTraceRecorder.completeNode(decisionNodeId, "completed",
-                        result != null ? result.activityLogId() : null);
-                if (result != null) {
-                    item.projectId = result.projectId();
-                    item.taskId = result.taskId();
-                    if (result.projectId() != null) {
-                        projectIds.add(result.projectId());
-                    }
-                    if (outcome.projectId == null && result.projectId() != null) {
-                        outcome.projectId = result.projectId();
-                    }
-                    if (outcome.taskId == null && result.taskId() != null) {
-                        outcome.taskId = result.taskId();
-                    }
-                }
-            } catch (Exception e) {
-                String error = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                LOG.warnf(e, "Failed to process Manager decision '%s' for event %s",
-                        decision.decision(), event.id);
-                failDecisionNode(traceCtx, decisionNodeId, error);
-                item.status = "failed";
-                item.errorMessage = truncate(error, 2000);
-                summaryBuilder.append(" failed: ").append(error);
-            } finally {
-                if (traceCtx != null && decisionNodeId != null) {
-                    traceCtx.pop();
-                }
-            }
-        }
-        if (traceCtx != null && evalNodeId != null) {
-            traceCtx.pop();
-        }
-        outcome.summary = truncate(summaryBuilder.toString(), 2000);
-
-        if (traceCtx != null && projectIds.size() == 1) {
-            try {
-                traceService.setProjectId(traceCtx.traceId(), projectIds.iterator().next());
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to set project on trace %s", traceCtx.traceId());
-            }
-        }
-
-        // Tasks created by the Manager share this trace; TaskTraceFinalizer completes it
-        // when the last of them finishes. Only complete it here if no task is open.
-        completeTraceIfNoOpenTasks(traceCtx);
-        return outcome;
-    }
-
-    /**
-     * Records a failed Manager evaluation: fails the evaluation node and the trace, marks
-     * the outcome failed, and returns an exception that makes {@link #routeEvent} persist
-     * this outcome and fail the ledger entry (so it is retried).
-     */
-    private RoutingFailedException failManagerRouting(RoutingOutcomeEntity outcome,
-                                                      TraceContext traceCtx, Long evalNodeId,
-                                                      Long activityLogId, String error,
-                                                      Throwable cause) {
-        LOG.warnf("Manager evaluation failed: %s", error);
-        managerTraceRecorder.failNode(evalNodeId, error, activityLogId);
-        managerTraceRecorder.completeTrace(traceCtx, "failed");
-        outcome.status = "failed";
-        outcome.errorMessage = truncate(error, 2000);
-        outcome.summary = "Manager evaluation failed";
-        return new RoutingFailedException(error, outcome, cause);
-    }
-
-    /**
-     * Fails a decision node with the error, and fails any task node under it that was left
-     * open because the decision's transaction rolled back.
-     */
-    private void failDecisionNode(TraceContext traceCtx, Long decisionNodeId, String error) {
-        if (traceCtx == null || decisionNodeId == null) return;
-        try {
-            traceService.failNode(decisionNodeId, error);
-            List<Long> orphanTaskNodes = QuarkusTransaction.requiringNew().call(() ->
-                    io.apitomy.axiom.core.entities.TraceNodeEntity
-                            .<io.apitomy.axiom.core.entities.TraceNodeEntity>list(
-                                    "parentNodeId = ?1 and nodeType = 'task' and status = 'in-progress'",
-                                    decisionNodeId)
-                            .stream().map(n -> n.id).toList());
-            orphanTaskNodes.forEach(id -> traceService.completeNode(id, "failed"));
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to record decision failure on trace node %d", decisionNodeId);
-        }
-    }
-
     private static String truncate(String value, int maxLength) {
         if (value == null || value.length() <= maxLength) {
             return value;
@@ -842,166 +651,15 @@ public class EventStreamOrchestrator {
     }
 
     /**
-     * Completes the trace unless it still has in-progress task nodes (which will
-     * complete it when they finish) or has already been completed.
+     * Completes the trace with the given status, logging (not propagating) any failure.
      */
-    private void completeTraceIfNoOpenTasks(TraceContext traceCtx) {
+    private void completeTraceQuietly(TraceContext traceCtx, String status) {
         if (traceCtx == null) return;
         try {
-            boolean hasOpenTasks = QuarkusTransaction.requiringNew().call(() ->
-                    io.apitomy.axiom.core.entities.TraceNodeEntity.count(
-                            "traceId = ?1 and nodeType = 'task' and status = 'in-progress'",
-                            traceCtx.traceId()) > 0);
-            if (hasOpenTasks) {
-                return;
-            }
-            String status = QuarkusTransaction.requiringNew().call(() -> {
-                io.apitomy.axiom.core.entities.TraceEntity trace =
-                        io.apitomy.axiom.core.entities.TraceEntity.findById(traceCtx.traceId());
-                return trace != null ? trace.status : null;
-            });
-            if ("in-progress".equals(status)) {
-                managerTraceRecorder.completeTrace(traceCtx, "completed");
-            }
+            traceService.completeTrace(traceCtx.traceId(), status);
         } catch (Exception e) {
             LOG.warnf(e, "Failed to complete trace %s", traceCtx.traceId());
         }
-    }
-
-    /**
-     * Result of processing a single manager decision, capturing the IDs of any
-     * project/task involved and the activity row written, so they can be recorded
-     * in the routing outcome and on the decision's trace node.
-     */
-    record ManagerDecisionResult(Long projectId, Long taskId, Long activityLogId) {}
-
-    /**
-     * Thrown by a routing type to fail routing while supplying the outcome to persist.
-     */
-    static final class RoutingFailedException extends RuntimeException {
-        private static final long serialVersionUID = 1L;
-        private final transient RoutingOutcomeEntity outcome;
-
-        RoutingFailedException(String message, RoutingOutcomeEntity outcome, Throwable cause) {
-            super(message, cause);
-            this.outcome = outcome;
-        }
-
-        RoutingOutcomeEntity outcome() {
-            return outcome;
-        }
-    }
-
-    private ManagerDecisionResult processManagerDecision(StreamEventEntity event,
-                                                          ManagerDecision decision,
-                                                          TraceContext traceCtx) {
-        // Check confidence threshold — escalate if below
-        if (!managerService.meetsConfidenceThreshold(decision)) {
-            LOG.infof("Decision below confidence threshold (%.2f): %s — escalating",
-                    decision.confidence(), decision.decision());
-            return QuarkusTransaction.requiringNew().call(() ->
-                handleEscalation(event, decision, traceCtx,
-                    "Low confidence (" + String.format("%.0f%%", decision.confidence() * 100)
-                        + "): " + decision.reasoning()));
-        }
-
-        return switch (decision.decision()) {
-            case "create_task", "script_action" -> QuarkusTransaction.requiringNew().call(() ->
-                    handleCreateTask(event, decision, traceCtx));
-            case "ignore" -> QuarkusTransaction.requiringNew().call(() ->
-                    handleIgnore(event, decision, traceCtx));
-            case "escalate" -> QuarkusTransaction.requiringNew().call(() ->
-                    handleEscalation(event, decision, traceCtx, decision.reasoning()));
-            default -> throw new IllegalArgumentException(
-                    "Unknown Manager decision type: " + decision.decision());
-        };
-    }
-
-    private ManagerDecisionResult handleCreateTask(StreamEventEntity event,
-                                                     ManagerDecision decision,
-                                                     TraceContext traceCtx) {
-        ProjectEntity project = findOrCreateProjectForStreamEvent(event,
-                traceCtx != null ? traceCtx.traceId() : null);
-
-        TaskEntity task = new TaskEntity();
-        task.projectId = project.id;
-        task.actionType = decision.actionType();
-        task.createdBy = "manager";
-        task.status = "Pending";
-        task.input = decision.inputContext();
-        task.humanContext = decision.humanContext();
-        task.outputSchema = decision.outputSchema();
-        task.eventId = event.id;
-        task.createdOn = Instant.now();
-        if (traceCtx != null) {
-            task.traceId = traceCtx.traceId();
-        }
-        task.persist();
-
-        // Add a trace node for this task so the task execution is linked to the trace
-        if (traceCtx != null) {
-            try {
-                traceService.addNode(traceCtx, "task", "in-progress",
-                        "Task: " + task.actionType, "task", task.id);
-            } catch (Exception e) {
-                LOG.warnf(e, "Failed to add task trace node for task %d", task.id);
-            }
-        }
-
-        LOG.infof("Manager created task %d (%s) for project %d from stream event %s",
-                task.id, task.actionType, project.id, event.id);
-
-        logActivity(project.id, task.id, event.id, "task-created",
-                "Manager created task: " + task.actionType + " — " + decision.reasoning(),
-                task.traceId);
-        addThreadEntry(project.id, "manager", "decision",
-                "Created task: " + task.actionType + "\n\nReasoning: " + decision.reasoning());
-
-        sseEvents.fire(SseEvent.taskUpdated(project.id, task.id, "Pending"));
-        sseEvents.fire(SseEvent.projectUpdated(project.id));
-        sseEvents.fire(SseEvent.threadEntry(project.id));
-
-        // If the action type is script-based, execute the script immediately
-        // rather than waiting for the task queue to pick it up
-        ActionTypeEntity actionType = ActionTypeEntity.find("name", decision.actionType())
-                .firstResult();
-        if (actionType != null && "script".equals(actionType.executionMode)) {
-            scriptExecutionService.executeScript(task, project);
-        }
-
-        return new ManagerDecisionResult(project.id, task.id, null);
-    }
-
-    private ManagerDecisionResult handleIgnore(StreamEventEntity event, ManagerDecision decision,
-                                               TraceContext traceCtx) {
-        LOG.infof("Manager ignored stream event %s: %s", event.id, decision.reasoning());
-        Long logId = logActivity(null, null, event.id, "event-ignored",
-                "Event ignored: " + event.type + " — " + decision.reasoning(),
-                traceCtx != null ? traceCtx.traceId() : null);
-        return new ManagerDecisionResult(null, null, logId);
-    }
-
-    private ManagerDecisionResult handleEscalation(StreamEventEntity event,
-                                                   ManagerDecision decision,
-                                                   TraceContext traceCtx,
-                                                   String reason) {
-        LOG.infof("Manager escalated stream event %s: %s", event.id, reason);
-        Long logId = logActivity(null, null, event.id, "manager-escalation",
-                "Manager escalation: " + reason,
-                traceCtx != null ? traceCtx.traceId() : null);
-
-        // If we can find a project for this event, add to its thread
-        ProjectEntity project = QuarkusTransaction.requiringNew().call(() ->
-                ProjectEntity.find("ref", event.ref).<ProjectEntity>firstResult());
-        if (project != null) {
-            addThreadEntry(project.id, "manager", "question",
-                    "Escalation: " + reason
-                            + "\n\nThe Manager needs your input on how to handle this event.");
-            sseEvents.fire(SseEvent.threadEntry(project.id));
-        }
-
-        sseEvents.fire(SseEvent.notification("Manager escalation: " + reason, "warning"));
-        return new ManagerDecisionResult(project != null ? project.id : null, null, logId);
     }
 
     /**
@@ -1038,13 +696,13 @@ public class EventStreamOrchestrator {
             if (run.failed()) {
                 item.errorMessage = truncate(run.errorMessage(), 2000);
             }
-            item.projectId = run.projectId();
+            item.subjectId = run.subjectId();
             item.workflowRunId = run.runId();
             item.traceNodeId = run.traceNodeId();
             outcome.pendingItems.add(item);
-            // Backward compatibility: the outcome holds the first project and trace
-            if (outcome.projectId == null) {
-                outcome.projectId = run.projectId();
+            // Backward compatibility: the outcome holds the first subject and trace
+            if (outcome.subjectId == null) {
+                outcome.subjectId = run.subjectId();
             }
             if (outcome.traceId == null) {
                 outcome.traceId = run.traceId();
@@ -1059,229 +717,170 @@ public class EventStreamOrchestrator {
             throw new IllegalStateException(
                     "create-workflow routing rule missing workflowDefinitionId");
         }
-        Long projectId = findOrCreateProjectForEvent(event, null);
-
-        // Build the event as a JsonNode so the workflow context can access
-        // event fields via EL expressions (e.g., context.event.type,
-        // context.event.payload.issue.title). The flow engine's
-        // JsonNodeELResolver handles JsonNode navigation in EL.
-        Map<String, Object> extraContext = new HashMap<>();
+        Long subjectId = findOrCreateSubjectForEvent(event, null);
+        WorkflowRunEntity run;
         try {
-            com.fasterxml.jackson.databind.node.ObjectNode eventNode = objectMapper.createObjectNode();
-            eventNode.put("id", event.id.toString());
-            eventNode.put("type", event.type);
-            eventNode.put("source", event.source);
-            eventNode.put("connectionId", event.connectionId);
-            eventNode.put("ref", event.ref);
-            eventNode.put("timestamp", event.timestamp.toString());
-            if (event.actor != null) {
-                eventNode.set("actor", objectMapper.readTree(event.actor));
-            }
-            if (event.payload != null) {
-                eventNode.set("payload", objectMapper.readTree(event.payload));
-            }
-            extraContext.put("event", eventNode);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to build event context for workflow creation");
+            run = startRunFromEvent(event, subjectId, rule.workflowDefinitionId(),
+                    RunRequest.EMPTY, ledgerId);
+        } catch (WorkflowRunConflictException e) {
+            String summary = "Skipped: subject already has an active run of definition "
+                    + rule.workflowDefinitionId();
+            LOG.infof("%s (event %s, subject %d)", summary, event.id, subjectId);
+            RoutingOutcomeEntity skipped = new RoutingOutcomeEntity();
+            skipped.status = "completed";
+            skipped.summary = summary;
+            skipped.subjectId = subjectId;
+            RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
+                    "skipped", summary);
+            item.subjectId = subjectId;
+            skipped.pendingItems.add(item);
+            return skipped;
         }
-
-        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, rule.workflowDefinitionId(),
-                        extraContext, new EventOrigin(event.id, ledgerId)));
-        LOG.infof("Created workflow (definition %d) for event %s on project %d",
-                rule.workflowDefinitionId(), event.id, projectId);
-
-        sseEvents.fire(SseEvent.projectUpdated(projectId));
 
         RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
         outcome.status = "completed";
         outcome.summary = "Created workflow from definition " + rule.workflowDefinitionId();
-        outcome.projectId = projectId;
+        outcome.subjectId = subjectId;
         outcome.traceId = run != null ? run.traceId : null;
         RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_WORKFLOW_RUN,
                 "completed", "Workflow run from definition " + rule.workflowDefinitionId());
-        item.projectId = projectId;
+        item.subjectId = subjectId;
         item.workflowRunId = run != null ? run.id : null;
         outcome.pendingItems.add(item);
         return outcome;
     }
 
-    private RoutingOutcomeEntity routeToInvokeAction(StreamEventEntity event, RoutingRule rule,
-                                                     LogContext ruleLog) {
-        if (rule.actionTypeId() == null) {
-            throw new IllegalStateException(
-                    "invoke-action routing rule missing actionTypeId");
-        }
-
-        ActionTypeEntity actionType = QuarkusTransaction.requiringNew().call(() ->
-                ActionTypeEntity.findById(rule.actionTypeId()));
-        if (actionType == null) {
-            throw new IllegalStateException(
-                    "Action type " + rule.actionTypeId() + " not found");
-        }
-
-        // Create a trace for this invoke-action routing
-        TraceContext traceCtx = null;
-        try {
-            traceCtx = traceService.createTrace(
-                    "invoke-action",
-                    "Invoke action: " + actionType.name + " — " + event.ref,
-                    event.id, null, null,
-                    "invoke-action", "Invoke action: " + actionType.name,
-                    null, null);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create trace for invoke-action of event %s", event.id);
-        }
-        if (traceCtx != null) {
-            ruleLog.traceId(traceCtx.traceId());
-        }
-
-        final io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx = traceCtx;
-        Long projectId;
-        Long taskId;
-        try {
-            projectId = findOrCreateProjectForEvent(event,
-                    traceCtx != null ? traceCtx.traceId() : null);
-
-            // Build a structured input with a human-readable summary for {{managerInput}}
-            // and the raw event payload for {{event}}
-            String taskInput = buildInvokeActionInput(event);
-            taskId = createInvokeActionTask(event, actionType, projectId, taskInput,
-                    finalTraceCtx);
-        } catch (RuntimeException e) {
-            // The task was never created, so nothing else will close this trace.
-            managerTraceRecorder.completeTrace(traceCtx, "failed");
-            throw e;
-        }
-
-        // The trace is intentionally left in-progress: TaskExecutionService completes it
-        // (and the task node) when the task reaches a final state.
-        sseEvents.fire(SseEvent.taskUpdated(projectId, taskId, "Pending"));
-        sseEvents.fire(SseEvent.projectUpdated(projectId));
-
-        RoutingOutcomeEntity outcome = new RoutingOutcomeEntity();
-        outcome.status = "completed";
-        outcome.summary = "Invoked action: " + actionType.name;
-        outcome.projectId = projectId;
-        outcome.taskId = taskId;
-        RoutingOutcomeItemEntity item = newItem(RoutingOutcomeItemEntity.TYPE_TASK, "completed",
-                "Task: " + actionType.name);
-        item.projectId = projectId;
-        item.taskId = taskId;
-        outcome.pendingItems.add(item);
-        if (traceCtx != null) {
-            outcome.traceId = traceCtx.traceId();
-        }
-        return outcome;
+    /**
+     * Starts a run of a workflow definition for a stream event: resolves (or creates) the event's subject,
+     * and starts the run in its own transaction. The run's {@code event} input is the event when its Start node
+     * declares {@code event}.
+     * Used both by {@code create-workflow} routing rules and by manual "run from event" requests.
+     *
+     * @param event        the stream event
+     * @param definitionId the workflow definition to run
+     * @param request      run title and labels
+     * @param ledgerId     the processing (ledger) entry that triggered the run; null for manual runs
+     * @return the started run
+     * @throws WorkflowRunConflictException if the subject already has an active run of the definition
+     */
+    public WorkflowRunEntity startRunFromEvent(StreamEventEntity event, long definitionId,
+                                               RunRequest request, Long ledgerId) {
+        Long subjectId = findOrCreateSubjectForEvent(event, null);
+        return startRunFromEvent(event, subjectId, definitionId, request, ledgerId);
     }
 
-    private Long createInvokeActionTask(StreamEventEntity event, ActionTypeEntity actionType,
-            Long projectId, String taskInput,
-            io.apitomy.axiom.core.tracing.TraceContext finalTraceCtx) {
-        return QuarkusTransaction.requiringNew().call(() -> {
-            TaskEntity task = new TaskEntity();
-            task.projectId = projectId;
-            task.actionType = actionType.name;
-            task.createdBy = "subscription";
-            task.status = "Pending";
-            task.input = taskInput;
-            task.eventId = event.id;
-            task.createdOn = Instant.now();
-            if (finalTraceCtx != null) {
-                task.traceId = finalTraceCtx.traceId();
-            }
-            task.persist();
+    private WorkflowRunEntity startRunFromEvent(StreamEventEntity event, Long subjectId, long definitionId,
+                                                RunRequest request, Long ledgerId) {
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId, request,
+                        new EventOrigin(event.id, ledgerId)));
+        LOG.infof("Created workflow (definition %d) for event %s on subject %d",
+                definitionId, event.id, subjectId);
 
-            // Add a trace node for the task
-            if (finalTraceCtx != null) {
-                try {
-                    traceService.addNode(finalTraceCtx, "task", "in-progress",
-                            "Task: " + task.actionType, "task", task.id);
-                } catch (Exception e) {
-                    LOG.warnf(e, "Failed to add task trace node for task %d", task.id);
-                }
-            }
+        sseEvents.fire(SseEvent.subjectUpdated(subjectId));
+        return run;
+    }
 
-            // Log activity
-            logActivity(projectId, task.id, event.id, "task-created",
-                    "Subscription invoked action: " + task.actionType, task.traceId);
-
-            LOG.infof("Created task for action '%s' from event %s",
-                    actionType.name, event.id);
-            return task.id;
-        });
+    private Long findOrCreateSubjectForEvent(StreamEventEntity event, UUID traceId) {
+        return QuarkusTransaction.requiringNew().call(() ->
+                findOrCreateSubjectForStreamEvent(event, traceId).id);
     }
 
     /**
-     * Builds the task input for invoke-action routing. Contains a JSON object with:
-     * - "summary": a human-readable description of the event for {{managerInput}}
-     * - "event": the raw event payload for {{event}}
+     * The {@code owner/repo} an event belongs to, for GitHub events (derived from the event ref).
+     *
+     * @param event the stream event
+     * @return the repository, or null for non-GitHub events or when it cannot be determined
      */
-    private String buildInvokeActionInput(StreamEventEntity event) {
-        try {
-            var node = objectMapper.createObjectNode();
-
-            // Build human-readable summary
-            StringBuilder summary = new StringBuilder();
-            summary.append("Event: ").append(event.type).append("\n");
-            summary.append("Source: ").append(event.source).append("\n");
-            summary.append("Ref: ").append(event.ref).append("\n");
-
-            // Extract key details from payload
-            try {
-                JsonNode payload = objectMapper.readTree(event.payload);
-                JsonNode issue = payload.path("issue");
-                JsonNode pr = payload.path("pullRequest");
-                if (!issue.isMissingNode()) {
-                    summary.append("Title: ").append(issue.path("title").asText("")).append("\n");
-                    String body = issue.path("body").asText(null);
-                    if (body != null && !body.isBlank()) {
-                        summary.append("Body: ").append(body.length() > 500
-                                ? body.substring(0, 500) + "..." : body).append("\n");
-                    }
-                    summary.append("State: ").append(issue.path("state").asText("")).append("\n");
-                } else if (!pr.isMissingNode()) {
-                    summary.append("Title: ").append(pr.path("title").asText("")).append("\n");
-                    String body = pr.path("body").asText(null);
-                    if (body != null && !body.isBlank()) {
-                        summary.append("Body: ").append(body.length() > 500
-                                ? body.substring(0, 500) + "..." : body).append("\n");
-                    }
-                    summary.append("Base branch: ").append(pr.path("baseBranch").asText("")).append("\n");
-                }
-            } catch (Exception e) {
-                LOG.debugf("Failed to extract details from event payload: %s", e.getMessage());
-            }
-
-            node.put("summary", summary.toString());
-            node.set("event", objectMapper.readTree(event.payload));
-
-            return objectMapper.writeValueAsString(node);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to build invoke-action input for event %s", event.id);
-            return event.payload;
+    static String repositoryFor(StreamEventEntity event) {
+        if (!"github".equals(event.source)) {
+            return null;
         }
+        return io.apitomy.axiom.events.github.v2.GitHubUrls.repositoryFromRef(event.ref).orElse(null);
     }
 
-    private Long findOrCreateProjectForEvent(StreamEventEntity event, UUID traceId) {
-        return QuarkusTransaction.requiringNew().call(() ->
-                findOrCreateProjectForStreamEvent(event, traceId).id);
-    }
-
-    private ProjectEntity findOrCreateProjectForStreamEvent(StreamEventEntity event,
+    private SubjectEntity findOrCreateSubjectForStreamEvent(StreamEventEntity event,
                                                             UUID traceId) {
-        // Try to find existing project by ref
-        ProjectEntity project = ProjectEntity.find("ref", event.ref).firstResult();
-        if (project != null) return project;
+        // Try to find existing subject by ref
+        SubjectEntity subject = SubjectEntity.find("ref", event.ref).firstResult();
+        if (subject != null) {
+            // Subjects created before the repository was recorded get it filled in now
+            if (subject.repository == null || subject.repository.isBlank()) {
+                String repository = repositoryFor(event);
+                if (repository != null) {
+                    subject.repository = repository;
+                    subject.updatedOn = Instant.now();
+                }
+            }
+            return subject;
+        }
 
         // Auto-create with metadata from the payload
-        project = new ProjectEntity();
-        project.ref = event.ref;
-        project.refSource = event.source;
-        project.type = determineProjectType(event.type);
-        project.status = ProjectStatus.Created.name();
-        project.createdOn = Instant.now();
-        project.updatedOn = Instant.now();
+        subject = newSubjectFor(event);
+        subject.persist();
+
+        LOG.infof("Auto-created subject %d for %s", subject.id, event.ref);
+
+        logActivity(subject.id, null, event.id, "subject-created",
+                "Subject auto-created from " + event.type + " event", traceId);
+        addThreadEntry(subject.id, "system", "message",
+                "Subject created from " + event.source + " event: " + event.type);
+
+        // Ensure the workspace directory exists
+        try {
+            workspaceService.ensureWorkspace(subject);
+        } catch (Exception e) {
+            LOG.warnf(e, "Failed to create workspace for subject %d", subject.id);
+        }
+
+        return subject;
+    }
+
+    /**
+     * The {@code subject} standard input a run started from this event would receive, without creating or
+     * changing anything: the event's existing subject (with a missing GitHub repository filled in, as run
+     * creation does), or a preview of the subject run creation would create (with a null {@code id}).
+     *
+     * @param event the stream event
+     * @return the subject input value
+     */
+    public Map<String, Object> subjectValueForEvent(StreamEventEntity event) {
+        SubjectEntity existing = SubjectEntity.find("ref", event.ref).firstResult();
+        if (existing == null) {
+            return StandardInputs.subjectValue(newSubjectFor(event));
+        }
+        Map<String, Object> value = StandardInputs.subjectValue(existing);
+        if (value.get("repository") == null) {
+            value.put("repository", repositoryFor(event));
+        }
+        return value;
+    }
+
+    /**
+     * The event map subscription filters are evaluated against.
+     *
+     * @param event the stream event
+     * @return the event map exposed as {@code event} to filter expressions
+     */
+    public Map<String, Object> filterEventMap(StreamEventEntity event) {
+        return buildEventMap(event, parsePayload(event));
+    }
+
+    /**
+     * Builds, without persisting, the subject auto-created for an event that has none: ref, source, GitHub
+     * repository, type from the event type, and name and body from the normalized payload.
+     *
+     * @param event the stream event
+     * @return the unsaved subject
+     */
+    private SubjectEntity newSubjectFor(StreamEventEntity event) {
+        SubjectEntity subject = new SubjectEntity();
+        subject.ref = event.ref;
+        subject.refSource = event.source;
+        subject.repository = repositoryFor(event);
+        subject.type = determineSubjectType(event.type);
+        subject.createdOn = Instant.now();
+        subject.updatedOn = Instant.now();
 
         // Extract title and body from the normalized payload
         try {
@@ -1289,35 +888,18 @@ public class EventStreamOrchestrator {
             // The normalized payload uses "issue.title" or "pullRequest.title"
             String title = payload.path("issue").path("title").asText(null);
             if (title == null) title = payload.path("pullRequest").path("title").asText(null);
-            project.name = title != null ? title : event.ref;
+            subject.name = title != null ? title : event.ref;
 
             String body = payload.path("issue").path("body").asText(null);
             if (body == null) body = payload.path("pullRequest").path("body").asText(null);
-            project.body = body;
+            subject.body = body;
         } catch (Exception e) {
-            project.name = event.ref;
+            subject.name = event.ref;
         }
-
-        project.persist();
-
-        LOG.infof("Auto-created project %d for %s", project.id, event.ref);
-
-        logActivity(project.id, null, event.id, "project-created",
-                "Project auto-created from " + event.type + " event", traceId);
-        addThreadEntry(project.id, "system", "message",
-                "Project created from " + event.source + " event: " + event.type);
-
-        // Ensure the workspace directory exists
-        try {
-            workspaceService.ensureWorkspace(project);
-        } catch (Exception e) {
-            LOG.warnf(e, "Failed to create workspace for project %d", project.id);
-        }
-
-        return project;
+        return subject;
     }
 
-    private String determineProjectType(String eventType) {
+    private String determineSubjectType(String eventType) {
         if (eventType != null) {
             if (eventType.startsWith("issue.")) return "issue";
             if (eventType.startsWith("pr.")) return "pull-request";
@@ -1334,7 +916,7 @@ public class EventStreamOrchestrator {
         }
         map.put("type", event.type);
         map.put("source", event.source);
-        map.put("connectionId", event.connectionId);
+        map.put("eventSourceId", event.eventSourceId);
         map.put("ref", event.ref);
         map.put("timestamp", event.timestamp.toString());
 
@@ -1391,10 +973,10 @@ public class EventStreamOrchestrator {
 
     // ── Activity and thread logging ────────────────────────────────
 
-    private Long logActivity(Long projectId, Long taskId, UUID eventId,
+    private Long logActivity(Long subjectId, Long taskId, UUID eventId,
                              String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
-        log.projectId = projectId;
+        log.subjectId = subjectId;
         log.taskId = taskId;
         log.eventId = eventId;
         log.entryType = entryType;
@@ -1407,10 +989,10 @@ public class EventStreamOrchestrator {
         return log.id;
     }
 
-    private void addThreadEntry(Long projectId, String authorType, String entryType,
+    private void addThreadEntry(Long subjectId, String authorType, String entryType,
                                   String content) {
         ThreadEntryEntity entry = new ThreadEntryEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.authorType = authorType;
         entry.entryType = entryType;
         entry.content = content;

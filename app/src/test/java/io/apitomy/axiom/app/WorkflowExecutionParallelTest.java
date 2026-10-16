@@ -31,7 +31,7 @@ import static org.hamcrest.Matchers.notNullValue;
 @QuarkusTest
 class WorkflowExecutionParallelTest {
 
-    private static final String PROJECTS_PATH = "/api/v1/projects";
+    private static final String SUBJECTS_PATH = "/api/v1/subjects";
     private static final String WORKFLOWS_PATH = "/api/v1/workflow/definitions";
     private static final String INBOX_PATH = "/api/v1/inbox";
 
@@ -77,14 +77,14 @@ class WorkflowExecutionParallelTest {
 
     @Test
     void forkCreatesOneTaskPerBranchAndJoinCompletesRunAfterBoth() {
-        int projectId = createProject("Fork Join Project");
+        int subjectId = createSubject("Fork Join Subject");
         int definitionId = createAndPublishForkJoinDefinition("Fork Join WF");
 
         given()
                 .contentType(ContentType.JSON)
                 .body(Map.of("workflowDefinitionId", definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -95,7 +95,7 @@ class WorkflowExecutionParallelTest {
                     .get(INBOX_PATH)
                 .then()
                     .statusCode(200)
-                    .body("items.findAll { it.projectId == " + projectId + " }.size()",
+                    .body("items.findAll { it.subjectId == " + subjectId + " }.size()",
                             equalTo(2));
 
         Integer branchATaskId = given()
@@ -103,10 +103,10 @@ class WorkflowExecutionParallelTest {
                     .get(INBOX_PATH)
                 .then()
                     .statusCode(200)
-                    .body("items.find { it.projectId == " + projectId
+                    .body("items.find { it.subjectId == " + subjectId
                             + " && it.actionType == 'Branch A' }.id", notNullValue())
                     .extract()
-                    .path("items.find { it.projectId == " + projectId
+                    .path("items.find { it.subjectId == " + subjectId
                             + " && it.actionType == 'Branch A' }.id");
         Integer branchBTaskId = given()
                 .when()
@@ -114,7 +114,7 @@ class WorkflowExecutionParallelTest {
                 .then()
                     .statusCode(200)
                     .extract()
-                    .path("items.find { it.projectId == " + projectId
+                    .path("items.find { it.subjectId == " + subjectId
                             + " && it.actionType == 'Branch B' }.id");
 
         // 2. Completing only branch A leaves the run WAITING and branch B's task still open
@@ -131,7 +131,7 @@ class WorkflowExecutionParallelTest {
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -141,9 +141,9 @@ class WorkflowExecutionParallelTest {
                     .get(INBOX_PATH)
                 .then()
                     .statusCode(200)
-                    .body("items.findAll { it.projectId == " + projectId + " }.size()",
+                    .body("items.findAll { it.subjectId == " + subjectId + " }.size()",
                             equalTo(1))
-                    .body("items.find { it.projectId == " + projectId + " }.id",
+                    .body("items.find { it.subjectId == " + subjectId + " }.id",
                             equalTo(branchBTaskId));
 
         // 3. Completing branch B too joins the branches; run parks at the join's task.
@@ -159,7 +159,7 @@ class WorkflowExecutionParallelTest {
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -169,10 +169,10 @@ class WorkflowExecutionParallelTest {
                     .get(INBOX_PATH)
                 .then()
                     .statusCode(200)
-                    .body("items.find { it.projectId == " + projectId + " }.actionType",
+                    .body("items.find { it.subjectId == " + subjectId + " }.actionType",
                             equalTo("Join"))
                     .extract()
-                    .path("items.find { it.projectId == " + projectId + " }.id");
+                    .path("items.find { it.subjectId == " + subjectId + " }.id");
 
         // 4. Completing the join's task advances the run to completed.
         given()
@@ -187,7 +187,7 @@ class WorkflowExecutionParallelTest {
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
@@ -195,7 +195,7 @@ class WorkflowExecutionParallelTest {
 
     // -- Helpers --
 
-    private int createProject(String name) {
+    private int createSubject(String name) {
         return given()
                 .contentType(ContentType.JSON)
                 .body(String.format("""
@@ -207,7 +207,7 @@ class WorkflowExecutionParallelTest {
                     """, name,
                         "test/" + name.toLowerCase().replace(" ", "-")))
                 .when()
-                    .post(PROJECTS_PATH)
+                    .post(SUBJECTS_PATH)
                 .then()
                     .statusCode(200)
                     .extract().path("id");

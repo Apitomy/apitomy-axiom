@@ -5,7 +5,6 @@ import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import PlayIcon from "@patternfly/react-icons/dist/esm/icons/play-icon";
 import WrenchIcon from "@patternfly/react-icons/dist/esm/icons/wrench-icon";
-import FileAltIcon from "@patternfly/react-icons/dist/esm/icons/file-alt-icon";
 import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import MinusCircleIcon from "@patternfly/react-icons/dist/esm/icons/minus-circle-icon";
@@ -15,18 +14,12 @@ import "./TraceGraphNode.css";
 
 const NODE_TYPE_ICONS: Record<string, React.ComponentType> = {
     "event-ingested": BoltIcon,
-    "manager-evaluation": CogIcon,
     "decision-processed": CheckCircleIcon,
-    "manager-decision": CheckCircleIcon,
-    "project-created": FolderIcon,
+    "subject-created": FolderIcon,
     "task": PlayIcon,
     "task-completed": CheckCircleIcon,
     "task-failed": TimesCircleIcon,
     "tool-execution": WrenchIcon,
-    "report-triggered": FileAltIcon,
-    "report-ai-invoked": CogIcon,
-    "report-completed": CheckCircleIcon,
-    "report-failed": TimesCircleIcon,
     "event-ignored": MinusCircleIcon,
     "escalation": ExclamationTriangleIcon,
 };
@@ -44,8 +37,8 @@ export const STATUS_COLORS: Record<string, LabelProps["color"]> = {
 };
 
 /**
- * Looks up the label colour for a status, ignoring case (workflow run and scheduled-job
- * statuses are capitalised, e.g. "Completed").
+ * Looks up the label colour for a status, ignoring case (some statuses are capitalised,
+ * e.g. "Completed").
  */
 export function statusColor(status: string | null | undefined): LabelProps["color"] {
     return status ? STATUS_COLORS[status.toLowerCase()] : undefined;

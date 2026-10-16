@@ -15,7 +15,7 @@ import java.util.UUID;
  * Records what a single routing rule produced when processing an event
  * against a subscription. Linked to the processing ledger entry.
  *
- * <p>{@code projectId} and {@code taskId} hold only the first project and task (kept for
+ * <p>{@code subjectId} and {@code taskId} hold only the first subject and task (kept for
  * backward compatibility); every result is stored as a {@link RoutingOutcomeItemEntity}.</p>
  */
 @Entity
@@ -34,8 +34,8 @@ public class RoutingOutcomeEntity extends PanacheEntity {
     @Column(columnDefinition = "TEXT")
     public String summary;
 
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     @Column(name = "task_id")
     public Long taskId;

@@ -83,12 +83,12 @@ public class GitHubEventNormalizerV2 {
      * Normalizes a single GitHub Events API event into a {@link NormalizedEvent}.
      *
      * @param event        a single event JSON object from the Events API array
-     * @param connectionId the slug of the EventSourceConnection that produced this event
+     * @param eventSourceId the slug of the EventSource that produced this event
      * @param baseUrl      the HTML base URL (e.g., {@code https://github.com}), NOT the API base
      * @param fullPr       the backfilled full PR JSON from the Pulls API (null for non-PR events)
      * @return the normalized event, or null if the event type/action is not recognized
      */
-    public NormalizedEvent normalize(JsonNode event, String connectionId, String baseUrl, JsonNode fullPr) {
+    public NormalizedEvent normalize(JsonNode event, String eventSourceId, String baseUrl, JsonNode fullPr) {
         String githubEventType = textOrNull(event, "type");
         JsonNode payload = event.path("payload");
         String action = textOrNull(payload, "action");
@@ -180,7 +180,7 @@ public class GitHubEventNormalizerV2 {
                 UUID.randomUUID().toString(),
                 githubEventId,
                 SOURCE,
-                connectionId,
+                eventSourceId,
                 eventType,
                 ref,
                 timestamp,

@@ -1,48 +1,119 @@
 # Workflow Input Contract
 
-When Axiom starts a workflow for a project, it injects a fixed, canonical set of inputs into the workflow's
-initial context. Workflow definitions may depend only on these inputs. This keeps a definition runnable by
-construction — there is no way to supply arbitrary inputs from the "Run Workflow" dialog.
+A workflow's Start node declares the inputs the workflow needs. Axiom provides a fixed set of **standard
+inputs** and puts into a new run's context exactly the standard inputs the Start node declares. The registry
+of standard inputs is `io.apitomy.axiom.app.StandardInputs`.
 
-## Canonical inputs
+## Standard inputs
 
-| name          | type   | presence                                          | may be `required`? |
-|---------------|--------|----------------------------------------------------|--------------------|
-| `projectId`   | number | always                                            | yes |
-| `ref`         | string | always                                            | yes |
-| `event`       | object | only when the run was started by a subscription's `create-workflow` routing rule | no — must be optional |
-| `projectName` | string | never populated automatically (see below)         | no — must be optional |
-| `repository`  | string | never populated automatically (see below)         | no — must be optional |
+| name      | type   | presence | value |
+|-----------|--------|----------|-------|
+| `subject` | object | always | the run's subject: `id` (number), `name`, `type`, `ref`, `refSource`, `repository` (strings); a field with no value is `null` |
+| `event`   | object | only when the run was started from a stream event | the event envelope: `id`, `type`, `source`, `eventSourceId`, `ref`, `timestamp`, `actor`, `payload` |
 
-Only `projectId` and `ref` are guaranteed to be present in every workflow run, and only these two may be
-declared `required` on the Start node.
+A run is started from a stream event (all through `EventStreamOrchestrator.startRunFromEvent`) by:
 
-`event` is populated with the triggering event's envelope (`type`, `source`, `connectionId`, `ref`,
-`timestamp`, `actor`, `payload`) only when the workflow instance was started by a subscription's
-`create-workflow` routing rule. Manually triggered runs (from the project detail page or the "Run Workflow"
-dialog) do not populate `event`.
+- a subscription's `create-workflow` routing rule;
+- **Run workflow…** on the event detail page (`POST /stream/events/{eventId}/runs`);
+- a re-run of a run that was itself started from an event (`POST /workflow/runs/{runId}/rerun`).
 
-`projectName` and `repository` are accepted as valid Start-node input names — so a definition may declare
-them without failing publish validation — but Axiom does not currently inject values for them into any
-workflow's initial context. Declare them only if you plan to resolve them another way (e.g. via an early
-`action` node that fetches project details), and always as optional inputs, since a `required` declaration
-for either name is rejected at publish time.
+Runs started by a schedule trigger, or as a re-run of such a run, have no `event`.
 
-## Rules enforced at publish
+## Declaring inputs
 
-A workflow definition's Start node declares its inputs under `config.inputs` (a list of
-`{ name, type, required, description }`). At publish time Axiom rejects a definition when:
+A Start node declares its inputs under `config.inputs` (a list of `{ name, type, required, description }`).
+`WorkflowContentRules.startInputViolation` checks the declarations at publish and in workbench validation
+(`propose_workflow_changes`). It rejects an input when:
 
-1. The Start node declares an input whose `name` is not one of the canonical inputs
-   (`projectId`, `ref`, `event`, `projectName`, `repository`).
-2. The Start node marks any input other than `projectId` or `ref` as `required`.
+1. its name is not a valid identifier;
+2. its name is not a standard input name (the message lists the standard inputs);
+3. its `type` is set and differs from the standard type (`object` for both);
+4. it declares a default value — Axiom provides standard inputs itself.
 
-New definitions are scaffolded with three inputs already declared: `projectId` (required, number), `ref`
-(required, string), and `event` (optional, object, described as "present when created by subscription
-routing").
+Either input may be `required`. Requiring `event` is how a workflow says it must be started from an event.
 
-## Run-time behavior
+New workflows (from the workbench and **Components → Workflows**) are scaffolded by
+`WorkflowTemplates.emptyWorkflow` with `subject` and `event` both declared and required. A workflow run by a
+schedule trigger must remove `event` or make it optional.
 
-As defense-in-depth for legacy or hand-edited definitions, a trigger whose context does not satisfy a
-required Start-node input fails with HTTP 400 and a message naming the missing input, which the UI surfaces in
-the Run Workflow dialog.
+## Run creation
+
+`WorkflowExecutionService.startRun` resolves the declared inputs with `StandardInputs.resolve`:
+
+- only declared inputs are put into the initial context; undeclared standard inputs are not provided;
+- a declared optional input that is not available is absent from the context;
+- a declared required input that is not available stops the run before it is created, with the message
+  `Cannot start workflow "<name>": required input(s) not available: <names>`.
+
+How that failure surfaces depends on how the run was started:
+
+| started by | outcome when a required input is unavailable |
+|------------|----------------------------------------------|
+| re-run (`POST /workflow/runs/{runId}/rerun`) | HTTP 400 with the message |
+| schedule trigger | the firing records `lastOutcome` `failed: <message>`, for example `failed: Cannot start workflow "<name>": required input(s) not available: event` |
+| subscription routing, **Run workflow…** on an event | cannot happen: both inputs are always available |
+
+A re-run resolves its inputs again from the subject's current state and the original run's triggering event;
+it does not copy the original run's inputs.
+
+The run's stored `inputs` (shown in the **Inputs** field of the run's Overview tab and returned by
+`axiom_get_workflow_run`) are the resolved standard inputs without `event`; the event is linked to the run as
+its trigger instead.
+
+## Reading inputs
+
+Expressions read standard inputs from the run context, for example `context.subject.ref`,
+`context.subject.repository` or `context.event.payload.pull_request.number`.
+
+Reading a standard input that the Start node does not declare (for example `context.subject` without
+declaring `subject`) is not reported, because a node output with that name may legitimately provide the key.
+Standard input names are not reserved.
+
+## Shadowing warning
+
+Workflow validation (`ConfigItemValidationService.validateWorkflow`, which backs the workbench's
+`propose_workflow_changes` problems and assistant item validation) reports a **warning** with code
+`SHADOWS_WORKFLOW_INPUT` when a node would write a context key equal to the name of a declared Start input,
+for example `Output 'event' of node 'Review' overwrites the workflow input 'event' for later nodes.` The
+check is `WorkflowContentRules.shadowProblems` and does not block publish. It considers these output keys:
+
+- an `action` node's `config.outputs` (by their context key);
+- the declared outputs of the node's action type that the node does not rename;
+- a `human-task` node's form fields (by their context key);
+- a `receive-event` node's output mapping context keys.
+
+`sdk:` node results are not declared anywhere and are not checked.
+
+## Passing context to action types
+
+Action types never read the run context directly. Each `action` node maps values into the action type's
+declared inputs, for example `context.subject.ref` into a `ref` input. Every required action-type input must
+be mapped, mapping an undeclared input name is an error, and an unmapped optional input is simply absent. See
+[Inputs, Placeholders and Mappings](../user-guide/concepts.md#inputs-placeholders-and-mappings).
+
+## Action type inputs and outputs at run time
+
+When a workflow task runs, `TaskExecutionService` checks the task's resolved inputs before it runs the action
+type:
+
+1. `InputBindingResolver.missingRequiredInputs` lists required declared inputs with no value (absent, `null`
+   or a blank string). If any are missing, the task fails with `Missing required input(s): ...`.
+2. `ActionTypeIoValidator.validate` checks each supplied value against its declared type. A mismatch fails the
+   task with `Input validation failed: ...`.
+
+When the task completes, `WorkflowExecutionService` validates its outputs against the action type's declared
+outputs with the same validator. A mismatch fails the task and the node with `Output validation failed: ...`.
+Workbench test runs (`DraftTestRunner`) use the same validator for inputs and outputs.
+
+`ActionTypeIoValidator` accepts a value that already has the declared type or can be converted without loss:
+
+| Type      | Accepted values                                                                   |
+|-----------|-----------------------------------------------------------------------------------|
+| `string`  | strings, numbers and booleans                                                      |
+| `number`  | numbers, and strings that parse as a number                                        |
+| `boolean` | booleans, and the strings `true` / `false` (any case)                              |
+| `object`  | any JSON structure: an object **or an array**, or a string that parses as one       |
+
+Any other declared type is not checked. `InputBindingResolver` also substitutes `{{inputs.NAME}}` placeholders
+in agent prompts and scripts: strings are inserted as-is, `null` becomes an empty string, and other values
+are serialized as JSON.

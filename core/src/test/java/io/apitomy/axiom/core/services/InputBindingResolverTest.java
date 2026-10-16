@@ -70,4 +70,74 @@ class InputBindingResolverTest {
         assertTrue(contract.contains("\"summary\" (string) [required] — A short summary"));
         assertTrue(contract.contains("\"count\" (number)"));
     }
+
+    private static final List<ActionTypeField> SECTION_INPUTS = List.of(
+            new ActionTypeField("issue", "string", true, "The issue title"),
+            new ActionTypeField("count", "number", false, ""),
+            new ActionTypeField("meta", "object", false, null),
+            new ActionTypeField("note", "string", false, "Optional note"));
+
+    @Test
+    void buildInputsSectionListsValuedInputsInDeclarationOrder() {
+        Map<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("meta", Map.of("a", 1));
+        values.put("count", 3);
+        values.put("issue", "Bug X");
+
+        String section = InputBindingResolver.buildInputsSection(SECTION_INPUTS, values, mapper);
+
+        String expected = "## Inputs\n"
+                + "- **issue** (string) — The issue title\n"
+                + "  Bug X\n"
+                + "- **count** (number)\n"
+                + "  3\n"
+                + "- **meta** (object)\n"
+                + "  ```json\n"
+                + "  {\n"
+                + "    \"a\" : 1\n"
+                + "  }\n"
+                + "  ```\n";
+        assertEquals(expected, section);
+    }
+
+    @Test
+    void buildInputsSectionSkipsAbsentAndNullValues() {
+        Map<String, Object> values = new java.util.HashMap<>();
+        values.put("issue", "Bug X");
+        values.put("note", null);
+        String section = InputBindingResolver.buildInputsSection(SECTION_INPUTS, values, mapper);
+        assertTrue(section.contains("**issue**"));
+        assertTrue(!section.contains("**note**"));
+        assertTrue(!section.contains("**meta**"));
+    }
+
+    @Test
+    void buildInputsSectionIsEmptyWhenNothingValued() {
+        assertEquals("", InputBindingResolver.buildInputsSection(SECTION_INPUTS, Map.of(), mapper));
+        assertEquals("", InputBindingResolver.buildInputsSection(null, Map.of("issue", "x"), mapper));
+    }
+
+    @Test
+    void missingRequiredInputsReturnsOnlyRequiredAbsentNames() {
+        List<ActionTypeField> inputs = List.of(
+                new ActionTypeField("a", "string", true, null),
+                new ActionTypeField("b", "string", false, null),
+                new ActionTypeField("c", "number", true, null),
+                new ActionTypeField("d", "string", true, null));
+        Map<String, Object> values = new java.util.HashMap<>();
+        values.put("d", "present");
+        values.put("c", null);
+        assertEquals(List.of("a", "c"), InputBindingResolver.missingRequiredInputs(inputs, values));
+        assertEquals(List.of(), InputBindingResolver.missingRequiredInputs(null, values));
+    }
+
+    @Test
+    void blankStringCountsAsMissingForRequiredInputs() {
+        List<ActionTypeField> inputs = List.of(
+                new ActionTypeField("repository", "string", true, null),
+                new ActionTypeField("note", "string", false, null),
+                new ActionTypeField("count", "number", true, null));
+        Map<String, Object> values = Map.of("repository", "  ", "note", "", "count", 0);
+        assertEquals(List.of("repository"), InputBindingResolver.missingRequiredInputs(inputs, values));
+    }
 }

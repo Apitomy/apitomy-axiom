@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * and communicates with it over the MCP stdio protocol (JSON-RPC 2.0).
  *
  * <p>This test verifies the full round-trip: Java generates the MCP server
- * project via {@link McpConfigGenerator}, then the test starts the server,
+ * subject via {@link McpConfigGenerator}, then the test starts the server,
  * lists available tools, calls a "hello_world" tool, and verifies the result.</p>
  */
 @QuarkusTest

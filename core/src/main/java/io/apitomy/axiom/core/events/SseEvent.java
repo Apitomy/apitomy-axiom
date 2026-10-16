@@ -8,7 +8,7 @@ import java.util.UUID;
  */
 public record SseEvent(
         /**
-         * Event type: "project-updated", "task-updated", "thread-entry",
+         * Event type: "subject-updated", "task-updated", "thread-entry",
          * "notification", "activity"
          */
         String type,
@@ -20,27 +20,27 @@ public record SseEvent(
 ) {
 
     /**
-     * Creates a project-updated event.
+     * Creates a subject-updated event.
      *
-     * @param projectId the project that changed
+     * @param subjectId the subject that changed
      * @return a new SSE event
      */
-    public static SseEvent projectUpdated(Long projectId) {
-        return new SseEvent("project-updated",
-                "{\"projectId\":" + projectId + "}");
+    public static SseEvent subjectUpdated(Long subjectId) {
+        return new SseEvent("subject-updated",
+                "{\"subjectId\":" + subjectId + "}");
     }
 
     /**
      * Creates a task-updated event.
      *
-     * @param projectId the project the task belongs to
+     * @param subjectId the subject the task belongs to
      * @param taskId the task that changed
      * @param status the new task status
      * @return a new SSE event
      */
-    public static SseEvent taskUpdated(Long projectId, Long taskId, String status) {
+    public static SseEvent taskUpdated(Long subjectId, Long taskId, String status) {
         return new SseEvent("task-updated",
-                "{\"projectId\":" + projectId
+                "{\"subjectId\":" + subjectId
                         + ",\"taskId\":" + taskId
                         + ",\"status\":\"" + status + "\"}");
     }
@@ -48,12 +48,12 @@ public record SseEvent(
     /**
      * Creates a thread-entry event.
      *
-     * @param projectId the project the thread belongs to
+     * @param subjectId the subject the thread belongs to
      * @return a new SSE event
      */
-    public static SseEvent threadEntry(Long projectId) {
+    public static SseEvent threadEntry(Long subjectId) {
         return new SseEvent("thread-entry",
-                "{\"projectId\":" + projectId + "}");
+                "{\"subjectId\":" + subjectId + "}");
     }
 
     /**
@@ -80,19 +80,6 @@ public record SseEvent(
         return new SseEvent("activity",
                 "{\"entryType\":\"" + entryType
                         + "\",\"summary\":\"" + escapeJson(summary) + "\"}");
-    }
-
-    /**
-     * Creates a report-updated event.
-     *
-     * @param reportId the report that changed
-     * @param status the new report status
-     * @return a new SSE event
-     */
-    public static SseEvent reportUpdated(Long reportId, String status) {
-        return new SseEvent("report-updated",
-                "{\"reportId\":" + reportId
-                        + ",\"status\":\"" + status + "\"}");
     }
 
     /**
@@ -141,38 +128,14 @@ public record SseEvent(
     }
 
     /**
-     * Creates a scheduled-job-updated event.
-     *
-     * @param jobId the scheduled job that changed
-     * @return a new SSE event
-     */
-    public static SseEvent scheduledJobUpdated(Long jobId) {
-        return new SseEvent("scheduled-job-updated",
-                "{\"jobId\":" + jobId + "}");
-    }
-
-    /**
-     * Creates a scheduled-job-run-updated event.
-     *
-     * @param runId the scheduled job run that changed
-     * @param status the new run status
-     * @return a new SSE event
-     */
-    public static SseEvent scheduledJobRunUpdated(Long runId, String status) {
-        return new SseEvent("scheduled-job-run-updated",
-                "{\"runId\":" + runId
-                        + ",\"status\":\"" + status + "\"}");
-    }
-
-    /**
      * Fires when a workflow run changes state.
      *
-     * @param projectId the project the run belongs to
+     * @param subjectId the subject the run belongs to
      * @param runId the workflow run that changed (nullable)
      * @param status the run status (nullable)
      */
-    public static SseEvent workflowUpdated(long projectId, Long runId, String status) {
-        StringBuilder json = new StringBuilder("{\"projectId\":").append(projectId);
+    public static SseEvent workflowUpdated(long subjectId, Long runId, String status) {
+        StringBuilder json = new StringBuilder("{\"subjectId\":").append(subjectId);
         if (runId != null) {
             json.append(",\"runId\":").append(runId);
         }
@@ -184,20 +147,73 @@ public record SseEvent(
     }
 
     /**
+     * A composition draft item changed (saved by the user or the AI, or restored).
+     *
+     * @param compositionId the composition id
+     * @param itemId the item id
+     * @param contentRevision the item's new content revision
+     * @param author {@code user} or {@code ai}
+     * @param turnId the AI turn id, or null
+     * @return the event
+     */
+    public static SseEvent compositionItemChanged(long compositionId, long itemId, String contentRevision,
+                                                  String author, String turnId) {
+        return new SseEvent("composition-item-changed",
+                "{\"compositionId\":" + compositionId
+                        + ",\"itemId\":" + itemId
+                        + ",\"contentRevision\":\"" + escapeJson(contentRevision) + "\""
+                        + ",\"author\":\"" + escapeJson(author) + "\""
+                        + ",\"turnId\":" + (turnId == null ? "null" : "\"" + escapeJson(turnId) + "\"")
+                        + "}");
+    }
+
+    /**
+     * Creates a composition-turn event, emitted when an AI turn changes state.
+     *
+     * @param compositionId the composition id
+     * @param turnId        the turn id
+     * @param state         the new turn state
+     * @return the SSE event
+     */
+    public static SseEvent compositionTurn(long compositionId, String turnId, String state) {
+        return new SseEvent("composition-turn",
+                "{\"compositionId\":" + compositionId
+                        + ",\"turnId\":" + (turnId == null ? "null" : "\"" + escapeJson(turnId) + "\"")
+                        + ",\"state\":\"" + escapeJson(state) + "\""
+                        + "}");
+    }
+
+    /**
+     * Creates a composition-changeset event, carrying an AI turn's change set for review.
+     *
+     * @param compositionId the composition id
+     * @param turnId        the turn id
+     * @param changeSetJson the change set, as raw JSON (embedded unescaped)
+     * @return the SSE event
+     */
+    public static SseEvent compositionChangeSet(long compositionId, String turnId, String changeSetJson) {
+        return new SseEvent("composition-changeset",
+                "{\"compositionId\":" + compositionId
+                        + ",\"turnId\":" + (turnId == null ? "null" : "\"" + escapeJson(turnId) + "\"")
+                        + ",\"changeSet\":" + (changeSetJson == null ? "null" : changeSetJson)
+                        + "}");
+    }
+
+    /**
      * Creates a stream-event-received event, indicating a new event
      * has been added to the event stream.
      *
      * @param eventId      the stream event UUID
      * @param eventType    the normalized event type (e.g., "issue.created")
-     * @param connectionId the connection slug that produced the event
+     * @param eventSourceId the event source slug that produced the event
      * @return a new SSE event
      */
     public static SseEvent streamEventReceived(String eventId, String eventType,
-                                                String connectionId) {
+                                                String eventSourceId) {
         return new SseEvent("stream-event",
                 "{\"eventId\":\"" + eventId
                         + "\",\"eventType\":\"" + escapeJson(eventType)
-                        + "\",\"connectionId\":\"" + escapeJson(connectionId) + "\"}");
+                        + "\",\"eventSourceId\":\"" + escapeJson(eventSourceId) + "\"}");
     }
 
     /**
@@ -215,5 +231,17 @@ public record SseEvent(
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
                 .replace("\r", "\\r");
+    }
+
+    /**
+     * Creates a composition-test-run event, emitted when a test run starts and when it finishes.
+     *
+     * @param compositionId the composition id
+     * @param runJson       the run, as raw JSON (embedded unescaped)
+     * @return the SSE event
+     */
+    public static SseEvent compositionTestRun(long compositionId, String runJson) {
+        return new SseEvent("composition-test-run",
+                "{\"compositionId\":" + compositionId + ",\"run\":" + runJson + "}");
     }
 }

@@ -22,16 +22,11 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
-    Tooltip,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
-import UserIcon from "@patternfly/react-icons/dist/esm/icons/user-icon";
-import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
-import EnvelopeIcon from "@patternfly/react-icons/dist/esm/icons/envelope-icon";
-import ShareSquareIcon from "@patternfly/react-icons/dist/esm/icons/share-square-icon";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -45,15 +40,23 @@ import {
     createActionType,
     deleteActionType,
 } from "../config/api";
+import { executionModeColor } from "../components/executionModeColor";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 // Default templates sent when creating an action type so the POST is complete and
 // passes server-side validation. Users refine these on the detail page afterward.
-// Placeholders must be ones the server's ActionTypeValidator recognizes.
-const DEFAULT_PROMPT_TEMPLATE = "Complete the following task:\n\n{{input}}\n";
+// The only valid placeholder is {{inputs.<name>}} for a declared input; these defaults use none.
+const DEFAULT_PROMPT_TEMPLATE = "Describe the task the agent should perform. Declared inputs are listed\nautomatically in an Inputs section and can be referenced inline.\n";
 const DEFAULT_SCRIPT_TEMPLATE =
-    "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running action for {{projectName}}\"\n";
+    "#!/usr/bin/env bash\nset -euo pipefail\n\n# TODO: implement this action\necho \"Running task $AXIOM_TASK_ID\"\n";
+const DEFAULT_NODE_TEMPLATE =
+    "// inputs: the declared inputs. ctx: { workDir, apiUrl, taskId, log(...), exec(cmd, args, options) }\n"
+    + "// Only Node.js built-in modules may be imported (e.g. node:fs).\n"
+    + "export async function run(inputs, ctx) {\n"
+    + "    ctx.log(\"running\");\n"
+    + "    return {};\n"
+    + "}\n";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "action-type-filter-name" },
@@ -143,11 +146,9 @@ export function ActionTypesPage() {
         const data: NewActionType = {
             name: newName,
             executionMode: newMode,
-            userTriggerable: false,
-            managerTriggerable: false,
-            emitsEvent: false,
             promptTemplate: newMode === "agent" ? DEFAULT_PROMPT_TEMPLATE : undefined,
             scriptTemplate: newMode === "script" ? DEFAULT_SCRIPT_TEMPLATE : undefined,
+            codeTemplate: newMode === "node" ? DEFAULT_NODE_TEMPLATE : undefined,
         };
         createActionType(data)
             .then((created) => {
@@ -238,7 +239,6 @@ export function ActionTypesPage() {
                                 <Th>Name</Th>
                                 <Th>Mode</Th>
                                 <Th>Labels</Th>
-                                <Th>Flags</Th>
                                 <Th>Tools</Th>
                                 <Th />
                             </Tr>
@@ -253,7 +253,7 @@ export function ActionTypesPage() {
                                     <Td>{at.name}</Td>
                                     <Td>
                                         <Label isCompact
-                                            color={at.executionMode === "agent" ? "blue" : "orange"}
+                                            color={executionModeColor(at.executionMode)}
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -273,30 +273,6 @@ export function ActionTypesPage() {
                                                 {label}
                                             </ColoredLabel>
                                         ))}
-                                    </Td>
-                                    <Td>
-                                        <div style={{ display: "flex", gap: 6 }}>
-                                            {at.userTriggerable && (
-                                                <Tooltip content="User Triggerable">
-                                                    <UserIcon color="var(--pf-t--global--color--status--success--default)" />
-                                                </Tooltip>
-                                            )}
-                                            {at.managerTriggerable && (
-                                                <Tooltip content="Manager Triggerable">
-                                                    <CogIcon color="var(--pf-t--global--color--status--info--default)" />
-                                                </Tooltip>
-                                            )}
-                                            {at.emitsEvent && (
-                                                <Tooltip content="Emits Event">
-                                                    <EnvelopeIcon color="var(--pf-t--global--color--status--warning--default)" />
-                                                </Tooltip>
-                                            )}
-                                            {at.workflowEnabled && (
-                                                <Tooltip content="Workflow Enabled">
-                                                    <ShareSquareIcon color="var(--pf-t--global--color--status--custom--default)" />
-                                                </Tooltip>
-                                            )}
-                                        </div>
                                     </Td>
                                     <Td>{at.executionMode === "agent" ? `${at.allowedTools?.length || 0} tools` : "—"}</Td>
                                     <Td>
@@ -343,6 +319,7 @@ export function ActionTypesPage() {
                             >
                                 <FormSelectOption value="agent" label="Agent — AI agent" />
                                 <FormSelectOption value="script" label="Script — bash script" />
+                                <FormSelectOption value="node" label="Node.js — runs a JavaScript module" />
                             </FormSelect>
                         </FormGroup>
                     </Form>

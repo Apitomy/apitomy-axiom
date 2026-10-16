@@ -4,11 +4,11 @@ import { ColoredLabel } from "./ColoredLabel";
 
 /**
  * Read-only display of labels as colored chips with a pencil icon
- * button to trigger editing. Shows "No labels" in italic when empty.
+ * button to trigger editing (omitted when no onEdit handler is given). Shows "No labels" in italic when empty.
  */
 export function LabelDisplay({ labels, onEdit }: {
     labels: string[];
-    onEdit: () => void;
+    onEdit?: () => void;
 }) {
     return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -21,10 +21,12 @@ export function LabelDisplay({ labels, onEdit }: {
             ) : (
                 <span className="axiom-text-subtle" style={{ fontStyle: "italic" }}>No labels</span>
             )}
-            <Button variant="plain" size="sm" style={{ padding: 0 }}
-                onClick={onEdit} aria-label="Edit labels">
-                <PencilAltIcon />
-            </Button>
+            {onEdit && (
+                <Button variant="plain" size="sm" style={{ padding: 0 }}
+                    onClick={onEdit} aria-label="Edit labels">
+                    <PencilAltIcon />
+                </Button>
+            )}
         </div>
     );
 }

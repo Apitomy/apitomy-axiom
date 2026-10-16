@@ -12,7 +12,7 @@ class SlugUtilTest {
     @CsvSource({
         "Daily GitHub Activity, daily-github-activity",
         "auto-tag, auto-tag",
-        "Test Scheduled Job, test-scheduled-job",
+        "Test Workflow Run, test-workflow-run",
         "My Report!!, my-report",
         "  Spaces  Everywhere  , spaces-everywhere",
         "UPPER CASE NAME, upper-case-name",

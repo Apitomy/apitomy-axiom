@@ -51,7 +51,7 @@ export function TasksPage() {
 
     // Execution log modal
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-    const [logProjectId, setLogProjectId] = useState<number | null>(null);
+    const [logSubjectId, setLogSubjectId] = useState<number | null>(null);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
 
     // Cancel confirmation modal
@@ -118,8 +118,8 @@ export function TasksPage() {
         setPage(1);
     };
 
-    const handleViewLog = (projectId: number, taskId: number) => {
-        setLogProjectId(projectId);
+    const handleViewLog = (subjectId: number, taskId: number) => {
+        setLogSubjectId(subjectId);
         setLogTaskId(taskId);
         setIsLogModalOpen(true);
     };
@@ -130,7 +130,7 @@ export function TasksPage() {
 
     const confirmCancel = () => {
         if (cancelTarget) {
-            cancelTask(cancelTarget.projectId, cancelTarget.id)
+            cancelTask(cancelTarget.subjectId, cancelTarget.id)
                 .then(loadData)
                 .catch(console.error);
             setCancelTarget(null);
@@ -202,7 +202,7 @@ export function TasksPage() {
                             <Tr>
                                 <Th>#</Th>
                                 <Th>Action Type</Th>
-                                <Th>Project</Th>
+                                <Th>Subject</Th>
                                 <Th>Status</Th>
                                 <Th>Created By</Th>
                                 <Th>Created</Th>
@@ -216,8 +216,8 @@ export function TasksPage() {
                                     <Td>{task.id}</Td>
                                     <Td>{task.actionType}</Td>
                                     <Td>
-                                        <Link to={`/projects/${task.projectId}`}>
-                                            Project #{task.projectId}
+                                        <Link to={`/subjects/${task.subjectId}`}>
+                                            Subject #{task.subjectId}
                                         </Link>
                                     </Td>
                                     <Td>
@@ -253,7 +253,7 @@ export function TasksPage() {
                                         </Button>
                                         {(task.status === "Completed" || task.status === "Failed") && (
                                             <Button variant="link" isInline
-                                                onClick={() => handleViewLog(task.projectId, task.id)}>
+                                                onClick={() => handleViewLog(task.subjectId, task.id)}>
                                                 View Log
                                             </Button>
                                         )}
@@ -274,7 +274,7 @@ export function TasksPage() {
 
             <ExecutionLogModal
                 isOpen={isLogModalOpen}
-                projectId={logProjectId}
+                subjectId={logSubjectId}
                 taskId={logTaskId}
                 onClose={() => setIsLogModalOpen(false)}
             />

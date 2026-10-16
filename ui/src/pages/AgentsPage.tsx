@@ -22,6 +22,8 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import OutlinedQuestionCircleIcon from "@patternfly/react-icons/dist/esm/icons/outlined-question-circle-icon";
+import { AgentPoolHelpModal } from "../components/AgentPoolHelpModal";
 import {
     type Agent,
     type NewAgent,
@@ -33,6 +35,7 @@ import {
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
 export function AgentsPage() {
+    const [isHelpOpen, setIsHelpOpen] = useState(false);
     const navigate = useNavigate();
     const [agents, setAgents] = useState<Agent[]>([]);
     const [loading, setLoading] = useState(true);
@@ -61,7 +64,8 @@ export function AgentsPage() {
         action.then(() => { setIsModalOpen(false); load(); }).catch(console.error);
     };
 
-    const handleDelete = (id: number) => {
+    const handleDelete = (e: React.MouseEvent, id: number) => {
+        e.stopPropagation();
         setDeleteTarget(id);
     };
 
@@ -78,6 +82,15 @@ export function AgentsPage() {
                 <FlexItem><Title headingLevel="h1" size="lg">Agents</Title></FlexItem>
                 <FlexItem><Button variant="primary" icon={<PlusCircleIcon />} onClick={openCreate}>Create Agent</Button></FlexItem>
             </Flex>
+            <p className="axiom-text-subtle" style={{ marginTop: "8px" }}>
+                Agents form a pool of workers for AI agent action types. Each agent runs one task at a time, so
+                the number of enabled agents controls how many AI tasks can run concurrently.{" "}
+                <Button variant="link" isInline icon={<OutlinedQuestionCircleIcon />}
+                    onClick={() => setIsHelpOpen(true)}>
+                    How the agent pool works
+                </Button>
+            </p>
+            <AgentPoolHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
 
             <div style={{ marginTop: "16px" }}>
                 {loading ? (
@@ -97,7 +110,8 @@ export function AgentsPage() {
                                     <Td>{a.capabilities?.join(", ") || "—"}</Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
-                                            onClick={() => handleDelete(a.id)}><TrashIcon /></Button>
+                                            aria-label={`Delete ${a.name}`}
+                                            onClick={(e) => handleDelete(e, a.id)}><TrashIcon /></Button>
                                     </Td>
                                 </Tr>
                             ))}

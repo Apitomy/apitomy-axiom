@@ -9,12 +9,15 @@ in the Axiom React UI.
 
 | Technology | Purpose |
 |-----------|---------|
-| React | UI framework |
-| PatternFly | Component library (Red Hat's design system) |
+| React 19 | UI framework |
+| PatternFly 6 | Component library (Red Hat's design system) |
 | TypeScript | Type-safe JavaScript |
 | Vite | Build tool and dev server |
+| React Router | Client-side routing |
+| `@apitomy/flow-ui` 3.0.2 | Workflow editor and viewer (`WorkflowViewer`) |
 | Monaco Editor | Code editors (prompt templates, scripts, logs) |
-| react-markdown | Markdown rendering (reports, thread entries) |
+| react-markdown | Markdown rendering (subject bodies, thread entries) |
+| Vitest + Testing Library | Unit and component tests (`npm test`) |
 | `@apitomy/common-ui-components` | Shared filtering components |
 
 ---
@@ -26,23 +29,37 @@ ui/src/
 ├── main.tsx               Entry point — React root, BrowserRouter
 ├── App.tsx                 Route definitions, SSE client init, health check
 ├── config/
-│   ├── api.ts              REST API client layer (all fetch functions + types)
-│   └── sse.ts              Server-Sent Events client (auto-reconnect)
+│   ├── api.ts              REST API client layer (fetch functions + types)
+│   ├── compositions.ts     Workflow Workbench API client (/compositions) + types
+│   ├── sse.ts              Server-Sent Events client (auto-reconnect)
+│   └── sse-worker.ts       SharedWorker that owns the single SSE connection
+├── hooks/                  Shared hooks (useTheme, useWorkflowEditorSpi)
 ├── pages/                  One component per route
-│   ├── DashboardPage.tsx
-│   ├── ProjectsPage.tsx
-│   ├── ProjectDetailPage.tsx
+│   ├── WorkflowRunsPage.tsx     Runs list — the landing page (/runs)
+│   ├── WorkflowRunDetailPage.tsx
+│   ├── SubjectsPage.tsx
+│   ├── SubjectDetailPage.tsx
 │   ├── ActionTypesPage.tsx
 │   ├── AssistantPage.tsx
 │   ├── AssistantSessionPage.tsx
 │   ├── SessionTemplatesPage.tsx
 │   ├── SessionTemplateDetailPage.tsx
+│   ├── WorkbenchListPage.tsx    Workbench composition list (/workbench)
+│   ├── workbench/               Workflow Workbench (/workbench/:compositionId)
+│   │   ├── WorkbenchPage.tsx        Three-pane layout, toolbar, bottom Tests/Runs panel
+│   │   ├── useWorkbench.ts          Composition state, saves, SSE handling
+│   │   ├── CompositionTree.tsx      Components tree
+│   │   ├── WorkflowTab.tsx, ItemTab.tsx   Centre editor tabs
+│   │   ├── ChatPane.tsx             AI Assistant chat
+│   │   ├── TestRunDialog.tsx, TestRunDetailModal.tsx, RunsList.tsx, RunDetailDialog.tsx
+│   │   └── PublishDialog.tsx
 │   └── ...
+├── test/                   Vitest setup (setup.ts) and helpers (renderWithRouter.tsx)
 ├── components/             Reusable UI components
 │   ├── AppMasthead.tsx
 │   ├── AppSidebar.tsx
 │   ├── ExecutionLogModal.tsx
-│   ├── EventDetailModal.tsx
+│   ├── StreamEventDetailModal.tsx
 │   └── assistant/          AI Assistant components
 │       ├── AssistantChatPanel.tsx      SSE-connected chat orchestrator
 │       ├── AssistantMessageList.tsx    Message rendering (markdown, tools, permissions)
@@ -58,63 +75,67 @@ ui/src/
 
 ## API Layer (`api.ts`)
 
-All backend communication goes through `ui/src/config/api.ts`. This file contains:
+Backend communication goes through `ui/src/config/api.ts`. The Workflow Workbench API (`/compositions`) has
+its own client in `ui/src/config/compositions.ts`. `api.ts` contains:
 
-- **TypeScript interfaces** for every API entity (`Project`, `Task`, `ActionType`,
+- **TypeScript interfaces** for every API entity (`Subject`, `Task`, `ActionType`,
   `ToolDefinition`, etc.)
-- **Fetch functions** for every REST endpoint (`fetchProjects()`, `createTool()`,
+- **Fetch functions** for every REST endpoint (`fetchSubjects()`, `createTool()`,
   `updateActionType()`, etc.)
 - **Pagination type** — `SearchResults<T>` with `items`, `totalCount`, `page`, `limit`
 
 ### Base URL Resolution
 
 ```typescript
-function getApiBaseUrl(): string {
-    // Dev: empty string (Vite proxy handles /api)
-    // Prod: window.AXIOM_API_URL injected by backend
+export function getApiBaseUrl(): string {
+    // window.AXIOM_API_URL if defined, otherwise "" (same origin;
+    // in development the Vite proxy forwards /api to the backend)
 }
 
-const API_BASE = `${getApiBaseUrl()}/api/v1`;
+const API = `${getApiBaseUrl()}/api/v1`;
 ```
 
 ### API Function Pattern
 
-Every function follows the same pattern:
+Functions follow the same pattern:
 
 ```typescript
-export async function fetchProjects(
-    page: number,
-    limit: number,
-    name?: string,
-): Promise<SearchResults<Project>> {
+export async function fetchSubjects(
+    page = 1, limit = 20, filterName?: string, filterActive?: boolean, filterLabels?: string
+): Promise<SearchResults<Subject>> {
     const params = new URLSearchParams();
     params.set("page", String(page));
     params.set("limit", String(limit));
-    if (name) params.set("name", name);
-
-    const resp = await fetch(`${API_BASE}/projects?${params}`);
-    if (!resp.ok) throw new Error("Failed to fetch projects");
-    return resp.json();
+    if (filterName) params.set("filterName", filterName);
+    if (filterActive !== undefined) params.set("filterActive", String(filterActive));
+    if (filterLabels) params.set("filterLabels", filterLabels);
+    const response = await fetch(`${API}/subjects?${params}`);
+    if (!response.ok) throw new Error(`Failed to fetch subjects: ${response.status}`);
+    return response.json();
 }
 ```
 
-When adding a new API function, follow this pattern — plain `fetch()`, check `resp.ok`,
-return typed JSON.
+When adding a new API function, follow this pattern — plain `fetch()`, check `response.ok`,
+return typed JSON. Use `extractErrorMessage()` when the server returns a useful error message (for example a
+422 validation error).
 
 ---
 
 ## SSE System
 
 Axiom uses Server-Sent Events for real-time UI updates (task status changes, new
-activity log entries, report progress, etc.).
+activity log entries, workflow run updates, etc.).
 
 ### Frontend: `SseClient` (`sse.ts`)
 
-A class-based singleton managing a persistent `EventSource` connection:
+A class-based singleton (`sseClient`) managing a persistent `EventSource` connection:
 
+- When the browser supports `SharedWorker`, one worker (`sse-worker.ts`) owns the connection and broadcasts
+  events to all tabs, so there is exactly one SSE connection per browser; otherwise each tab opens its own
 - Auto-reconnects with exponential backoff (1 second to 30 seconds max)
 - Parses nested JSON (data serialized as a string within JSON)
-- Subscriber pattern — components subscribe to events and receive callbacks
+- Subscriber pattern — components subscribe to events and receive callbacks; `subscribeSession()` delivers
+  the events of one AI Assistant session
 
 ```typescript
 // In App.tsx:
@@ -122,7 +143,7 @@ sseClient.connect();
 
 // In a component:
 const unsub = sseClient.subscribe((event) => {
-    if (event.type === "task-completed") {
+    if (event.type === "task-updated") {
         // refresh data
     }
 });
@@ -133,7 +154,11 @@ const unsub = sseClient.subscribe((event) => {
 - Endpoint: `GET /api/v1/sse` (produces `text/event-stream`)
 - Maintains a map of active client emitters
 - Observes CDI `SseEvent` events and broadcasts to all connected clients
-- Any service can fire an SSE event: `sseEvents.fire(new SseEvent(type, data))`
+- Any service can fire an SSE event with one of the `SseEvent` factory methods, e.g.
+  `sseEvents.fire(SseEvent.traceUpdated(traceId))`
+- Event types include `subject-updated`, `task-updated`, `workflow-updated`, `stream-event`,
+  `assistant-session-event` and the workbench events `composition-item-changed`, `composition-turn`,
+  `composition-changeset` and `composition-test-run`
 
 ---
 
@@ -170,7 +195,8 @@ import { MyFeaturePage } from "./pages/MyFeaturePage";
 
 ### 3. Add Sidebar Navigation
 
-In `AppSidebar.tsx`, add a `<NavItem>`:
+In `AppSidebar.tsx`, add a `<NavItem>` (inside a `<NavExpandable>` if it belongs to a group such as
+Events or Components):
 
 ```typescript
 <NavItem
@@ -265,3 +291,6 @@ import { CodeEditor, Language } from "@patternfly/react-code-editor";
    on port 9090
 3. Hot module replacement (HMR) updates the browser instantly when you save a file
 4. Run `npm run build` (which runs `tsc -b && vite build`) to type-check before committing
+5. Run `npm test` (Vitest, configured in `vitest.config.ts`) to run the UI unit and component tests.
+   Tests live next to the code they cover as `*.test.ts(x)` files (e.g. `pages/WorkflowRunsPage.test.tsx`).
+   `./build.sh -Pui` builds the UI and runs these tests as part of the Maven build

@@ -14,7 +14,9 @@ function log(level, message, data) {
 }
 
 const AXIOM_API_URL = process.env.AXIOM_API_URL || "http://localhost:9090/api/v1";
-const AXIOM_PROJECT_ID = process.env.AXIOM_PROJECT_ID;
+const AXIOM_SUBJECT_ID = process.env.AXIOM_SUBJECT_ID;
+const AXIOM_ASSISTANT_SESSION_ID = process.env.AXIOM_ASSISTANT_SESSION_ID;
+const AXIOM_SESSION_TOKEN = process.env.AXIOM_SESSION_TOKEN || "";
 
 async function axiomApi(method, path, body) {
     const url = `${AXIOM_API_URL}${path}`;
@@ -22,6 +24,9 @@ async function axiomApi(method, path, body) {
         method,
         headers: { "Accept": "application/json" },
     };
+    if (AXIOM_SESSION_TOKEN) {
+        opts.headers["X-Axiom-Session-Token"] = AXIOM_SESSION_TOKEN;
+    }
     if (body !== undefined) {
         opts.headers["Content-Type"] = "application/json";
         opts.body = JSON.stringify(body);
@@ -66,7 +71,7 @@ const TOOLS = [
     },
     {
         name: "axiom_list_action_types",
-        description: "List all existing action types in Axiom. Returns names, descriptions, and execution modes.",
+        description: "List all existing action types in Axiom. Returns names, descriptions, and execution modes. Action types run only from workflow action nodes.",
         parameters: [],
         handler: async () => {
             const response = JSON.parse(await axiomApi("GET", "/action-types"));
@@ -76,8 +81,6 @@ const TOOLS = [
                 name: at.name,
                 description: at.description || "",
                 executionMode: at.executionMode,
-                userTriggerable: at.userTriggerable,
-                managerTriggerable: at.managerTriggerable,
             })), null, 2);
         },
     },
@@ -93,34 +96,6 @@ const TOOLS = [
             const at = items.find(a => a.name === args.name);
             if (!at) return `Action type '${args.name}' not found.`;
             return JSON.stringify(at, null, 2);
-        },
-    },
-    {
-        name: "axiom_list_report_definitions",
-        description: "List all existing report definitions in Axiom. Returns names, descriptions, and schedules.",
-        parameters: [],
-        handler: async () => {
-            const items = JSON.parse(await axiomApi("GET", "/reports/definitions"));
-            if (items.length === 0) return "No report definitions configured.";
-            return JSON.stringify(items.map(rd => ({
-                name: rd.name,
-                description: rd.description || "",
-                schedule: rd.schedule,
-                enabled: rd.enabled,
-            })), null, 2);
-        },
-    },
-    {
-        name: "axiom_get_report_definition",
-        description: "Get full details of a specific report definition by name, including its prompt template, schedule, and allowed tools.",
-        parameters: [
-            { name: "name", type: "string", description: "The report definition name", required: true },
-        ],
-        handler: async (args) => {
-            const items = JSON.parse(await axiomApi("GET", "/reports/definitions"));
-            const rd = items.find(r => r.name === args.name);
-            if (!rd) return `Report definition '${args.name}' not found.`;
-            return JSON.stringify(rd, null, 2);
         },
     },
     {
@@ -194,43 +169,13 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_list_scheduled_jobs",
-        description: "List all scheduled jobs in Axiom. Returns names, schedules, execution modes, and whether they are enabled.",
+        name: "axiom_list_event_sources",
+        description: "List all configured event sources (GitHub, Jira) with their IDs, names, types, and enabled status.",
         parameters: [],
         handler: async () => {
-            const items = JSON.parse(await axiomApi("GET", "/scheduled-jobs"));
-            if (items.length === 0) return "No scheduled jobs configured.";
-            return JSON.stringify(items.map(j => ({
-                id: j.id,
-                name: j.name,
-                description: j.description || "",
-                schedule: j.schedule,
-                executionMode: j.executionMode,
-                enabled: j.enabled,
-            })), null, 2);
-        },
-    },
-    {
-        name: "axiom_get_scheduled_job",
-        description: "Get full details of a specific scheduled job by name, including its schedule, execution configuration, allowed tools, and environment.",
-        parameters: [
-            { name: "name", type: "string", description: "The scheduled job name", required: true },
-        ],
-        handler: async (args) => {
-            const items = JSON.parse(await axiomApi("GET", "/scheduled-jobs"));
-            const job = items.find(j => j.name === args.name);
-            if (!job) return `Scheduled job '${args.name}' not found.`;
-            return JSON.stringify(job, null, 2);
-        },
-    },
-    {
-        name: "axiom_list_connections",
-        description: "List all configured event source connections (GitHub, Jira) with their IDs, names, types, and enabled status.",
-        parameters: [],
-        handler: async () => {
-            const result = JSON.parse(await axiomApi("GET", "/connections?limit=100"));
+            const result = JSON.parse(await axiomApi("GET", "/event-sources?limit=100"));
             const items = result.items || [];
-            if (items.length === 0) return "No connections configured.";
+            if (items.length === 0) return "No event sources configured.";
             return JSON.stringify(items.map(c => ({
                 id: c.id,
                 name: c.name,
@@ -241,16 +186,16 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_get_connection",
-        description: "Get the full details of an event source connection by its slug ID, including configuration (repositories/projects), base URL, and poll interval.",
+        name: "axiom_get_event_source",
+        description: "Get the full details of an event source by its slug ID, including configuration (repositories/subjects), base URL, and poll interval.",
         parameters: [
-            { name: "connectionId", type: "string", description: "The connection slug ID (e.g., 'github-com')", required: true },
+            { name: "eventSourceId", type: "string", description: "The event source slug ID (e.g., 'github-com')", required: true },
         ],
         handler: async (args) => {
             try {
-                return await axiomApi("GET", "/connections/" + encodeURIComponent(args.connectionId));
+                return await axiomApi("GET", "/event-sources/" + encodeURIComponent(args.eventSourceId));
             } catch (e) {
-                return `Connection '${args.connectionId}' not found.`;
+                return `Event source '${args.eventSourceId}' not found.`;
             }
         },
     },
@@ -316,6 +261,39 @@ const TOOLS = [
         },
     },
     {
+        name: "axiom_validate_item",
+        description: "Validate a draft configuration item BEFORE writing it to a file. type is one of: tool, "
+            + "action-type, toolset, session-template, workflow, event-source, subscription. item is the full "
+            + "JSON object you intend to write. Items already written in this session count as existing.",
+        parameters: [
+            { name: "type", type: "string", description: "Item type", required: true },
+            { name: "item", type: "object", description: "The complete item JSON", required: true },
+        ],
+        handler: async (args) => {
+            if (!AXIOM_ASSISTANT_SESSION_ID) {
+                return "Validation unavailable: no assistant session id.";
+            }
+            let item = args.item;
+            if (typeof item === "string") {
+                try {
+                    item = JSON.parse(item);
+                } catch (e) {
+                    return "INVALID — item is not valid JSON: " + e.message;
+                }
+            }
+            const result = JSON.parse(await axiomApi("POST",
+                "/assistant/sessions/" + encodeURIComponent(AXIOM_ASSISTANT_SESSION_ID) + "/validate",
+                { type: args.type, item }));
+            if (result.valid && result.problems.length === 0) {
+                return "VALID. You can write this item to its file.";
+            }
+            const lines = result.problems.map(p =>
+                `- [${p.severity.toUpperCase()}] ${p.path || "(root)"} ${p.code}: ${p.message}`);
+            return (result.valid ? "VALID with warnings:\n" : "INVALID — fix these and validate again:\n")
+                + lines.join("\n");
+        },
+    },
+    {
         name: "axiom_list_secrets",
         description: "List all secret names in Axiom. Returns names and descriptions only (values are never exposed). Use these names with ${secret:NAME} syntax in environment variables and configuration.",
         parameters: [],
@@ -329,24 +307,22 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_list_projects",
-        description: "List projects in Axiom with optional filtering. Returns names, statuses, issue references, and labels.",
+        name: "axiom_list_subjects",
+        description: "List subjects in Axiom with optional filtering. Returns names, active flags, issue references, and labels.",
         parameters: [
-            { name: "filterStatus", type: "string", description: "Comma-separated status filter (e.g. 'Created,InProgress,Idle')", required: false },
-            { name: "filterName", type: "string", description: "Substring filter on project name or issue reference", required: false },
+            { name: "filterName", type: "string", description: "Substring filter on subject name or issue reference", required: false },
             { name: "limit", type: "string", description: "Max results to return (default 20)", required: false },
         ],
         handler: async (args) => {
-            let path = "/projects?limit=" + (args.limit || "20");
-            if (args.filterStatus) path += "&filterStatus=" + encodeURIComponent(args.filterStatus);
+            let path = "/subjects?limit=" + (args.limit || "20");
             if (args.filterName) path += "&filterName=" + encodeURIComponent(args.filterName);
             const result = JSON.parse(await axiomApi("GET", path));
             const items = result.items || [];
-            if (items.length === 0) return "No projects found.";
+            if (items.length === 0) return "No subjects found.";
             return JSON.stringify(items.map(p => ({
                 id: p.id,
                 name: p.name,
-                status: p.status,
+                active: p.active,
                 refSource: p.refSource || "",
                 ref: p.ref || "",
                 labels: p.labels || [],
@@ -370,51 +346,51 @@ const TOOLS = [
     },
 ];
 
-if (AXIOM_PROJECT_ID) {
-    const projectId = AXIOM_PROJECT_ID;
+if (AXIOM_SUBJECT_ID) {
+    const subjectId = AXIOM_SUBJECT_ID;
     TOOLS.push(
         {
-            name: "axiom_project_get_details",
-            description: "Get full details of the project this session is scoped to, including name, description, type, status, issue reference, repository, and labels",
+            name: "axiom_subject_get_details",
+            description: "Get full details of the subject this session is scoped to, including name, description, type, active flag, issue reference, repository, and labels",
             parameters: [],
             handler: async () => {
-                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}`);
+                return await axiomApi("GET", `/subjects/${encodeURIComponent(subjectId)}`);
             },
         },
         {
-            name: "axiom_project_list_tasks",
-            description: "List all tasks for this project with their status, assigned actor, and action type",
+            name: "axiom_subject_list_tasks",
+            description: "List all tasks for this subject with their status, assigned actor, and action type",
             parameters: [],
             handler: async () => {
-                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/tasks`);
+                return await axiomApi("GET", `/subjects/${encodeURIComponent(subjectId)}/tasks`);
             },
         },
         {
-            name: "axiom_project_get_task",
-            description: "Get detailed information about a specific project task including input, output, and execution log",
+            name: "axiom_subject_get_task",
+            description: "Get detailed information about a specific subject task including input, output, and execution log",
             parameters: [
                 { name: "taskId", type: "string", description: "The task ID to retrieve", required: true },
             ],
             handler: async (args) => {
-                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(args.taskId)}`);
+                return await axiomApi("GET", `/subjects/${encodeURIComponent(subjectId)}/tasks/${encodeURIComponent(args.taskId)}`);
             },
         },
         {
-            name: "axiom_project_get_thread",
-            description: "Read the project's discussion thread entries",
+            name: "axiom_subject_get_thread",
+            description: "Read the subject's discussion thread entries",
             parameters: [],
             handler: async () => {
-                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/thread`);
+                return await axiomApi("GET", `/subjects/${encodeURIComponent(subjectId)}/thread`);
             },
         },
         {
-            name: "axiom_project_add_thread_entry",
-            description: "Post a new entry to the project's discussion thread",
+            name: "axiom_subject_add_thread_entry",
+            description: "Post a new entry to the subject's discussion thread",
             parameters: [
                 { name: "content", type: "string", description: "The thread entry content", required: true },
             ],
             handler: async (args) => {
-                return await axiomApi("POST", `/projects/${encodeURIComponent(projectId)}/thread`, {
+                return await axiomApi("POST", `/subjects/${encodeURIComponent(subjectId)}/thread`, {
                     authorType: "assistant",
                     authorId: "axiom-assistant",
                     entryType: "comment",
@@ -423,19 +399,19 @@ if (AXIOM_PROJECT_ID) {
             },
         },
         {
-            name: "axiom_project_list_events",
-            description: "List events that triggered or relate to this project",
+            name: "axiom_subject_list_events",
+            description: "List events that triggered or relate to this subject",
             parameters: [],
             handler: async () => {
-                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/events`);
+                return await axiomApi("GET", `/subjects/${encodeURIComponent(subjectId)}/events`);
             },
         },
         {
-            name: "axiom_project_list_traces",
-            description: "List activity traces for this project for debugging and review",
+            name: "axiom_subject_list_traces",
+            description: "List activity traces for this subject for debugging and review",
             parameters: [],
             handler: async () => {
-                return await axiomApi("GET", `/projects/${encodeURIComponent(projectId)}/traces`);
+                return await axiomApi("GET", `/subjects/${encodeURIComponent(subjectId)}/traces`);
             },
         },
     );
@@ -444,10 +420,10 @@ if (AXIOM_PROJECT_ID) {
 log("INFO", "Axiom Assistant MCP server started", {
     toolCount: TOOLS.length,
     axiomApiUrl: AXIOM_API_URL,
-    projectId: AXIOM_PROJECT_ID || null,
+    subjectId: AXIOM_SUBJECT_ID || null,
 });
 
-const server = new Server({ name: "axiom-assistant", version: "1.0.0" }, {
+const server = new Server({ name: "axiom-assistant", version: "3.0.0-SNAPSHOT" }, {
     capabilities: { tools: {} }
 });
 

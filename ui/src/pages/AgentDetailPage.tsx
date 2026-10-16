@@ -39,8 +39,6 @@ import {
     fetchAgent,
     fetchAgentTasks,
     fetchActionTypes,
-    fetchReportDefinitions,
-    fetchScheduledJobs,
     updateAgent,
 } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
@@ -81,7 +79,7 @@ export function AgentDetailPage() {
 
     // Execution log modal
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-    const [logProjectId, setLogProjectId] = useState<number | null>(null);
+    const [logSubjectId, setLogSubjectId] = useState<number | null>(null);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
 
     const loadAgent = useCallback(() => {
@@ -134,8 +132,8 @@ export function AgentDetailPage() {
     useEffect(() => { loadAgent(); }, [loadAgent]);
     useEffect(() => { loadTasks(); }, [loadTasks]);
 
-    const handleViewLog = (projectId: number, taskId: number) => {
-        setLogProjectId(projectId);
+    const handleViewLog = (subjectId: number, taskId: number) => {
+        setLogSubjectId(subjectId);
         setLogTaskId(taskId);
         setIsLogModalOpen(true);
     };
@@ -241,7 +239,7 @@ export function AgentDetailPage() {
 
             <ExecutionLogModal
                 isOpen={isLogModalOpen}
-                projectId={logProjectId}
+                subjectId={logSubjectId}
                 taskId={logTaskId}
                 onClose={() => setIsLogModalOpen(false)}
             />
@@ -276,23 +274,15 @@ function CapabilitiesTab({ capabilities, onAdd, onRemove }: {
     onRemove: (c: string) => void;
 }) {
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
-    const [reportDefinitions, setReportDefinitions] = useState<Array<{name: string; slug?: string}>>([]);
-    const [scheduledJobs, setScheduledJobs] = useState<Array<{name: string; slug?: string}>>([]);
 
     useEffect(() => {
         fetchActionTypes(1, 1000).then((r) => setActionTypes(r.items)).catch(console.error);
-        fetchReportDefinitions().then((defs) => setReportDefinitions(defs)).catch(console.error);
-        fetchScheduledJobs().then((jobs) => setScheduledJobs(jobs)).catch(console.error);
     }, []);
 
     const suggestions: TypeaheadAddSuggestion[] = [
         { value: "*" },
         { value: "action:*" },
-        { value: "report:*" },
-        { value: "job:*" },
         ...actionTypes.map((at) => ({ value: `action:${at.name}` })),
-        ...reportDefinitions.map((rd) => ({ value: `report:${rd.slug || rd.name}` })),
-        ...scheduledJobs.map((sj) => ({ value: `job:${sj.slug || sj.name}` })),
     ];
 
     const validateCapability = (cap: string): boolean => {
@@ -306,8 +296,8 @@ function CapabilitiesTab({ capabilities, onAdd, onRemove }: {
             <HelperText>
                 <HelperTextItem>
                     Define which workloads this agent can perform. Use glob patterns to match
-                    multiple items: <code>action:*</code>, <code>report:daily-*</code>,{" "}
-                    <code>job:github-*</code>, or <code>*</code> for all workloads.
+                    multiple items: <code>action:*</code>, <code>action:auto-*</code>,{" "}
+                    or <code>*</code> for all workloads.
                 </HelperTextItem>
             </HelperText>
 
@@ -383,7 +373,7 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
     onFilterStatus: (v: string[]) => void;
     onStatusSelectToggle: (open: boolean) => void;
     onRefresh: () => void;
-    onViewLog: (projectId: number, taskId: number) => void;
+    onViewLog: (subjectId: number, taskId: number) => void;
 }) {
     const hasActiveFilters = filterActionType || filterStatus.length > 0;
 
@@ -494,7 +484,7 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
                     <Thead>
                         <Tr>
                             <Th>Action Type</Th>
-                            <Th>Project</Th>
+                            <Th>Subject</Th>
                             <Th>Status</Th>
                             <Th>Created</Th>
                             <Th>Completed</Th>
@@ -506,8 +496,8 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
                             <Tr key={task.id}>
                                 <Td>{task.actionType}</Td>
                                 <Td>
-                                    <Link to={`/projects/${task.projectId}`}>
-                                        Project #{task.projectId}
+                                    <Link to={`/subjects/${task.subjectId}`}>
+                                        Subject #{task.subjectId}
                                     </Link>
                                 </Td>
                                 <Td>
@@ -526,7 +516,7 @@ function TaskHistoryTab({ tasks, totalCount, page, perPage, filterActionType, fi
                                 <Td>
                                     {(task.status === "Completed" || task.status === "Failed") && (
                                         <Button variant="link" isInline
-                                            onClick={() => onViewLog(task.projectId, task.id)}>
+                                            onClick={() => onViewLog(task.subjectId, task.id)}>
                                             View Log
                                         </Button>
                                     )}

@@ -47,7 +47,7 @@ export function EngineSettingsPage() {
             .then((loadedConfig) => {
                 setConfig(loadedConfig);
                 setSelectedDefaultEngine(
-                    loadedConfig.defaultEngine || loadedConfig.engine || ""
+                    loadedConfig.defaultEngine || ""
                 );
             })
             .catch(console.error)
@@ -72,7 +72,7 @@ export function EngineSettingsPage() {
     }
 
     const engines = config.engines || [];
-    const defaultEngine = config.defaultEngine || config.engine;
+    const defaultEngine = config.defaultEngine;
     const nodeJsCheck = (config.checks || []).find((c) => c.name === "Node.js");
 
     const handleDefaultEngineChange = (_event: FormEvent<HTMLSelectElement>, value: string) => {
@@ -91,7 +91,7 @@ export function EngineSettingsPage() {
         updateSystemConfig({ defaultEngine: value })
             .then((updated) => {
                 setConfig(updated);
-                setSelectedDefaultEngine(updated.defaultEngine || updated.engine || "");
+                setSelectedDefaultEngine(updated.defaultEngine || "");
             })
             .catch((error: unknown) => {
                 const message = error instanceof Error ? error.message : "Failed to update default engine.";

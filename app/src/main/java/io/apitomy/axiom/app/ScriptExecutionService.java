@@ -2,17 +2,18 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
+import io.apitomy.axiom.core.entities.ActionTypeField;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
-import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
+import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.logging.LogContext;
-import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
+import io.apitomy.axiom.core.services.ShellContext;
 import io.apitomy.axiom.core.tracing.TraceService;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -27,6 +28,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -35,8 +37,8 @@ import java.util.regex.Pattern;
 
 /**
  * Executes script-mode action types by running a user-defined bash script.
- * The script template is stored on the ActionTypeEntity and supports
- * placeholder substitution for project/event context and the API base URL.
+ * The script template is stored on the ActionTypeEntity and receives data only
+ * through its declared inputs ({@code {{inputs.NAME}}} placeholders).
  */
 @ApplicationScoped
 public class ScriptExecutionService {
@@ -53,8 +55,6 @@ public class ScriptExecutionService {
     @Inject
     Event<SseEvent> sseEvents;
 
-    @Inject
-    EncryptionService encryptionService;
 
     @Inject
     EnvironmentResolver environmentResolver;
@@ -71,11 +71,23 @@ public class ScriptExecutionService {
     @Inject
     WorkflowExecutionService workflowExecutionService;
 
+    @Inject
+    WorkspaceService workspaceService;
+
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
 
     @ConfigProperty(name = "axiom.script.timeout-seconds", defaultValue = "60")
     int timeoutSeconds;
+
+    /**
+     * The maximum run time of a script or node action ({@code axiom.script.timeout-seconds}).
+     *
+     * @return the timeout in seconds
+     */
+    int timeoutSeconds() {
+        return timeoutSeconds;
+    }
 
     /**
      * Executes the script for a task asynchronously.
@@ -87,16 +99,16 @@ public class ScriptExecutionService {
     }
 
     /**
-     * Executes the script for a task asynchronously, using the supplied project
-     * for template variable resolution. If {@code project} is {@code null}, the
-     * project is loaded from the database — callers that already hold a managed
+     * Executes the script for a task asynchronously, using the supplied subject
+     * to locate the workspace directory. If {@code subject} is {@code null}, the
+     * subject is loaded from the database — callers that already hold a managed
      * entity (e.g. inside an uncommitted transaction) should pass it directly to
      * avoid a race between the async thread and the transaction commit.
      *
      * @param task    the task whose action type defines the script to run
-     * @param project the project to use for placeholder substitution, or {@code null}
+     * @param subject the subject whose workspace the script runs against, or {@code null}
      */
-    public void executeScript(TaskEntity task, ProjectEntity project) {
+    public void executeScript(TaskEntity task, SubjectEntity subject) {
         try (LogContext ignored = TaskExecutionService.taskLogContext(task)) {
             markTaskInProgress(task.id);
         }
@@ -106,7 +118,7 @@ public class ScriptExecutionService {
         CompletableFuture.runAsync(() -> {
             Arc.container().requestContext().activate();
             try (LogContext ignored = TaskExecutionService.taskLogContext(task)) {
-                RunResult result = runScript(task, project);
+                RunResult result = runScript(task, subject);
                 completeTask(task.id, result.output, result.exitCode == 0,
                         result.executionLog);
             } catch (Exception e) {
@@ -118,7 +130,52 @@ public class ScriptExecutionService {
         });
     }
 
-    private RunResult runScript(TaskEntity task, ProjectEntity project)
+    /**
+     * Runs a script action type with explicit input values, outside any task (used for test runs).
+     *
+     * @param actionType the action type (may be transient); its {@code scriptTemplate} must not be blank
+     * @param inputs     input values by name
+     * @param subject    the subject whose workspace to run in, or {@code null} for a temporary directory
+     * @param runId      identifier exposed to the script as {@code AXIOM_TASK_ID}
+     * @return the run
+     * @throws IOException          if files cannot be written
+     * @throws InterruptedException if interrupted while waiting for the process
+     */
+    ActionRun runScriptAction(ActionTypeEntity actionType, Map<String, Object> inputs, SubjectEntity subject,
+                              String runId) throws IOException, InterruptedException {
+        Map<String, String> placeholderEnv = new LinkedHashMap<>();
+        String script = substitutePlaceholders(actionType.scriptTemplate, inputs, actionType.inputs,
+                placeholderEnv);
+        Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
+        WorkingDirectory workDir = workingDirectory(subject);
+        try {
+            Files.writeString(scriptFile, script);
+            scriptFile.toFile().setExecutable(true);
+            ProcessBuilder pb = scriptProcess(scriptFile, workDir.path(),
+                    buildBaseEnvironment(runId, workDir.path()));
+            applyActionEnvironment(pb, actionType);
+            // Inject substituted placeholder values as environment variables. The script references them via
+            // quoted shell expansions ("$AXIOM_*"), so values containing shell metacharacters are literal data
+            // (see substitutePlaceholders / issue #267). Applied last so the reserved AXIOM_* names win.
+            pb.environment().putAll(placeholderEnv);
+            Instant startTime = Instant.now();
+            Process process = pb.start();
+            CapturedOutput captured = capture(process, timeoutSeconds);
+            long durationMs = java.time.Duration.between(startTime, Instant.now()).toMillis();
+            String stdout = captured.stdout();
+            if (!captured.finished()) {
+                stdout = stdout + "\n[Script timed out after " + timeoutSeconds + "s]";
+            }
+            // The output is the last JSON object the script printed to stdout; logs belong on stderr.
+            return new ActionRun(captured.exitCode(), stdout, captured.stderr(), extractScriptOutput(stdout),
+                    durationMs, captured.finished(), script);
+        } finally {
+            Files.deleteIfExists(scriptFile);
+            workDir.cleanUp();
+        }
+    }
+
+    private RunResult runScript(TaskEntity task, SubjectEntity subject)
             throws IOException, InterruptedException {
         ActionTypeEntity actionType = ActionTypeEntity.find("name", task.actionType).firstResult();
         if (actionType == null || actionType.scriptTemplate == null
@@ -127,118 +184,304 @@ public class ScriptExecutionService {
                     "No script template configured for action type: " + task.actionType,
                     null);
         }
-
-        if (project == null) {
-            project = ProjectEntity.findById(task.projectId);
+        if (subject == null) {
+            subject = SubjectEntity.findById(task.subjectId);
         }
-        Map<String, String> placeholderEnv = new LinkedHashMap<>();
-        String script = substitutePlaceholders(actionType.scriptTemplate, task, project,
-                placeholderEnv);
+        Map<String, Object> inputs = task.workflowRunId != null
+                ? InputBindingResolver.parseInputs(task.input, objectMapper)
+                : Map.of();
+        LOG.infof("Executing script for task %d (%s), timeout %ds", task.id, task.actionType, timeoutSeconds);
         Instant startTime = Instant.now();
+        ActionRun run = runScriptAction(actionType, inputs, subject, String.valueOf(task.id));
+        String executionLog = buildExecutionLog(task, "Script Template", actionType.scriptTemplate,
+                run.resolvedScript(), run.stdout(), run.stderr(), run.exitCode(), startTime, run.durationMs());
+        return new RunResult(run.exitCode(), run.output(), executionLog);
+    }
 
-        Path scriptFile = Files.createTempFile("axiom-script-", ".sh");
+    /** Parser that rejects trailing content, so a candidate must run to the end of stdout. */
+    private static final ObjectMapper STRICT_JSON = new ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
+    /**
+     * Separately captured result of a script process.
+     *
+     * @param stdout   everything the script wrote to stdout
+     * @param stderr   everything the script wrote to stderr
+     * @param exitCode the exit code ({@code 1} when the script timed out)
+     * @param finished false when the script was killed after the timeout
+     */
+    record CapturedOutput(String stdout, String stderr, int exitCode, boolean finished) {
+    }
+
+    /**
+     * Reads stdout and stderr concurrently (so neither pipe can fill up and block the script), waits up to the
+     * timeout, and kills the script and its child processes if it is still running.
+     *
+     * @param process        the started process
+     * @param timeoutSeconds maximum run time
+     * @return the captured output
+     * @throws InterruptedException if interrupted while waiting
+     */
+    static CapturedOutput capture(Process process, long timeoutSeconds) throws InterruptedException {
+        java.util.concurrent.CompletableFuture<String> stdout = readAsync(process.getInputStream());
+        java.util.concurrent.CompletableFuture<String> stderr = readAsync(process.getErrorStream());
+        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
+        if (!finished) {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            process.waitFor(5, TimeUnit.SECONDS);
+        }
+        int exitCode = finished ? process.exitValue() : 1;
+        return new CapturedOutput(join(stdout), join(stderr), exitCode, finished);
+    }
+
+    private static java.util.concurrent.CompletableFuture<String> readAsync(java.io.InputStream in) {
+        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                return "";
+            }
+        });
+    }
+
+    private static String join(java.util.concurrent.CompletableFuture<String> future) {
         try {
-            Files.writeString(scriptFile, script);
-            scriptFile.toFile().setExecutable(true);
-
-            LOG.infof("Executing script for task %d (%s), timeout %ds",
-                    task.id, task.actionType, timeoutSeconds);
-
-            ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
-                    .redirectErrorStream(true);
-            pb.environment().put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
-            pb.environment().put("AXIOM_PROJECT_ID", String.valueOf(task.projectId));
-            pb.environment().put("AXIOM_TASK_ID", String.valueOf(task.id));
-
-            // Inject environment variables (custom or all secrets as fallback)
-            if (environmentResolver.hasCustomEnvironment(actionType.environment)) {
-                pb.environment().putAll(environmentResolver.resolve(actionType.environment));
-            } else {
-                for (SecretEntity secret : SecretEntity.<SecretEntity>listAll()) {
-                    try {
-                        pb.environment().put(secret.name, encryptionService.decrypt(secret.encryptedValue));
-                    } catch (Exception e) {
-                        LOG.warnf("Failed to decrypt secret '%s' for script — skipping", secret.name);
-                    }
-                }
-            }
-
-            // Inject substituted placeholder values as environment variables. The
-            // script references them via quoted shell expansions ("$AXIOM_*"), so
-            // values that contain shell metacharacters are treated as literal data
-            // rather than being executed (see substitutePlaceholders / issue #267).
-            // Applied last so the reserved AXIOM_* names are authoritative.
-            pb.environment().putAll(placeholderEnv);
-
-            Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes());
-            boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-            Instant endTime = Instant.now();
-            long durationMs = java.time.Duration.between(startTime, endTime).toMillis();
-
-            int exitCode;
-            if (!finished) {
-                process.destroyForcibly();
-                exitCode = 1;
-                output = output + "\n[Script timed out after " + timeoutSeconds + "s]";
-            } else {
-                exitCode = process.exitValue();
-            }
-
-            String executionLog = buildExecutionLog(task, actionType.scriptTemplate,
-                    script, output, exitCode, startTime, durationMs);
-
-            return new RunResult(exitCode, output, executionLog);
-        } finally {
-            Files.deleteIfExists(scriptFile);
+            return future.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            future.cancel(true);
+            return "";
         }
     }
 
-    private String buildExecutionLog(TaskEntity task, String template, String resolvedScript,
-                                      String output, int exitCode, Instant startTime,
-                                      long durationMs) {
+    /**
+     * Extracts a script's outputs from its stdout: the last JSON object printed, which may span several lines
+     * (e.g. pretty-printed by {@code jq}) and must be the final thing on stdout. Earlier lines are treated as
+     * logs. When stdout does not end with a JSON object it is returned unchanged.
+     *
+     * @param stdout the script's stdout
+     * @return the JSON object text, or {@code stdout} when none is found
+     */
+    static String extractScriptOutput(String stdout) {
+        if (stdout == null) {
+            return "";
+        }
+        String trimmed = stdout.strip();
+        if (!trimmed.endsWith("}")) {
+            return stdout;
+        }
+        for (int start = trimmed.lastIndexOf('{'); start >= 0; start = trimmed.lastIndexOf('{', start - 1)) {
+            if (!startsLine(trimmed, start)) {
+                continue;
+            }
+            String candidate = trimmed.substring(start);
+            try {
+                if (STRICT_JSON.readTree(candidate).isObject()) {
+                    return candidate;
+                }
+            } catch (IOException e) {
+                // not a complete object from here; try an earlier line
+            }
+            if (start == 0) {
+                break;
+            }
+        }
+        return stdout;
+    }
+
+    private static boolean startsLine(String text, int index) {
+        for (int i = index - 1; i >= 0; i--) {
+            char c = text.charAt(i);
+            if (c == '\n') {
+                return true;
+            }
+            if (c != ' ' && c != '\t' && c != '\r') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Injects the action type's declared environment into a process, with {@code ${secret:NAME}} references
+     * resolved. Secrets are never injected automatically.
+     *
+     * @param pb         the process builder to add variables to
+     * @param actionType the action type being run
+     * @throws io.apitomy.axiom.core.services.MissingSecretException when a referenced secret does not exist
+     */
+    void applyActionEnvironment(ProcessBuilder pb, ActionTypeEntity actionType) {
+        pb.environment().putAll(environmentResolver.resolve(actionType.environment));
+    }
+
+    /**
+     * Builds the human-readable execution log stored on a task.
+     *
+     * @param task          the task that ran
+     * @param sourceLabel   heading for the source section (e.g. "Script Template" or "Code")
+     * @param source        the source that was run
+     * @param resolvedSource the resolved script, or {@code null} to omit the "Resolved Script" section
+     * @param output        the process stdout
+     * @param stderr        the process stderr
+     * @param exitCode      the exit code
+     * @param startTime     when the run started
+     * @param durationMs    run time in milliseconds
+     * @return the execution log
+     */
+    static String buildExecutionLog(TaskEntity task, String sourceLabel, String source, String resolvedSource,
+                                    String output, String stderr, int exitCode, Instant startTime,
+                                    long durationMs) {
+        return buildExecutionLog("Script Execution Log", task, sourceLabel, source, resolvedSource, output,
+                stderr, exitCode, startTime, durationMs);
+    }
+
+    /**
+     * Builds an execution log with the given header title.
+     *
+     * @param title the header title, e.g. {@code Script Execution Log}
+     * @return the execution log
+     */
+    static String buildExecutionLog(String title, TaskEntity task, String sourceLabel, String source, String resolvedSource,
+                                    String output, String stderr, int exitCode, Instant startTime,
+                                    long durationMs) {
         StringBuilder log = new StringBuilder();
         log.append("═══════════════════════════════════════════════════════════════\n");
-        log.append("  Script Execution Log\n");
+        log.append("  ").append(title).append("\n");
         log.append("═══════════════════════════════════════════════════════════════\n");
         log.append("  Task:        #").append(task.id).append("\n");
         log.append("  Action Type: ").append(task.actionType).append("\n");
-        log.append("  Project:     #").append(task.projectId).append("\n");
+        log.append("  Subject:     #").append(task.subjectId).append("\n");
         log.append("  Started:     ").append(startTime).append("\n");
         log.append("  Duration:    ").append(durationMs).append(" ms\n");
         log.append("  Exit Code:   ").append(exitCode).append("\n");
         log.append("  Status:      ").append(exitCode == 0 ? "SUCCESS" : "FAILED").append("\n");
         log.append("═══════════════════════════════════════════════════════════════\n\n");
 
-        log.append("── Script Template ────────────────────────────────────────────\n");
-        log.append(template.strip()).append("\n\n");
+        log.append(sectionHeader(sourceLabel)).append("\n");
+        log.append(source.strip()).append("\n\n");
 
-        log.append("── Resolved Script ────────────────────────────────────────────\n");
-        log.append(resolvedScript.strip()).append("\n\n");
+        if (resolvedSource != null) {
+            log.append("── Resolved Script ────────────────────────────────────────────\n");
+            log.append(resolvedSource.strip()).append("\n\n");
+        }
 
-        log.append("── Output ─────────────────────────────────────────────────────\n");
+        log.append("── Output (stdout) ────────────────────────────────────────────\n");
         if (output != null && !output.isBlank()) {
             log.append(output.strip()).append("\n");
         } else {
             log.append("(no output)\n");
         }
 
+        log.append("\n── Errors (stderr) ────────────────────────────────────────────\n");
+        if (stderr != null && !stderr.isBlank()) {
+            log.append(stderr.strip()).append("\n");
+        } else {
+            log.append("(none)\n");
+        }
+
         log.append("\n═══════════════════════════════════════════════════════════════\n");
         return log.toString();
     }
 
+    /** Renders a section heading such as {@code ── Code ───…}, padded with rules to the log width. */
+    private static String sectionHeader(String label) {
+        String head = "── " + label + " ";
+        return head + "─".repeat(Math.max(0, 63 - head.length()));
+    }
+
     /**
-     * Resolves {@code {{...}}} placeholders in a script template.
+     * Builds the plumbing environment variables every script receives: the API base URL, the task ID
+     * and the script's working directory. No subject data is exposed; scripts receive data only
+     * through declared inputs.
      *
-     * <p>To guard against shell injection, placeholder <em>values</em> are never
+     * @param task    the task being executed
+     * @param workDir the directory the script runs in
+     * @return the plumbing environment variables
+     */
+    Map<String, String> buildBaseEnvironment(TaskEntity task, Path workDir) {
+        return buildBaseEnvironment(String.valueOf(task.id), workDir);
+    }
+
+    /**
+     * Builds the plumbing environment variables for a run that is identified by {@code runId} instead of a
+     * task: the API base URL, the run id (as {@code AXIOM_TASK_ID}) and the working directory.
+     *
+     * @param runId   the task id or test-run id
+     * @param workDir the directory the script runs in
+     * @return the plumbing environment variables
+     */
+    Map<String, String> buildBaseEnvironment(String runId, Path workDir) {
+        Map<String, String> env = new LinkedHashMap<>();
+        env.put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
+        env.put("AXIOM_TASK_ID", runId);
+        env.put("AXIOM_WORK_DIR", workDir.toString());
+        return env;
+    }
+
+    /**
+     * The directory a script runs in.
+     *
+     * @param path      the directory
+     * @param temporary true when it was created for this run and must be deleted afterwards
+     */
+    record WorkingDirectory(Path path, boolean temporary) {
+
+        /** Deletes the directory (recursively) if it was created for this run; a subject workspace is kept. */
+        void cleanUp() {
+            if (!temporary) {
+                return;
+            }
+            try (java.util.stream.Stream<Path> paths = Files.walk(path)) {
+                paths.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
+            } catch (IOException e) {
+                LOG.debugf("Failed to delete temporary script directory %s: %s", path, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Chooses where a script runs: the subject's workspace (created if needed), or a new temporary directory
+     * when the task has no subject. Scripts never run in the server's own directory, so tools like {@code gh}
+     * or {@code git} cannot pick up the repository Axiom itself runs from.
+     *
+     * @param subject the task's subject, may be {@code null}
+     * @return the working directory
+     * @throws IOException if a temporary directory cannot be created
+     */
+    WorkingDirectory workingDirectory(SubjectEntity subject) throws IOException {
+        if (subject != null) {
+            return new WorkingDirectory(workspaceService.ensureWorkspace(subject), false);
+        }
+        return new WorkingDirectory(Files.createTempDirectory("axiom-script-dir-"), true);
+    }
+
+    /**
+     * Builds the process for a script file, running in {@code workDir} with the given extra environment.
+     *
+     * @param scriptFile the script to run
+     * @param workDir    the working directory
+     * @param env        environment variables to add
+     * @return the process builder
+     */
+    static ProcessBuilder scriptProcess(Path scriptFile, Path workDir, Map<String, String> env) {
+        ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString()).directory(workDir.toFile());
+        pb.environment().putAll(env);
+        return pb;
+    }
+
+    /**
+     * Resolves {@code {{inputs.NAME}}} placeholders for the action type's declared inputs in a
+     * script template. No other placeholders are recognised.
+     *
+     * <p>To guard against shell injection, input <em>values</em> are never
      * inlined into the script text. Instead each value is exported as an
-     * environment variable (collected into {@code env}) and the placeholder is
-     * replaced with a shell expansion of that variable — e.g.
-     * {@code {{managerInput}}} becomes a reference to {@code AXIOM_MANAGER_INPUT}.
+     * environment variable {@code AXIOM_INPUT_<name>} (collected into {@code env})
+     * and the placeholder is replaced with a shell expansion of that variable.
      * Because bash does not re-parse the contents of a variable expansion for
      * command substitution, a value containing {@code $(...)}, backticks,
      * {@code ;}, {@code &&}, newlines, etc. is treated as literal data rather
-     * than being executed (issue #267).
+     * than being executed (issue #267). Declared inputs without a value (e.g.
+     * unmapped optional inputs) render as an empty string.
      *
      * <p>The exact form of the injected reference is chosen based on the shell
      * quoting context in which the placeholder appears, so that values containing
@@ -258,91 +501,64 @@ public class ScriptExecutionService {
      * </ul>
      *
      * @param template the raw script template
-     * @param task     the task providing context values
-     * @param project  the project providing context values, may be {@code null}
+     * @param task     the task whose resolved inputs supply the values (workflow tasks only)
+     * @param inputs   the action type's declared inputs, may be {@code null}
      * @param env      output map that receives the environment variables the
      *                 resolved script references; the caller must inject these
      *                 into the script's process environment
      * @return the resolved script with placeholders replaced by shell references
      */
     String substitutePlaceholders(String template, TaskEntity task,
-                                           ProjectEntity project, Map<String, String> env) {
-        String apiBaseUrl = "http://localhost:" + httpPort + "/api/v1";
-        String workDir = System.getProperty("user.home")
-                + "/.axiom/workspaces/project-" + task.projectId;
+                                  List<ActionTypeField> inputs, Map<String, String> env) {
+        Map<String, Object> values = task.workflowRunId != null
+                ? InputBindingResolver.parseInputs(task.input, objectMapper)
+                : Map.of();
+        return substitutePlaceholders(template, values, inputs, env);
+    }
 
-        // Collect every candidate placeholder and its target environment
-        // variable. Longer placeholders are matched first during rendering so
-        // that e.g. {{inputs.title}} wins over any shorter prefix match.
+    /**
+     * Resolves {@code {{inputs.NAME}}} placeholders using the given input values; see
+     * {@link #substitutePlaceholders(String, TaskEntity, List, Map)} for how values are bound.
+     *
+     * @param template the script template
+     * @param values   input values by name
+     * @param inputs   the declared inputs, may be {@code null}
+     * @param env      receives the environment variables the resolved script references
+     * @return the resolved script
+     */
+    String substitutePlaceholders(String template, Map<String, Object> values,
+                                  List<ActionTypeField> inputs, Map<String, String> env) {
         Map<String, String> bindings = new LinkedHashMap<>();
-        Map<String, String> values = new LinkedHashMap<>();
-        addBinding(bindings, values, "{{projectId}}", "AXIOM_PROJECT_ID", str(task.projectId));
-        addBinding(bindings, values, "{{eventId}}", "AXIOM_EVENT_ID", str(task.eventId));
-        addBinding(bindings, values, "{{taskId}}", "AXIOM_TASK_ID", str(task.id));
-        addBinding(bindings, values, "{{ref}}", "AXIOM_REF",
-                project != null && project.ref != null ? project.ref : "");
-        addBinding(bindings, values, "{{repository}}", "AXIOM_REPOSITORY",
-                project != null && project.repository != null ? project.repository : "");
-        addBinding(bindings, values, "{{projectName}}", "AXIOM_PROJECT_NAME",
-                project != null && project.name != null ? project.name : "");
-        addBinding(bindings, values, "{{managerInput}}", "AXIOM_MANAGER_INPUT",
-                task.input != null ? task.input : "");
-        addBinding(bindings, values, "{{apiBaseUrl}}", "AXIOM_API_URL", apiBaseUrl);
-        addBinding(bindings, values, "{{workDir}}", "AXIOM_WORK_DIR", workDir);
-
-        // Bind named workflow inputs as {{inputs.NAME}} (workflow tasks only).
-        // Input parsing and value rendering are shared with the agent-prompt path
-        // via InputBindingResolver; the script path additionally routes each value
-        // through an environment variable (rather than inlining it, as the prompt
-        // path safely does) so shell metacharacters cannot execute (issue #267).
-        if (task.workflowRunId != null) {
-            Map<String, Object> inputs =
-                    InputBindingResolver.parseInputs(task.input, objectMapper);
-            for (Map.Entry<String, Object> e : inputs.entrySet()) {
-                String key = e.getKey();
-                if (!VALID_INPUT_NAME.matcher(key).matches()) {
-                    // Not a valid shell identifier — cannot bind as an env var
-                    // safely; leave the placeholder untouched.
+        Map<String, String> rendered = new LinkedHashMap<>();
+        if (inputs != null) {
+            for (ActionTypeField input : inputs) {
+                if (input.name == null || !VALID_INPUT_NAME.matcher(input.name).matches()) {
+                    // Not a valid shell identifier — cannot bind as an env var safely.
                     continue;
                 }
-                addBinding(bindings, values, "{{inputs." + key + "}}",
-                        "AXIOM_INPUT_" + key,
-                        InputBindingResolver.renderValue(e.getValue(), objectMapper));
+                String placeholder = "{{inputs." + input.name + "}}";
+                bindings.put(placeholder, "AXIOM_INPUT_" + input.name);
+                rendered.put(placeholder,
+                        InputBindingResolver.renderValue(values.get(input.name), objectMapper));
             }
         }
 
-        return render(template, bindings, values, env);
+        return render(template, bindings, rendered, env);
     }
 
     /**
-     * Records a candidate placeholder-to-environment-variable binding. The value
-     * is only exported (and the env var only referenced) if the placeholder is
-     * actually encountered while rendering the template.
-     */
-    private void addBinding(Map<String, String> bindings, Map<String, String> values,
-                            String placeholder, String envName, String value) {
-        bindings.put(placeholder, envName);
-        values.put(placeholder, value != null ? value : "");
-    }
-
-    /**
-     * Renders {@code template} in a single pass, tracking bash quoting context so
-     * each placeholder is replaced with a shell reference appropriate to where it
-     * appears (see {@link #substitutePlaceholders}). Environment variables are
-     * added to {@code env} only for placeholders that are actually present.
+     * Renders {@code template}, replacing each placeholder with a shell reference suited to the quoting
+     * context it appears in (see {@link ShellContext} and {@link #substitutePlaceholders(String, TaskEntity, List, Map)}). Environment
+     * variables are added to {@code env} only for placeholders that are actually present.
      */
     private String render(String template, Map<String, String> bindings,
                           Map<String, String> values, Map<String, String> env) {
+        ShellContext.Context[] contexts = ShellContext.analyze(template);
         StringBuilder out = new StringBuilder(template.length() + 32);
         int i = 0;
         int n = template.length();
-        // Current quoting context: 0 = unquoted, '\'' = single, '"' = double.
-        char quote = 0;
         while (i < n) {
-            char c = template.charAt(i);
-
-            // Attempt to match a placeholder at this position (longest wins).
-            if (c == '{' && i + 1 < n && template.charAt(i + 1) == '{') {
+            if (template.charAt(i) == '{' && i + 1 < n && template.charAt(i + 1) == '{') {
                 String match = null;
                 for (String placeholder : bindings.keySet()) {
                     if (template.startsWith(placeholder, i)
@@ -353,68 +569,33 @@ public class ScriptExecutionService {
                 if (match != null) {
                     String envName = bindings.get(match);
                     env.put(envName, values.get(match));
-                    out.append(reference(envName, quote));
+                    out.append(reference(envName, contexts[i]));
                     i += match.length();
                     continue;
                 }
             }
-
-            // Not a placeholder — advance the quoting state machine. Injected
-            // references are always quote-balanced, so tracking only the
-            // original template characters keeps the context accurate.
-            if (quote == 0) {
-                if (c == '\'') {
-                    quote = '\'';
-                } else if (c == '"') {
-                    quote = '"';
-                } else if (c == '\\' && i + 1 < n) {
-                    // Backslash escapes the next character outside single quotes.
-                    out.append(c).append(template.charAt(i + 1));
-                    i += 2;
-                    continue;
-                }
-            } else if (quote == '"') {
-                if (c == '"') {
-                    quote = 0;
-                } else if (c == '\\' && i + 1 < n) {
-                    out.append(c).append(template.charAt(i + 1));
-                    i += 2;
-                    continue;
-                }
-            } else { // single quotes: no escapes, only a closing quote ends it
-                if (c == '\'') {
-                    quote = 0;
-                }
-            }
-
-            out.append(c);
+            out.append(template.charAt(i));
             i++;
         }
         return out.toString();
     }
 
     /**
-     * Builds the shell reference for {@code envName} appropriate to the current
-     * quoting context {@code quote} (0 = unquoted, {@code '} = single-quoted,
-     * {@code "} = double-quoted). See {@link #substitutePlaceholders} for the
-     * rationale behind each form.
+     * Builds the shell reference for {@code envName} appropriate to the quoting context it replaces a
+     * placeholder in. The value is always passed through the environment, so it is never parsed as code.
      */
-    private String reference(String envName, char quote) {
-        if (quote == '"') {
+    private String reference(String envName, ShellContext.Context context) {
+        return switch (context) {
             // Already inside double quotes: expansion is safe as-is.
-            return "${" + envName + "}";
-        }
-        if (quote == '\'') {
-            // Inside single quotes bash does not expand; break out, expand within
-            // double quotes, then reopen the single-quoted region.
-            return "'\"${" + envName + "}\"'";
-        }
-        // Unquoted: quote the expansion so whitespace does not word-split it.
-        return "\"${" + envName + "}\"";
-    }
-
-    private String str(Object value) {
-        return value != null ? String.valueOf(value) : "";
+            case DOUBLE -> "${" + envName + "}";
+            // Inside single quotes bash does not expand; break out, expand within double quotes, then reopen.
+            case SINGLE -> "'\"${" + envName + "}\"'";
+            // Heredoc body: expansions are not word-split or executed, and quotes would be literal text.
+            // (In a quoted heredoc nothing expands at all; the validator rejects placeholders there.)
+            case HEREDOC, QUOTED_HEREDOC -> "${" + envName + "}";
+            // Unquoted: quote the expansion so whitespace does not word-split it.
+            case UNQUOTED -> "\"${" + envName + "}\"";
+        };
     }
 
     @Transactional
@@ -423,19 +604,13 @@ public class ScriptExecutionService {
         if (task != null) {
             task.status = "InProgress";
 
-            ProjectEntity project = ProjectEntity.findById(task.projectId);
-            if (project != null) {
-                project.status = "InProgress";
-                project.updatedOn = Instant.now();
-            }
-
-            logActivity(task.projectId, taskId, task.eventId, "task-started",
+            logActivity(task.subjectId, taskId, task.eventId, "task-started",
                     "Script task started: " + task.actionType, task.traceId);
-            addThreadEntry(task.projectId, "system", "update",
+            addThreadEntry(task.subjectId, "system", "update",
                     "Script task started: " + task.actionType);
 
-            sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, "InProgress"));
-            sseEvents.fire(SseEvent.projectUpdated(task.projectId));
+            sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, "InProgress"));
+            sseEvents.fire(SseEvent.subjectUpdated(task.subjectId));
         }
     }
 
@@ -452,17 +627,17 @@ public class ScriptExecutionService {
         String statusText = success ? "completed" : "failed";
         LOG.infof("Script task %d %s", taskId, statusText);
 
-        logActivity(task.projectId, taskId, task.eventId, "task-" + statusText,
+        logActivity(task.subjectId, taskId, task.eventId, "task-" + statusText,
                 "Script task " + statusText + ": " + task.actionType, task.traceId);
 
         String threadContent = "Script task " + statusText + ": " + task.actionType;
         if (output != null && !output.isBlank()) {
             threadContent += "\n\nOutput:\n" + output;
         }
-        addThreadEntry(task.projectId, "system", "result", threadContent);
+        addThreadEntry(task.subjectId, "system", "result", threadContent);
 
-        sseEvents.fire(SseEvent.taskUpdated(task.projectId, taskId, task.status));
-        sseEvents.fire(SseEvent.threadEntry(task.projectId));
+        sseEvents.fire(SseEvent.taskUpdated(task.subjectId, taskId, task.status));
+        sseEvents.fire(SseEvent.threadEntry(task.subjectId));
         if (!success) {
             sseEvents.fire(SseEvent.notification(
                     "Script task failed: " + task.actionType, "error"));
@@ -470,8 +645,6 @@ public class ScriptExecutionService {
 
         // Complete the task node and (when it was the last open task) the trace
         taskTraceFinalizer.finalizeTaskTrace(task, statusText);
-
-        updateProjectStatusAfterTask(task.projectId);
 
         // Advance workflow if this task is part of one
         if (task.workflowRunId != null) {
@@ -484,23 +657,10 @@ public class ScriptExecutionService {
         completeTask(taskId, reason, false, null);
     }
 
-    private void updateProjectStatusAfterTask(Long projectId) {
-        long activeTasks = TaskEntity.count(
-                "projectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
-                projectId);
-        if (activeTasks == 0) {
-            ProjectEntity project = ProjectEntity.findById(projectId);
-            if (project != null && "InProgress".equals(project.status)) {
-                project.status = "Idle";
-                project.updatedOn = Instant.now();
-            }
-        }
-    }
-
-    private void logActivity(Long projectId, Long taskId, UUID eventId,
+    private void logActivity(Long subjectId, Long taskId, UUID eventId,
                               String entryType, String summary, UUID traceId) {
         ActivityLogEntity log = new ActivityLogEntity();
-        log.projectId = projectId;
+        log.subjectId = subjectId;
         log.taskId = taskId;
         log.eventId = eventId;
         log.entryType = entryType;
@@ -512,10 +672,10 @@ public class ScriptExecutionService {
         log.persist();
     }
 
-    private void addThreadEntry(Long projectId, String authorType, String entryType,
+    private void addThreadEntry(Long subjectId, String authorType, String entryType,
                                 String content) {
         ThreadEntryEntity entry = new ThreadEntryEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.authorType = authorType;
         entry.entryType = entryType;
         entry.content = content;
@@ -523,5 +683,27 @@ public class ScriptExecutionService {
         entry.persist();
     }
 
-    private record RunResult(int exitCode, String output, String executionLog) {}
+    /**
+     * Result of running a script or node action.
+     *
+     * @param exitCode     the process exit code
+     * @param output       the task output
+     * @param executionLog the execution log, may be {@code null}
+     */
+    record RunResult(int exitCode, String output, String executionLog) {}
+
+    /**
+     * Result of running an action type's script or code directly, without a task.
+     *
+     * @param exitCode       the exit code ({@code 1} when the run timed out or could not start)
+     * @param stdout         everything written to stdout
+     * @param stderr         everything written to stderr
+     * @param output         the last JSON object printed to stdout, or {@code null}
+     * @param durationMs     how long the process ran
+     * @param finished       false when the process was killed after the timeout
+     * @param resolvedScript the script after placeholder substitution, or {@code null} for node actions
+     */
+    public record ActionRun(int exitCode, String stdout, String stderr, String output, long durationMs,
+                            boolean finished, String resolvedScript) {
+    }
 }

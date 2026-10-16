@@ -11,16 +11,36 @@ the authoritative reference and change more often than documentation should chas
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Java |
-| Framework | Quarkus |
+| Language | Java 25 |
+| Framework | Quarkus 3 |
 | Database | H2 (in-memory for dev, file-based for prod) |
 | ORM | Hibernate with Panache (active record pattern) |
 | Migrations | Flyway |
-| Frontend | TypeScript, React, PatternFly |
+| Frontend | TypeScript, React 19, PatternFly 6 |
+| Workflow engine and editor | Apitomy Flow 3.0.2 (`apitomy-flow-engine`, `@apitomy/flow-ui`) |
 | Build (frontend) | Vite |
 | Build (backend) | Maven |
 | API | Contract-first OpenAPI with Apitomy Codegen |
 | AI Agents | Claude Code CLI, OpenCode, GitHub Copilot CLI (pluggable) |
+
+---
+
+## Module Layout
+
+The root `pom.xml` lists these modules:
+
+| Module | Contents |
+|--------|----------|
+| `common/api` | `openapi.json` and the JAX-RS interfaces and beans generated from it |
+| `core` | Entities, SSE events, filters, tracing and other shared services |
+| `agents/spi` | The `Agent` SPI |
+| `agents/claude-code`, `agents/opencode`, `agents/copilot` | Agent implementations |
+| `events/core` | Event stream persistence and the event source SPI |
+| `events/github`, `events/jira` | Event source pollers |
+| `notifications/spi` | The notification channel SPI |
+| `notifications/slack`, `notifications/telegram` | Notification channels |
+| `app` | The Quarkus application: REST resources, workflow execution, AI Assistant sessions and the workbench |
+| `ui-bundle` | Packages the React UI from `ui/` into the JAR (only with the `ui` profile) |
 
 ---
 
@@ -32,8 +52,8 @@ scheduled pollers and services cooperate to process events and execute work.
 ### Event Ingestion
 
 ```
-GitHubConnectionPoller / JiraConnectionPoller
-  │  @Scheduled — polls external APIs at each connection's configured interval
+GitHubEventSourcePoller / JiraEventSourcePoller
+  │  @Scheduled — polls external APIs at each event source's configured interval
   │
   ▼
 EventStreamService.persistEvent()
@@ -55,44 +75,26 @@ SubscriptionFilterEvaluator
   │
   ▼
 Routing dispatch (in order, per matched subscription)
-  ├── manager           → ManagerService.evaluateStreamEvent()
-  ├── workflow-dispatch  → offers the event to parked receive-event workflow nodes
-  ├── create-workflow    → finds/creates a project, starts a new workflow instance
-  └── invoke-action      → finds/creates a project, creates a TaskEntity directly
+  ├── create-workflow    → finds/creates the Subject from the event ref, starts a new workflow run
+  │                        (skipped and recorded if the subject already has an active run of that definition)
+  └── workflow-dispatch  → broadcasts the event to every waiting run parked at a matching receive-event node
 ```
 
 A durable processing ledger records the outcome of every (event, subscription) pair
 (`skipped`, `completed`, or `failed`), so processing survives restarts and failed
 routing is retried automatically on each tick.
 
-### Manager Evaluation
-
-```
-ManagerService.evaluateStreamEvent(event)
-  │  Invokes an AI agent with a structured output schema
-  │  Returns List<ManagerDecision>
-  │
-  ▼
-Decision dispatch
-  ├── create_task / script_action → find/create Project, create TaskEntity
-  ├── ignore                       → mark processed, log
-  └── escalate                     → create an Inbox task for human review
-```
-
-Decisions below the configured confidence threshold are automatically escalated
-regardless of their decision type.
-
 ### Task Execution
 
 ```
 TaskQueuePoller
-  │  @Scheduled — finds projects with pending tasks
+  │  @Scheduled — finds subjects with pending tasks
   │
   ▼
-TaskExecutionService.executeNextTask(projectId)
+TaskExecutionService.executeNextTask(subjectId)
   │  Requests a lease from AgentPool using a capability string (e.g. "action:Name")
   │  Builds an AgentRequest (tools, prompt, env, MCP config)
-  │  Enforces project-level serialization (one task at a time)
+  │  Enforces subject-level serialization (one task at a time per subject)
   │
   ▼
 Agent.execute(request)
@@ -105,49 +107,20 @@ AiUsageEntity created with cost/token data
 AgentPool lease released
 ```
 
-### Report Generation
-
-```
-ReportScheduler
-  │  @Scheduled — checks for due report definitions
-  │  Creates ReportEntity (status: Pending)
-  │
-  ▼
-ReportQueueConsumer
-  │  Sequential FIFO queue (one report at a time)
-  │  Daemon thread blocks on BlockingQueue.take()
-  │
-  ▼
-ReportExecutionService
-  │  Requests a lease from AgentPool using capability "report:<slug>"
-  │  Invokes the leased agent with the report prompt and tools
-  │  Writes generated Markdown to ReportEntity
-```
-
-### Scheduled Job Execution
-
-```
-ScheduledJobScheduler
-  │  @Scheduled — checks for due scheduled jobs
-  │  Creates ScheduledJobRunEntity (status: Pending)
-  │
-  ▼
-ScheduledJobQueueConsumer
-  │  Sequential FIFO queue (one job at a time)
-  │  Daemon thread blocks on BlockingQueue.take()
-  │
-  ▼
-ScheduledJobExecutionService
-  │  Agent mode: requests a lease using capability "job:<slug>", invokes the agent
-  │  Script mode: runs bash script via ProcessBuilder
-  │  Writes output to ScheduledJobRunEntity
-```
+Tasks are created only by workflow `action` and `human-task` nodes. Because tasks are serialized per subject,
+concurrent runs of different definitions on the same subject take turns executing their tasks.
 
 ### Workflow Execution
 
 ```
-WorkflowExecutionService.triggerWorkflow(projectId, definitionId)
-  │  Manual trigger, or a subscription's "create-workflow"/"workflow-dispatch" rule
+WorkflowExecutionService.triggerWorkflow(subjectId, definitionId, RunRequest)
+  │  A subscription's "create-workflow" rule, a manual start from an event (Event Stream),
+  │  a schedule trigger, or a re-run of a failed run
+  │  RunRequest carries only the optional title and labels; runs cannot be started with supplied inputs
+  │  StandardInputs resolves the inputs the Start node declares (subject, event) into the initial context;
+  │  the run stores the resolved inputs (subject only; the event is linked as the run's trigger event)
+  │  Rejects a second active (running/waiting) run of the same definition on the subject
+  │  (WorkflowRunConflictException → HTTP 409, or a recorded "skipped" for routing and schedules)
   │
   ▼
 WorkflowEngine (from the shared flow-engine library)
@@ -160,6 +133,24 @@ WorkflowEngine (from the shared flow-engine library)
 WorkflowRunEntity updated with instance state, current node, and status
 ```
 
+### Schedule Triggers
+
+```
+WorkflowScheduleTriggerScheduler
+  │  @Scheduled every axiom.workflow.schedule-poll-interval (default 30s)
+  │  Claims due, enabled WorkflowScheduleTriggerEntity rows (nextRunAt <= now)
+  │  Computes the next firing from the 5-field Unix cron expression (UTC)
+  │
+  ▼
+Find or create the fixed Subject (ref "schedule:<subjectName>")
+  │
+  ▼
+WorkflowExecutionService.triggerWorkflow(subjectId, definitionId, inputs, label trigger=schedule)
+  │  lastOutcome = started | skipped (active run exists) | failed: <reason>
+```
+
+Schedule firing assumes a single Axiom node; there is no cross-node locking.
+
 See [Workflows](../user-guide/workflows.md) for the authoring and run-time reference.
 
 ### AI Assistant Sessions
@@ -171,7 +162,7 @@ AssistantSessionManager
   │  Runs optional init script
   │
   ▼
-InteractiveSessionDriver (Claude Code or OpenCode)
+InteractiveSessionDriver (ClaudeInteractiveSessionDriver or OpenCodeInteractiveSessionDriver)
   │  ProcessBuilder or HTTP session with stream-json / SSE I/O
   │  Virtual threads: stdout reader, stderr reader, process monitor
   │
@@ -186,8 +177,42 @@ JAX-RS SSE endpoint (per-session)
   │  Full event history replay on reconnect
 ```
 
-Sessions are in-memory — they do not survive server restarts. Cost and token usage
-are accumulated per-session and persisted to `AiUsageEntity` on session destruction.
+Live sessions are held in memory, and the agent process does not survive a server restart. Each session's
+events are also appended to a JSON Lines history journal (`HistoryJournal`), so a conversation can be shown
+again after a restart. Cost and token usage are accumulated per session and persisted to `AiUsageEntity` when
+the session is destroyed (only if the session had at least one turn).
+
+Each session gets an MCP token. REST routes that only a session's own MCP server may call check the
+`X-Axiom-Session-Token` header with `SessionTokenGuard` and return 401 if it is missing or wrong. The token
+keeps sessions apart; it does not protect Axiom from the agent itself, which can read the token from its
+environment.
+
+### Workflow Workbench
+
+```
+CompositionsResourceImpl (REST, /compositions)
+  │
+  ▼
+CompositionService          → saves composition items (workflow, action types, tools) as drafts,
+  │                           checks the base revision, records revisions, fires composition-item-changed
+  ├── WorkbenchSessions     → binds each composition to one agent session (template "axiom-workbench")
+  ├── CompositionTurns      → runs AI turns; collects workflow change sets, fires composition-turn and
+  │                           composition-changeset
+  ├── TurnUndo              → undoes an AI turn
+  ├── CompositionValidator  → validates drafts with the same rules as publishing
+  ├── CompositionTestRuns   → runs node/script action type and tool drafts, fires composition-test-run
+  └── CompositionPublisher  → publishes selected drafts as one configuration pack in one transaction
+```
+
+The workbench agent reaches Axiom through the built-in `@axiom-workbench` MCP server
+(`app/src/main/resources/templates/axiom-workbench-mcp/server.js`). Its tools read the composition, write
+action types and tools (`upsert_item`, `remove_item`), propose workflow changes
+(`propose_workflow_changes`), validate, suggest tests (`suggest_test`), and look up events, runs, traces and
+existing components. The agent cannot run tests or change the workflow directly: workflow change sets are
+applied by the user's editor when the turn ends, and only the user runs tests. Calls from the MCP server to
+the `/compositions/{compositionId}/agent/...` routes are checked by `SessionTokenGuard`.
+
+See [Workflow Workbench](../user-guide/workbench.md) for the user-facing description.
 
 #### Init Script Security
 
@@ -215,6 +240,11 @@ server-level code execution.
 
 ### Real-Time Updates (SSE)
 
+Event types include `subject-updated`, `task-updated`, `workflow-updated`, `stream-event`, `trace-updated`,
+`inbox-updated`, `notification`, `activity`, `assistant-session-event`, the workbench events
+`composition-item-changed`, `composition-turn`, `composition-changeset` and `composition-test-run`, and
+`heartbeat`. See `core/src/main/java/io/apitomy/axiom/core/events/SseEvent.java` for the full list.
+
 ```
 Any service fires CDI event: Event<SseEvent>
   │
@@ -223,8 +253,8 @@ SseResource (@Observes SseEvent)
   │  Broadcasts to all connected clients
   │
   ▼
-SseClient (browser)
-  │  EventSource with auto-reconnect
+ui/src/config/sse.ts (browser)
+  │  Shared connection (sse-worker.ts) with auto-reconnect
   │  UI components update reactively
 ```
 
@@ -251,8 +281,8 @@ non-Long primary keys) and use the active record pattern — queries are static 
 on the entity class:
 
 ```java
-ProjectEntity project = ProjectEntity.findById(id);
-List<TaskEntity> tasks = TaskEntity.find("projectId", projectId).list();
+SubjectEntity subject = SubjectEntity.findById(id);
+List<TaskEntity> tasks = TaskEntity.find("subjectId", subjectId).list();
 entity.persist();
 ```
 
@@ -270,12 +300,11 @@ non-blocking.
 
 ### Tracing
 
-Every manager evaluation, workflow run, scheduled job run, and report generation
-produces a **trace** — a tree of lightweight nodes recording each step. The tracing
+Every workflow run produces a **trace** — a tree of lightweight nodes recording each step. The tracing
 subsystem follows several key design principles:
 
-- **`TraceService` lives in `core`** — all producers of traces (`app` and `manager`
-  modules) inject it directly, avoiding circular dependencies
+- **`TraceService` lives in `core`** — producers of traces inject it directly, avoiding circular
+  dependencies
 - **Stack-based context** — `TraceContext` maintains a mutable node stack. Call
   `push(nodeId)` when descending into a child scope and `pop()` when returning. The
   current top of the stack is the parent for new nodes.
@@ -296,5 +325,5 @@ REST endpoint reference.
 
 All background processing uses Quarkus `@Scheduled` with
 `concurrentExecution = SKIP` to prevent overlapping executions, including the
-connection pollers, the event stream orchestrator, the task queue poller, and the
-report and scheduled job schedulers.
+event source pollers, the event stream orchestrator, the task queue poller, the workflow
+wait scheduler, and the workflow schedule trigger scheduler.

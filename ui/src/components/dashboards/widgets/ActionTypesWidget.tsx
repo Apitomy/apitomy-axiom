@@ -3,6 +3,7 @@ import { Label } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { type ActionType, fetchActionTypes } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
+import { executionModeColor } from "../../executionModeColor";
 import { WidgetError } from "../WidgetError";
 
 function ActionTypesWidget({ config, labels }: WidgetProps) {
@@ -35,26 +36,21 @@ function ActionTypesWidget({ config, labels }: WidgetProps) {
     return (
         <Table aria-label="Action Types" variant="compact" isStickyHeader>
             <Thead><Tr>
-                <Th>Name</Th><Th>Mode</Th><Th>Triggers</Th>
+                <Th>Name</Th><Th>Mode</Th>
             </Tr></Thead>
             <Tbody>
                 {actionTypes.map(at => (
                     <Tr key={at.id}>
                         <Td>{at.name}</Td>
                         <Td>
-                            <Label isCompact color={at.executionMode === "agent" ? "blue" : "purple"}>
+                            <Label isCompact color={executionModeColor(at.executionMode)}>
                                 {at.executionMode}
                             </Label>
-                        </Td>
-                        <Td>
-                            {at.managerTriggerable && <Label isCompact color="green" style={{ marginRight: "4px" }}>manager</Label>}
-                            {at.userTriggerable && <Label isCompact color="blue">user</Label>}
-                            {!at.managerTriggerable && !at.userTriggerable && "—"}
                         </Td>
                     </Tr>
                 ))}
                 {actionTypes.length === 0 && (
-                    <Tr><Td colSpan={3}>No action types found.</Td></Tr>
+                    <Tr><Td colSpan={2}>No action types found.</Td></Tr>
                 )}
             </Tbody>
         </Table>

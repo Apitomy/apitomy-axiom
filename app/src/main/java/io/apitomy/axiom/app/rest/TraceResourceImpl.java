@@ -14,11 +14,8 @@ import io.apitomy.axiom.api.beans.TraceNodeDetail;
 import io.apitomy.axiom.api.beans.TraceSearchResults;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobEntity;
-import io.apitomy.axiom.core.entities.ScheduledJobRunEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.entities.ReportEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ToolExecutionEntity;
 import io.apitomy.axiom.core.entities.TraceEntity;
@@ -61,8 +58,7 @@ public class TraceResourceImpl implements TracesResource {
     @Override
     public TraceSearchResults listTraces(BigInteger page, BigInteger limit,
             String filterTraceType, String filterStatus,
-            String filterEventId, BigInteger filterProjectId,
-            BigInteger filterReportId, String filterScheduledJobRunId) {
+            String filterEventId, BigInteger filterSubjectId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -88,29 +84,9 @@ public class TraceResourceImpl implements TracesResource {
             hql.append(" and eventId = :eventId");
             params.put("eventId", parseEventId(filterEventId));
         }
-        if (filterProjectId != null) {
-            hql.append(" and projectId = :projectId");
-            params.put("projectId", filterProjectId.longValue());
-        }
-        if (filterReportId != null) {
-            hql.append(" and reportId = :reportId");
-            params.put("reportId", filterReportId.longValue());
-        }
-
-        if (filterScheduledJobRunId != null && !filterScheduledJobRunId.isBlank()) {
-            long runId = parseIdParam("filterScheduledJobRunId", filterScheduledJobRunId);
-            ScheduledJobRunEntity run = ScheduledJobRunEntity.findById(runId);
-            if (run != null && run.traceId != null) {
-                hql.append(" and traceId = :runTraceId");
-                params.put("runTraceId", run.traceId);
-            } else {
-                // No trace stored on the run (yet): fall back to the trace whose root node
-                // references the run (#423).
-                hql.append(" and traceId in (select n.traceId from TraceNodeEntity n"
-                        + " where n.parentNodeId is null and n.entityType = 'scheduled-job-run'"
-                        + " and n.entityId = :runIdText)");
-                params.put("runIdText", String.valueOf(runId));
-            }
+        if (filterSubjectId != null) {
+            hql.append(" and subjectId = :subjectId");
+            params.put("subjectId", filterSubjectId.longValue());
         }
 
         long totalCount = TraceEntity.count(hql.toString(), params);
@@ -255,7 +231,6 @@ public class TraceResourceImpl implements TracesResource {
                 case "workflow-wait" -> workflowWaitDetail(node, Long.valueOf(entityId));
                 case "workflow-event-subscription" ->
                         workflowEventSubscriptionDetail(node, Long.valueOf(entityId));
-                case "scheduled-job-run" -> scheduledJobRunDetail(Long.valueOf(entityId));
                 default -> {
                     Object entity = switch (entityType) {
                         case "activity-log" -> ActivityLogEntity.findById(Long.valueOf(entityId));
@@ -263,7 +238,6 @@ public class TraceResourceImpl implements TracesResource {
                         case "ai-usage" -> AiUsageEntity.findById(Long.valueOf(entityId));
                         case "tool-execution" -> ToolExecutionEntity.findById(Long.valueOf(entityId));
                         case "task" -> TaskEntity.findById(Long.valueOf(entityId));
-                        case "report" -> ReportEntity.findById(Long.valueOf(entityId));
                         default -> null;
                     };
                     yield entity != null ? objectMapper.convertValue(entity, Map.class) : null;
@@ -279,7 +253,7 @@ public class TraceResourceImpl implements TracesResource {
 
     /**
      * Builds the detail for a workflow run: the run's fields (without the bulky
-     * engine instance state) plus its definition and project names.
+     * engine instance state) plus its definition and subject names.
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> workflowRunDetail(Long runId) {
@@ -356,33 +330,18 @@ public class TraceResourceImpl implements TracesResource {
     }
 
     /**
-     * Builds the detail for a scheduled job run, adding the job's name.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> scheduledJobRunDetail(Long jobRunId) {
-        ScheduledJobRunEntity jobRun = ScheduledJobRunEntity.findById(jobRunId);
-        if (jobRun == null) {
-            return null;
-        }
-        Map<String, Object> properties = new HashMap<>(objectMapper.convertValue(jobRun, Map.class));
-        ScheduledJobEntity job = ScheduledJobEntity.findById(jobRun.jobId);
-        properties.put("jobName", job != null ? job.name : null);
-        return properties;
-    }
-
-    /**
-     * Adds the run ID, run status, definition name and project name of a workflow run.
+     * Adds the run ID, run status, definition name and subject name of a workflow run.
      */
     private void addRunContext(Map<String, Object> properties, WorkflowRunEntity run) {
         if (run == null) {
             return;
         }
         WorkflowDefinitionEntity definition = WorkflowDefinitionEntity.findById(run.definitionId);
-        ProjectEntity project = ProjectEntity.findById(run.projectId);
+        SubjectEntity subject = SubjectEntity.findById(run.subjectId);
         properties.put("runId", run.id);
-        properties.putIfAbsent("projectId", run.projectId);
+        properties.putIfAbsent("subjectId", run.subjectId);
         properties.put("definitionName", definition != null ? definition.name : null);
-        properties.put("projectName", project != null ? project.name : null);
+        properties.put("subjectName", subject != null ? subject.name : null);
     }
 
     /** Adds the owning run's status as {@code runStatus} for parked-node details. */
@@ -424,25 +383,6 @@ public class TraceResourceImpl implements TracesResource {
         }
     }
 
-    /**
-     * Parses a numeric ID query parameter, rejecting malformed input with 400.
-     *
-     * @param name  the parameter name (used in the error message)
-     * @param value the raw parameter value
-     * @return the parsed ID
-     */
-    static long parseIdParam(String name, String value) {
-        try {
-            long id = Long.parseLong(value.trim());
-            if (id < 0) {
-                throw new NumberFormatException(value);
-            }
-            return id;
-        } catch (NumberFormatException e) {
-            throw new WebApplicationException("Invalid " + name + ": " + value, 400);
-        }
-    }
-
     private Trace toTraceBean(TraceEntity entity) {
         Trace bean = new Trace();
         bean.setTraceId(entity.traceId);
@@ -450,8 +390,7 @@ public class TraceResourceImpl implements TracesResource {
         bean.setStatus(entity.status);
         bean.setSummary(entity.summary);
         bean.setEventId(entity.eventId);
-        bean.setProjectId(entity.projectId);
-        bean.setReportId(entity.reportId);
+        bean.setSubjectId(entity.subjectId);
         bean.setStartedOn(Date.from(entity.startedOn));
         if (entity.completedOn != null) {
             bean.setCompletedOn(Date.from(entity.completedOn));

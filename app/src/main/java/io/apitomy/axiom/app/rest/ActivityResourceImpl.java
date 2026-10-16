@@ -30,10 +30,8 @@ public class ActivityResourceImpl implements ActivityResource {
     @Override
     public ActivityLogSearchResults listActivityLog(BigInteger page, BigInteger limit,
                                                      String filterEventId, String filterSummary,
-                                                     BigInteger filterProjectId, String filterEntryType,
-                                                     String filterLabels, String filterTraceId,
-                                                     String filterScheduledJobRunId,
-                                                     String filterReportId) {
+                                                     BigInteger filterSubjectId, String filterEntryType,
+                                                     String filterLabels, String filterTraceId) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -48,9 +46,9 @@ public class ActivityResourceImpl implements ActivityResource {
             hql.append(" and lower(summary) like :summary");
             params.put("summary", "%" + filterSummary.toLowerCase() + "%");
         }
-        if (filterProjectId != null) {
-            hql.append(" and projectId = :projectId");
-            params.put("projectId", filterProjectId.longValue());
+        if (filterSubjectId != null) {
+            hql.append(" and subjectId = :subjectId");
+            params.put("subjectId", filterSubjectId.longValue());
         }
         if (filterEntryType != null && !filterEntryType.isBlank()) {
             List<String> types = Arrays.stream(filterEntryType.split(","))
@@ -61,7 +59,7 @@ public class ActivityResourceImpl implements ActivityResource {
         if (filterLabels != null && !filterLabels.isBlank()) {
             List<String> labels = Arrays.stream(filterLabels.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList();
-            hql.append(" and projectId in (SELECT p.id FROM ProjectEntity p"
+            hql.append(" and subjectId in (SELECT p.id FROM SubjectEntity p"
                     + " JOIN p.labels pl WHERE pl IN :labels"
                     + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
             params.put("labels", labels);
@@ -71,17 +69,6 @@ public class ActivityResourceImpl implements ActivityResource {
         if (filterTraceId != null && !filterTraceId.isBlank()) {
             hql.append(" and traceId = :traceId");
             params.put("traceId", TraceResourceImpl.parseUuidParam("filterTraceId", filterTraceId));
-        }
-
-        if (filterScheduledJobRunId != null && !filterScheduledJobRunId.isBlank()) {
-            hql.append(" and scheduledJobRunId = :scheduledJobRunId");
-            params.put("scheduledJobRunId",
-                    TraceResourceImpl.parseIdParam("filterScheduledJobRunId", filterScheduledJobRunId));
-        }
-        if (filterReportId != null && !filterReportId.isBlank()) {
-            hql.append(" and reportId = :reportId");
-            params.put("reportId",
-                    TraceResourceImpl.parseIdParam("filterReportId", filterReportId));
         }
 
         long totalCount = ActivityLogEntity.count(hql.toString(), params);
@@ -120,13 +107,10 @@ public class ActivityResourceImpl implements ActivityResource {
     private ActivityLogEntry toBean(ActivityLogEntity entity) {
         ActivityLogEntry entry = new ActivityLogEntry();
         entry.setId(entity.id);
-        entry.setProjectId(entity.projectId);
+        entry.setSubjectId(entity.subjectId);
         entry.setTaskId(entity.taskId);
         entry.setEventId(entity.eventId);
         entry.setTraceId(entity.traceId);
-        entry.setScheduledJobRunId(entity.scheduledJobRunId);
-        entry.setReportId(entity.reportId);
-        entry.setReportDefinitionId(entity.reportDefinitionId);
         entry.setEntryType(entity.entryType);
         entry.setSummary(entity.summary);
         entry.setDetails(entity.details);

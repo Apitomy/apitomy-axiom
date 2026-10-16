@@ -18,8 +18,7 @@ export interface AiConfigValues {
 }
 
 /**
- * Shared AI configuration form fields used by Action Types,
- * Scheduled Jobs, and Report Definitions.
+ * Shared AI configuration form fields used by Action Types.
  */
 export function AiConfigTab({ values, onChange, availableEngines, availableModels }: {
     values: AiConfigValues;

@@ -2,7 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -56,7 +56,7 @@ class WorkflowDispatchFailureTest {
 
     @Test
     void throwingResumeIsRecordedAsFailedItem() {
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
         String awaitedType = "dispatch-fail-" + UUID.randomUUID();
         long[] ids = setup(awaitedType);
@@ -88,7 +88,7 @@ class WorkflowDispatchFailureTest {
 
     @Test
     void completedDispatchWithFailedResumeIsNotReDispatchedOnRetry() {
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
         String awaitedType = "dispatch-fail-" + UUID.randomUUID();
         long[] ids = setup(awaitedType);
@@ -100,7 +100,7 @@ class WorkflowDispatchFailureTest {
                         ArgumentMatchers.any(), ArgumentMatchers.any());
         // The dispatch completes (with a failed item); the next rule fails the ledger entry.
         createEventAndSubscription(awaitedType,
-                "[{\"type\":\"workflow-dispatch\"},{\"type\":\"invoke-action\",\"actionTypeId\":-1}]");
+                "[{\"type\":\"workflow-dispatch\"},{\"type\":\"create-workflow\",\"workflowDefinitionId\":-1}]");
 
         orchestrator.processNewEvents();
         QuarkusTransaction.requiringNew().run(() -> EventProcessingLedgerEntity.update(
@@ -117,7 +117,7 @@ class WorkflowDispatchFailureTest {
         assertEquals(Integer.valueOf(1), dispatch.get(0).attemptNumber);
         List<RoutingOutcomeEntity> failed = QuarkusTransaction.requiringNew().call(() ->
                 RoutingOutcomeEntity.<RoutingOutcomeEntity>list(
-                        "routingType = ?1 order by id", "invoke-action"));
+                        "routingType = ?1 order by id", "create-workflow"));
         assertEquals(2, failed.size());
         assertEquals(Integer.valueOf(1), failed.get(0).attemptNumber);
         assertEquals(Integer.valueOf(2), failed.get(1).attemptNumber);
@@ -145,14 +145,13 @@ class WorkflowDispatchFailureTest {
             }
             """.formatted(awaitedType);
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Dispatch Fail Project";
-            project.type = "other";
-            project.status = "Created";
-            project.ref = "test/dispatch-fail-" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Dispatch Fail Subject";
+            subject.type = "other";
+            subject.ref = "test/dispatch-fail-" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Dispatch Fail WF " + UUID.randomUUID();
@@ -168,7 +167,7 @@ class WorkflowDispatchFailureTest {
             version.content = content;
             version.createdOn = Instant.now();
             version.persist();
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
     }
 
@@ -183,7 +182,7 @@ class WorkflowDispatchFailureTest {
             event.id = eventId;
             event.sourceEventId = "dispatch-fail-" + eventId;
             event.source = "github";
-            event.connectionId = "conn-dispatch-fail";
+            event.eventSourceId = "conn-dispatch-fail";
             event.type = eventType;
             event.ref = "https://github.com/test-org/dispatch-fail/issues/" + eventId;
             event.timestamp = Instant.now();

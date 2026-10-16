@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ConnectionPollLogEntity;
+import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
@@ -45,7 +45,7 @@ public class StreamEventCleanup {
     /**
      * Finds and deletes stream events older than the retention period, along with their
      * processing ledger entries and routing outcomes, one batch per transaction. Then deletes
-     * old connection poll logs.
+     * old event source poll logs.
      */
     @Scheduled(every = "1h", delayed = "6m",
             concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
@@ -56,7 +56,7 @@ public class StreamEventCleanup {
             CleanupRetry.runWithRetry(LOG, "Stream event cleanup", () -> shuttingDown,
                     () -> deleted[0] = cleanupBatch());
         }
-        CleanupRetry.runWithRetry(LOG, "Connection poll log cleanup", () -> shuttingDown,
+        CleanupRetry.runWithRetry(LOG, "Event source poll log cleanup", () -> shuttingDown,
                 this::cleanupPollLogs);
     }
 
@@ -121,13 +121,13 @@ public class StreamEventCleanup {
     }
 
     /**
-     * Deletes connection poll logs older than the fixed 3-day retention.
+     * Deletes event source poll logs older than the fixed 3-day retention.
      */
     void cleanupPollLogs() {
         Instant pollLogCutoff = Instant.now().minus(3, ChronoUnit.DAYS);
-        long pollLogsDeleted = ConnectionPollLogEntity.delete("createdOn < ?1", pollLogCutoff);
+        long pollLogsDeleted = EventSourcePollLogEntity.delete("createdOn < ?1", pollLogCutoff);
         if (pollLogsDeleted > 0) {
-            LOG.infof("Cleaned up %d connection poll log(s) older than 3 days", pollLogsDeleted);
+            LOG.infof("Cleaned up %d event source poll log(s) older than 3 days", pollLogsDeleted);
         }
     }
 }

@@ -178,7 +178,7 @@ export function InboxPage() {
                         <Thead>
                             <Tr>
                                 <Th>Title</Th>
-                                <Th>Project</Th>
+                                <Th>Subject</Th>
                                 <Th>Action Type</Th>
                                 <Th>Created</Th>
                                 <Th />
@@ -196,10 +196,10 @@ export function InboxPage() {
                                     </Td>
                                     <Td>
                                         <Link
-                                            to={`/projects/${item.projectId}`}
+                                            to={`/subjects/${item.subjectId}`}
                                             onClick={(e) => e.stopPropagation()}
                                         >
-                                            {item.projectName || `Project #${item.projectId}`}
+                                            {item.subjectName || `Subject #${item.subjectId}`}
                                         </Link>
                                     </Td>
                                     <Td>
@@ -284,14 +284,14 @@ export function InboxPage() {
                             </div>
                         )}
 
-                        {/* Project info */}
+                        {/* Subject info */}
                         <div style={{ marginBottom: "16px" }}>
                             <Split hasGutter>
                                 <SplitItem>
-                                    <strong>Project:</strong>{" "}
-                                    <Link to={`/projects/${selectedItem.projectId}`}>
-                                        {selectedItem.projectName ||
-                                            `Project #${selectedItem.projectId}`}
+                                    <strong>Subject:</strong>{" "}
+                                    <Link to={`/subjects/${selectedItem.subjectId}`}>
+                                        {selectedItem.subjectName ||
+                                            `Subject #${selectedItem.subjectId}`}
                                     </Link>
                                 </SplitItem>
                                 <SplitItem>
@@ -303,10 +303,10 @@ export function InboxPage() {
                             </Split>
                         </div>
 
-                        {/* Manager input (collapsible) */}
+                        {/* Task input (collapsible) */}
                         {selectedItem.input && (
                             <ExpandableSection
-                                toggleText="Manager Input"
+                                toggleText="Input"
                                 style={{ marginBottom: "16px" }}
                             >
                                 <Content>

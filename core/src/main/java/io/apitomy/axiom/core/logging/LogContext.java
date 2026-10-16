@@ -45,22 +45,18 @@ public final class LogContext implements AutoCloseable {
     public static final String TRACE_ID = "traceId";
     /** MDC key for the stream event ID. */
     public static final String EVENT_ID = "eventId";
-    /** MDC key for the project ID. */
-    public static final String PROJECT_ID = "projectId";
+    /** MDC key for the subject ID. */
+    public static final String SUBJECT_ID = "subjectId";
     /** MDC key for the task ID. */
     public static final String TASK_ID = "taskId";
-    /** MDC key for the scheduled job run ID. */
-    public static final String RUN_ID = "runId";
     /** MDC key for the workflow run ID. */
     public static final String WORKFLOW_RUN_ID = "workflowRunId";
-    /** MDC key for the report ID. */
-    public static final String REPORT_ID = "reportId";
     /** MDC key holding a compact rendering of all present correlation keys, used by the log format. */
     public static final String SUMMARY = "axiomCtx";
 
     /** All correlation keys, in the order they are rendered in {@link #SUMMARY}. */
     public static final List<String> KEYS = List.of(
-            TRACE_ID, EVENT_ID, PROJECT_ID, TASK_ID, RUN_ID, WORKFLOW_RUN_ID, REPORT_ID);
+            TRACE_ID, EVENT_ID, SUBJECT_ID, TASK_ID, WORKFLOW_RUN_ID);
 
     /** Previous MDC values of the keys changed by this context ({@code null} = absent). */
     private final Map<String, Object> previous = new LinkedHashMap<>();
@@ -122,13 +118,13 @@ public final class LogContext implements AutoCloseable {
     }
 
     /**
-     * Sets {@value #PROJECT_ID}; ignored when {@code value} is null.
+     * Sets {@value #SUBJECT_ID}; ignored when {@code value} is null.
      *
-     * @param value the project ID
+     * @param value the subject ID
      * @return this context
      */
-    public LogContext projectId(Object value) {
-        return putIfNotNull(PROJECT_ID, value);
+    public LogContext subjectId(Object value) {
+        return putIfNotNull(SUBJECT_ID, value);
     }
 
     /**
@@ -142,16 +138,6 @@ public final class LogContext implements AutoCloseable {
     }
 
     /**
-     * Sets {@value #RUN_ID} (scheduled job run); ignored when {@code value} is null.
-     *
-     * @param value the scheduled job run ID
-     * @return this context
-     */
-    public LogContext runId(Object value) {
-        return putIfNotNull(RUN_ID, value);
-    }
-
-    /**
      * Sets {@value #WORKFLOW_RUN_ID}; ignored when {@code value} is null.
      *
      * @param value the workflow run ID
@@ -159,16 +145,6 @@ public final class LogContext implements AutoCloseable {
      */
     public LogContext workflowRunId(Object value) {
         return putIfNotNull(WORKFLOW_RUN_ID, value);
-    }
-
-    /**
-     * Sets {@value #REPORT_ID}; ignored when {@code value} is null.
-     *
-     * @param value the report ID
-     * @return this context
-     */
-    public LogContext reportId(Object value) {
-        return putIfNotNull(REPORT_ID, value);
     }
 
     private LogContext putIfNotNull(String key, Object value) {

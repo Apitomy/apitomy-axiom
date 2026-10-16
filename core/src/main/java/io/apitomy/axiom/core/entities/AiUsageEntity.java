@@ -12,9 +12,8 @@ import java.util.UUID;
  * Records a single AI invocation (Claude Code subprocess execution) with
  * cost, token, and metadata for aggregation and reporting.
  *
- * <p>Every time Claude Code is invoked — whether for a task execution or
- * a Manager evaluation — a row is written to this table. The metadata
- * columns allow querying and aggregating by agent, project, action type,
+ * <p>Every time an agent is invoked — e.g. for a task execution — a row is written to this table. The metadata
+ * columns allow querying and aggregating by agent, subject, action type,
  * invocation type, and time range.</p>
  */
 @Entity
@@ -22,19 +21,19 @@ import java.util.UUID;
 public class AiUsageEntity extends PanacheEntity {
 
     /**
-     * Type of invocation: "task" or "manager".
+     * Type of invocation, e.g. "task".
      */
     @Column(name = "invocation_type", nullable = false)
     public String invocationType;
 
     /**
-     * Task ID (set for task executions, null for manager evaluations).
+     * Task ID (set for task executions).
      */
     @Column(name = "task_id")
     public Long taskId;
 
     /**
-     * Event ID (set for manager evaluations, may also be set for tasks).
+     * Event ID (may be set for tasks).
      */
     @Column(name = "event_id")
     public UUID eventId;
@@ -45,23 +44,12 @@ public class AiUsageEntity extends PanacheEntity {
     @Column(name = "trace_id")
     public UUID traceId;
 
-    /**
-     * Scheduled job run that made this invocation (null for other invocation types).
-     */
-    @Column(name = "scheduled_job_run_id")
-    public Long scheduledJobRunId;
 
     /**
-     * Report that made this invocation (null for other invocation types).
+     * Subject ID (if associated with a subject).
      */
-    @Column(name = "report_id")
-    public Long reportId;
-
-    /**
-     * Project ID (if associated with a project).
-     */
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     /**
      * Agent ID (the AI agent that performed the invocation).
@@ -70,7 +58,7 @@ public class AiUsageEntity extends PanacheEntity {
     public Long agentId;
 
     /**
-     * Action type name (e.g. "analyze", "answer-question", "manager-evaluate").
+     * Action type name (e.g. "analyze", "answer-question").
      */
     @Column(name = "action_type")
     public String actionType;

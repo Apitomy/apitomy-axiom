@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -64,11 +64,11 @@ class EventWorkflowLinksTest {
     WorkflowWaitScheduler waitScheduler;
 
     @Inject
-    ProjectDeletionService projectDeletionService;
+    SubjectDeletionService subjectDeletionService;
 
     @BeforeEach
     void setUp() {
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
     }
 
@@ -124,7 +124,7 @@ class EventWorkflowLinksTest {
                 .body("triggerLedgerId", equalTo(ledgerId.intValue()));
         given()
             .when()
-                .get("/api/v1/workflow/runs?projectId=" + run.projectId)
+                .get("/api/v1/workflow/runs?subjectId=" + run.subjectId)
             .then()
                 .statusCode(200)
                 .body("items[0].triggerEventId", equalTo(eventId.toString()))
@@ -139,13 +139,41 @@ class EventWorkflowLinksTest {
                 .body("items[0].outcomes[0].items[0].traceId", equalTo(run.traceId.toString()));
     }
 
+    /**
+     * A second create-workflow event for the same subject is skipped (and recorded as such) while the
+     * first run of the same definition is still active.
+     */
+    @Test
+    void createWorkflowSkipsWhenSameDefinitionActiveOnSubject() {
+        String awaitedType = "links-await-" + UUID.randomUUID();
+        long definitionId = createDefinition("Links Skip WF", awaitedType);
+        UUID firstEventId = createEventAndSubscription("issue.created",
+                "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":" + definitionId + "}]");
+        UUID secondEventId = createEvent("issue.updated", eventRef(firstEventId));
+
+        orchestrator.processNewEvents();
+
+        List<WorkflowRunEntity> runs = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.<WorkflowRunEntity>list("definitionId", definitionId));
+        assertEquals(1, runs.size());
+        RoutingOutcomeEntity secondOutcome = QuarkusTransaction.requiringNew().call(() ->
+                RoutingOutcomeEntity.<RoutingOutcomeEntity>find("ledgerId", ledgerId(secondEventId))
+                        .firstResult());
+        assertNotNull(secondOutcome);
+        RoutingOutcomeItemEntity item = items(secondOutcome.id).get(0);
+        assertEquals("skipped", item.status);
+        assertEquals("Skipped: subject already has an active run of definition " + definitionId,
+                item.summary);
+        assertEquals(runs.get(0).subjectId, item.subjectId);
+    }
+
     @Test
     void dispatchThatResumesRunRecordsRunNodeAndResumingEvent() {
         String awaitedType = "links-await-" + UUID.randomUUID();
         long definitionId = createDefinition("Links Resume WF", awaitedType);
-        long projectId = createProject("Links Resume Project");
+        long subjectId = createSubject("Links Resume Subject");
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, definitionId));
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId));
         assertEquals("waiting", run.status);
         Long parkedNodeId = QuarkusTransaction.requiringNew().call(() ->
                 TraceNodeEntity.<TraceNodeEntity>find(
@@ -165,7 +193,7 @@ class EventWorkflowLinksTest {
         assertEquals("completed", item.status);
         assertEquals(run.id, item.workflowRunId);
         assertEquals(parkedNodeId, item.traceNodeId);
-        assertEquals(projectId, item.projectId);
+        assertEquals(subjectId, item.subjectId);
         assertTrue(item.summary.contains("r1"), item.summary);
 
         // The resuming event is recorded against the run and on the receive-event trace node
@@ -223,13 +251,13 @@ class EventWorkflowLinksTest {
     void manualTriggerLeavesTriggerFieldsNull() {
         long definitionId = createDefinition("Links Manual WF",
                 "links-await-" + UUID.randomUUID());
-        long projectId = createProject("Links Manual Project");
+        long subjectId = createSubject("Links Manual Subject");
 
         int runId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
             .when()
-                .post("/api/v1/projects/" + projectId + "/workflow")
+                .post(TestRunsResource.path(subjectId))
             .then()
                 .statusCode(200)
                 .body("status", equalTo("waiting"))
@@ -259,9 +287,9 @@ class EventWorkflowLinksTest {
                                 + " \"config\": {\"eventType\": \"" + typeB + "\"},"
                                 + " \"position\": {\"x\": 150, \"y\": 200}}",
                         "ra", "rb"));
-        long projectId = createProject("Links Parallel Project");
+        long subjectId = createSubject("Links Parallel Subject");
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, definitionId));
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId));
         Long nodeA = parkedNodeId(run.traceId, "workflow-event-subscription",
                 subscriptionId(run.id, "ra"));
         Long nodeB = parkedNodeId(run.traceId, "workflow-event-subscription",
@@ -297,9 +325,9 @@ class EventWorkflowLinksTest {
                                 + " \"config\": {\"duration\": \"PT10M\"},"
                                 + " \"position\": {\"x\": 150, \"y\": 200}}",
                         "wa", "wb"));
-        long projectId = createProject("Links Parallel Wait Project");
+        long subjectId = createSubject("Links Parallel Wait Subject");
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, definitionId));
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId));
         long waitA = waitId(run.id, "wa");
         long waitB = waitId(run.id, "wb");
         Long nodeA = parkedNodeId(run.traceId, "workflow-wait", waitA);
@@ -313,13 +341,13 @@ class EventWorkflowLinksTest {
     }
 
     @Test
-    void deletingProjectDeletesItsResumeRows() {
-        long projectId = createProject("Links Delete Project");
-        long runId = createRunWithResume(projectId,
+    void deletingSubjectDeletesItsResumeRows() {
+        long subjectId = createSubject("Links Delete Subject");
+        long runId = createRunWithResume(subjectId,
                 createDefinition("Links Delete WF", "links-await-" + UUID.randomUUID()));
 
-        QuarkusTransaction.requiringNew().run(() -> projectDeletionService.deleteProject(
-                ProjectEntity.<ProjectEntity>findById(projectId)));
+        QuarkusTransaction.requiringNew().run(() -> subjectDeletionService.deleteSubject(
+                SubjectEntity.<SubjectEntity>findById(subjectId)));
 
         assertEquals(0L, QuarkusTransaction.requiringNew().call(() ->
                 WorkflowRunResumeEntity.count("runId", runId)));
@@ -329,7 +357,7 @@ class EventWorkflowLinksTest {
     void deletingDefinitionDeletesItsRunsResumeRows() {
         long definitionId = createDefinition("Links Delete Def WF",
                 "links-await-" + UUID.randomUUID());
-        long runId = createRunWithResume(createProject("Links Delete Def Project"), definitionId);
+        long runId = createRunWithResume(createSubject("Links Delete Def Subject"), definitionId);
 
         given()
             .when()
@@ -343,9 +371,9 @@ class EventWorkflowLinksTest {
 
     // ── Helpers ─────────────────────────────────────────────────────
 
-    private long createRunWithResume(long projectId, long definitionId) {
+    private long createRunWithResume(long subjectId, long definitionId) {
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                workflowExecutionService.triggerWorkflow(projectId, definitionId));
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId));
         QuarkusTransaction.requiringNew().run(() -> {
             WorkflowRunResumeEntity resume = new WorkflowRunResumeEntity();
             resume.runId = run.id;
@@ -364,7 +392,8 @@ class EventWorkflowLinksTest {
                 "name": "Links Parallel WF",
                 "nodes": [
                     {"id": "s1", "type": "start", "name": "Start",
-                     "config": {}, "position": {"x": 100, "y": 100}},
+                     "config": {"inputs": [{"name": "event", "type": "object", "required": false}]},
+                     "position": {"x": 100, "y": 100}},
                     %s,
                     %s,
                     {"id": "e1", "type": "end", "name": "End",
@@ -417,7 +446,8 @@ class EventWorkflowLinksTest {
                 "name": "Links WF",
                 "nodes": [
                     {"id": "s1", "type": "start", "name": "Start",
-                     "config": {}, "position": {"x": 100, "y": 100}},
+                     "config": {"inputs": [{"name": "event", "type": "object", "required": false}]},
+                     "position": {"x": 100, "y": 100}},
                     {"id": "r1", "type": "receive-event", "name": "Await Event",
                      "config": {"eventType": "%s"},
                      "position": {"x": 100, "y": 200}},
@@ -458,36 +488,49 @@ class EventWorkflowLinksTest {
         });
     }
 
-    private long createProject(String name) {
+    private long createSubject(String name) {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = name;
-            project.type = "other";
-            project.status = "Created";
-            project.ref = "test/links-" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            return project.id;
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = name;
+            subject.type = "other";
+            subject.ref = "test/links-" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            return subject.id;
         });
     }
 
-    private UUID createEventAndSubscription(String eventType, String routing) {
-        UUID eventId = UUID.randomUUID();
+    private static String eventRef(UUID eventId) {
+        return "https://github.com/test-org/links/issues/" + eventId;
+    }
+
+    private UUID createEvent(String eventType, String ref) {
+        return createEvent(UUID.randomUUID(), eventType, ref);
+    }
+
+    private UUID createEvent(UUID eventId, String eventType, String ref) {
         QuarkusTransaction.requiringNew().run(() -> {
             StreamEventEntity event = new StreamEventEntity();
             event.id = eventId;
             event.sourceEventId = "links-" + eventId;
             event.source = "github";
-            event.connectionId = "conn-links";
+            event.eventSourceId = "conn-links";
             event.type = eventType;
-            event.ref = "https://github.com/test-org/links/issues/" + eventId;
+            event.ref = ref;
             event.timestamp = Instant.now();
             event.actor = "{\"login\":\"testuser\"}";
             event.payload = "{\"issue\":{\"title\":\"Test\",\"state\":\"open\",\"number\":\"1\"}}";
             event.createdOn = Instant.now();
             event.persist();
+        });
+        return eventId;
+    }
 
+    private UUID createEventAndSubscription(String eventType, String routing) {
+        UUID eventId = UUID.randomUUID();
+        createEvent(eventId, eventType, eventRef(eventId));
+        QuarkusTransaction.requiringNew().run(() -> {
             EventSubscriptionEntity sub = new EventSubscriptionEntity();
             sub.name = "links-" + UUID.randomUUID();
             sub.enabled = true;

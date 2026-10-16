@@ -17,24 +17,26 @@ When a new issue is opened on a monitored GitHub repository, an AI agent reads t
 issue title and body, examines the repository's available labels, chooses the most
 relevant ones, and applies them — all automatically.
 
-This example uses an **Action Type** in agent mode with three custom **Tools** that
-encapsulate the GitHub CLI commands. The AI agent can only call these three tools,
-ensuring it can read issue details and apply labels but nothing else.
+This example uses a **Subscription** with a `create-workflow` routing rule that starts a
+**Workflow** whose single `action` node runs an **Action Type** in agent mode. The action type
+allows three custom **Tools** that encapsulate the GitHub CLI commands. The AI agent can only call
+these three tools, ensuring it can read issue details and apply labels but nothing else.
 
 ### What You'll Configure
 
 | Item | Purpose |
 |------|---------|
 | Secret | GitHub API token for authentication |
-| Connection | Polls a GitHub repository for new activity |
-| Subscription | Routes new-issue events to the AI Manager |
+| Event Source | Polls a GitHub repository for new activity |
 | 3 Tools | Fetch labels, fetch issue details, apply labels |
 | Action Type | Defines the auto-labeling behavior and prompt |
+| Workflow | Runs the action type on the issue's subject |
+| Subscription | Starts the workflow for each new issue |
 | Agent | An AI agent slot to execute the task |
 
 ### Step 1: Create a Secret
 
-Navigate to **Configuration > Secrets** and add a secret:
+Navigate to **Components > Secrets** and add a secret:
 
 | Field | Value |
 |-------|-------|
@@ -45,14 +47,14 @@ Navigate to **Configuration > Secrets** and add a secret:
 This token is encrypted at rest and injected as an environment variable into AI agent
 subprocesses, where the `gh` CLI picks it up automatically.
 
-### Step 2: Add a Connection
+### Step 2: Add an Event Source
 
-Navigate to **Events > Connections** and click **Add Connection**:
+Navigate to **Events > Event Sources** and click **Add Event Source**:
 
 | Field | Value |
 |-------|-------|
 | **ID** | e.g. `github-com` |
-| **Name** | e.g. `My Project` |
+| **Name** | e.g. `My Repository` |
 | **Source Type** | GitHub |
 | **Base URL** | `https://github.com` |
 | **Repositories** | `your-org/your-repo` |
@@ -63,23 +65,9 @@ Navigate to **Events > Connections** and click **Add Connection**:
 Axiom will now poll this repository every 60 seconds for new issues, pull requests,
 comments, and other activity, and record it in the event stream.
 
-### Step 3: Add a Subscription
+### Step 3: Create Three Tools
 
-Navigate to **Events > Subscriptions** and click **Add Subscription**:
-
-| Field | Value |
-|-------|-------|
-| **Name** | e.g. `Route issue activity to Manager` |
-| **Filter Expression** | `event.type.startsWith('issue.')` |
-| **Enabled** | Yes |
-
-Under **Routing Rules**, add one rule with destination **Manager**. This sends every
-matching issue event to the AI Manager for triage. Use **Preview** on the subscription
-editor to confirm the filter matches the events you expect before saving.
-
-### Step 4: Create Three Tools
-
-Navigate to **Configuration > Tools** and create each of the following tools. For each
+Navigate to **Components > Tools** and create each of the following tools. For each
 one, click **Create Tool**, enter the name, then configure the description, parameters,
 and script template on the detail page.
 
@@ -168,14 +156,14 @@ set -euo pipefail
 gh issue edit "{{issue_url}}" --add-label "{{labels}}"
 ```
 
-### Step 5: Create the Action Type
+### Step 4: Create the Action Type
 
-Navigate to **Configuration > Action Types** and click **Create Action Type**:
+Navigate to **Components > Action Types** and click **Create Action Type**:
 
 | Field | Value |
 |-------|-------|
 | **Name** | `Auto-Label Issue` |
-| **Execution Mode** | Agent |
+| **Execution Mode** | Agent — AI agent |
 
 On the detail page, configure the remaining fields:
 
@@ -184,9 +172,13 @@ On the detail page, configure the remaining fields:
 | Field | Value |
 |-------|-------|
 | **Description** | Analyze a new GitHub issue and apply relevant labels |
-| **Manager triggerable** | Yes |
-| **User triggerable** | No |
-| **Emits event** | No |
+
+**Inputs tab** — declare what the action operates on:
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `ref` | string | Yes | URL of the issue to label |
+| `repository` | string | Yes | Repository in owner/repo format |
 
 **Allowed Tools tab** — add exactly these three tools:
 
@@ -205,10 +197,10 @@ is to apply the most relevant labels from the repository's existing label set.
 ## Instructions
 
 1. Fetch the issue details using the `fetch_github_issue` tool with issue URL
-   `{{ref}}`.
+   `{{inputs.ref}}`.
 
 2. Fetch the available labels using the `fetch_github_labels` tool with repository
-   `{{repository}}`.
+   `{{inputs.repository}}`.
 
 3. Based on the issue title and body, select the most relevant labels from the
    available set. Choose labels that accurately categorize the issue. Typically
@@ -216,65 +208,87 @@ is to apply the most relevant labels from the repository's existing label set.
    exist in the repository.
 
 4. Apply the selected labels using the `apply_github_labels` tool with issue URL
-   `{{ref}}`.
+   `{{inputs.ref}}`.
 
 If the issue already has appropriate labels, or if no labels clearly apply, do not
 make any changes.
 ```
 
-### Step 6: Ensure a Matching Agent Exists
+### Step 5: Create the Workflow
 
-Navigate to **Configuration > Agents**. You need at least one enabled agent whose
-capabilities match this action type. If none exist, click **Create Agent**:
+Navigate to **Components > Workflows** and click **Create Workflow Definition** with the name
+`Auto-Label New Issues`. The new definition is scaffolded with a Start node (declaring `subject`
+and `event`) connected to an End node. In the editor:
 
-| Field | Value           |
-|-------|-----------------|
+1. Drag an **Auto-Label Issue** action node from the palette (every action type appears there) between
+   Start and End
+2. Double-click the action node to open its properties and map its inputs from the run context:
+   `ref` ← `context.subject.ref` and `repository` ← `context.subject.repository`
+3. Connect Start → Auto-Label Issue → End
+4. Click **Publish**
+
+!!! tip "Using the Workbench"
+    You can also build the workflow, the action type and the tools together in the
+    [Workbench](workbench.md), with the AI Assistant's help, and publish them in one step.
+
+### Step 6: Add a Subscription
+
+Navigate to **Events > Subscriptions** and click **Add Subscription** with the name
+`Label new issues`. Then configure it on the detail page:
+
+| Field | Value |
+|-------|-------|
+| **Filter Expression** | `event.type == 'issue.created'` |
+| **Enabled** | Yes |
+
+Under **Routing Rules**, add one rule of type **Create Workflow** and select the
+`Auto-Label New Issues` definition. Use the **Preview** on the subscription page to confirm the filter
+matches the events you expect, then click **Save Changes**.
+
+### Step 7: Ensure a Matching Agent Exists
+
+Navigate to **Components > Agents**. You need at least one enabled agent whose
+capabilities match this action type. A new installation already has four agents with capability `*`.
+If none exist, click **Create Agent**:
+
+| Field | Value |
+|-------|-------|
 | **Name** | e.g. `AI Agent` |
 | **Type** | Claude Code (or your preferred agent type) |
-| **Capabilities** | `*`             |
+
+Then add the capability `*` on the agent's **Capabilities** tab.
 
 A capability of `*` matches any work, including the `action:Auto-Label Issue`
 capability this task will request. See
 [AI Agents](concepts.md#ai-agents) for how capability matching works.
 
-### Step 7: Verify the Manager Configuration
-
-No changes are needed to the Manager for this example. The Manager's default prompt
-template includes the `{{actionTypes}}` placeholder, which automatically lists all
-manager-triggerable action types — including the new `Auto-Label Issue` type. When the
-Manager sees an `issue.created` event routed to it, it will recognize this action type
-as an option and can assign it to an available agent.
-
-You can review the Manager's prompt template under **Configuration > Manager** to
-confirm the `{{actionTypes}}` placeholder is present.
-
 ### How It Works End to End
 
 1. Someone opens a new issue on the monitored repository
-2. The Connection detects the new issue on its next poll and records it in the event
+2. The Event Source detects the new issue on its next poll and records it in the event
    stream
-3. The Subscription's filter matches the `issue.created` event and routes it to the
-   Manager
-4. The AI Manager triages the event and decides to assign the `Auto-Label Issue`
-   action type
-5. A Task is created and leased by an available agent whose capabilities match
-   `action:Auto-Label Issue`
-6. The agent reads the issue, checks available labels, picks the best matches, and
+3. The Subscription's filter matches the `issue.created` event, and its `create-workflow` rule finds or
+   creates a subject for the issue's URL and starts an `Auto-Label New Issues` run on it
+4. The run reaches the action node, which creates a Task leased by an available agent whose
+   capabilities match `action:Auto-Label Issue`
+5. The agent reads the issue, checks available labels, picks the best matches, and
    applies them
-7. The task completes and the result is visible on the project's detail page
+6. The task completes, the run finishes, and the result is visible on the **Runs** page and on the
+   subject's detail page
 
 ---
 
-## Example 2: Weekly GitHub @Mentions Report
+## Example 2: Weekly GitHub @Mentions Summary
 
 ### Goal
 
-Generate a weekly report summarizing all GitHub issues and pull requests where you were
-@mentioned in the past 7 days. The report is organized by repository and highlights
-items that may need your attention.
+Every Monday, summarize all GitHub issues and pull requests where you were @mentioned in the past
+7 days, organized by repository, and post the summary to a dedicated subject so the history of weekly
+summaries accumulates in one place.
 
-This example uses a **Report Definition** with a custom **Tool** that queries the
-GitHub notifications API for @mentions.
+This example uses a **Workflow** with a **Schedule Trigger**. The workflow's action node runs an
+**Action Type** whose agent calls a custom **Tool** that queries the GitHub notifications API, then posts
+the summary to the subject's thread with the `axiom_add_thread_entry` SDK function.
 
 ### What You'll Configure
 
@@ -282,14 +296,15 @@ GitHub notifications API for @mentions.
 |------|---------|
 | Secret | GitHub API token for authentication |
 | Tool | Queries GitHub notifications API for @mentions |
-| Report Definition | Defines the schedule, time window, and prompt |
-| Agent | An AI agent slot to generate the report |
+| Action Type | Defines the summary prompt and allowed tools |
+| Workflow + Schedule Trigger | Runs the action type every Monday on a fixed subject |
+| Agent | An AI agent slot to execute the task |
 
 ### Step 1: Create a Secret
 
 If you already created a `GH_TOKEN` secret (e.g. from Example 1), skip this step.
 
-Navigate to **Configuration > Secrets** and add:
+Navigate to **Components > Secrets** and add:
 
 | Field | Value |
 |-------|-------|
@@ -299,7 +314,7 @@ Navigate to **Configuration > Secrets** and add:
 
 ### Step 2: Create the Tool
 
-Navigate to **Configuration > Tools** and click **Create Tool** with the name
+Navigate to **Components > Tools** and click **Create Tool** with the name
 `github_mentions`. Then configure it on the detail page:
 
 #### Tool: `github_mentions`
@@ -338,93 +353,70 @@ gh api /notifications \
 ```
 
 This script uses the GitHub notifications API with `reason == "mention"` to filter for
-only @mentions. The `since` parameter limits results to the report's time window.
+only @mentions. The `since` parameter limits results to the summary's time window.
 
-### Step 3: Create the Report Definition
+### Step 3: Create the Action Type
 
-Navigate to **Configuration > Report Definitions** and click **Create Definition**:
+Navigate to **Components > Action Types** and click **Create Action Type** with the name
+`Summarize @Mentions` and execution mode **Agent — AI agent**. On the detail page:
 
-| Field | Value |
-|-------|-------|
-| **Name** | `Weekly @Mentions` |
-| **Schedule** | Weekly |
-
-On the detail page, configure the remaining fields:
-
-**Info tab:**
-
-| Field | Value |
-|-------|-------|
-| **Description** | Weekly summary of GitHub @mentions across all repositories |
-| **Schedule** | Weekly |
-| **Day of Week** | Monday |
-| **Time of Day** | `08:00` |
-| **Time Window** | Last 7 days |
-| **Enabled** | Yes |
-
-**Allowed Tools tab** — add:
+**Allowed Tools tab** — add the tool and the SDK functions used to find the subject and post to its
+thread:
 
 ```
 github_mentions
+mcp__axiom-sdk__axiom_list_subjects
+mcp__axiom-sdk__axiom_add_thread_entry
 ```
+
+**Inputs tab** — add a required `subjectName` input (string, "Name of the subject to post the summary
+to").
 
 **Prompt Template tab:**
 
 ```markdown
-Generate a report summarizing all GitHub @mentions from the past week.
+Summarize all GitHub @mentions from the past 7 days.
 
-## Data Collection
-
-Run the `github_mentions` tool with the `since` parameter set to `{{timeRangeStart}}`
-to fetch all @mention notifications.
-
-## Report Structure
-
-Produce a Markdown report with the following structure:
-
-### Header
-- Title: "Weekly @Mentions Report"
-- Date range: {{timeRangeStart}} to {{timeRangeEnd}}
-
-### Summary
-- Total number of mentions
-- Number of repositories involved
-- Breakdown by type (Issue vs Pull Request)
-
-### Mentions by Repository
-For each repository that has mentions:
-- List each mention with its title, type (Issue/PR), and date
-- Include a one-line note on whether the item likely needs a response or action
-  (e.g. a question directed at you vs. an FYI tag)
-
-### Action Items
-Highlight any mentions that appear to need a response or follow-up, based on the
-title and context. If none need attention, note that explicitly.
-
-## Formatting
-- Use clean, concise Markdown
-- Use bullet points, not paragraphs
-- Sort repositories alphabetically
-- Sort mentions within each repository by date (newest first)
+1. Compute the date 7 days ago (ISO 8601, UTC) and run the `github_mentions` tool with
+   that value as `since`.
+2. Produce a Markdown summary with:
+   - Total number of mentions, repositories involved, and a breakdown by type (Issue vs PR)
+   - For each repository (alphabetically), each mention with its title, type, and date
+     (newest first) and a one-line note on whether it likely needs a response
+   - An "Action Items" section listing mentions that need follow-up (or "None")
+3. Find the ID of the subject named "{{inputs.subjectName}}" with `axiom_list_subjects`, then post
+   the summary to that subject's thread with `axiom_add_thread_entry`.
 ```
 
-### Step 4: Ensure a Matching Agent Exists
+### Step 4: Create the Workflow and Schedule Trigger
 
-Report generation draws from the same shared agent pool as tasks and scheduled jobs.
-Navigate to **Configuration > Agents** and confirm at least one enabled agent's
-capabilities match `report:weekly-mentions` (the definition's slug). A capability of
-`*` or `report:*` matches any report.
+Navigate to **Components > Workflows**, create a workflow definition named `Weekly @Mentions`, add a
+**Summarize @Mentions** action node between Start and End, map its `subjectName` input from
+`context.subject.name`, and remove the `event` input from the Start node (a schedule trigger has no
+event, so a required `event` would stop every firing), and click **Publish**.
+
+On the workflow's **Triggers** tab, add a schedule trigger:
+
+| Field | Value |
+|-------|-------|
+| **Cron** | `0 8 * * 1` (Mondays at 08:00 UTC) |
+| **Subject name** | `Weekly @Mentions` |
+| **Enabled** | Yes |
+
+### Step 5: Ensure a Matching Agent Exists
+
+Navigate to **Components > Agents** and confirm at least one enabled agent's
+capabilities match `action:Summarize @Mentions`. A capability of `*` or `action:*` matches any action
+type.
 
 ### How It Works End to End
 
-1. Every Monday at 08:00, Axiom triggers the `Weekly @Mentions` report definition
-2. An agent matching `report:weekly-mentions` is leased from the pool and launched
-   with the prompt template (placeholders substituted with the actual date range)
-3. The agent calls the `github_mentions` tool with the start date of the time window
-4. The tool queries the GitHub notifications API and returns all @mentions from the
-   past 7 days
-5. The agent organizes the results into a structured Markdown report
-6. The report is saved and viewable under **Reports** in the sidebar
-
-You can also click **Run Now** on the report definition page to generate a report
-immediately without waiting for the schedule.
+1. Every Monday at 08:00 UTC, the schedule trigger fires
+2. On the first firing, Axiom creates the `Weekly @Mentions` subject (ref `schedule:Weekly @Mentions`);
+   later firings reuse it
+3. A `Weekly @Mentions` run starts on that subject — unless the previous week's run is somehow still
+   active, in which case the firing is skipped and the trigger's last outcome shows `skipped`
+4. The action node creates a task; an agent matching `action:Summarize @Mentions` is leased from the pool
+5. The agent calls `github_mentions`, organizes the results, and posts the summary to the subject's
+   thread
+6. Each week's summary is visible on the subject's detail page, alongside the timeline of past runs

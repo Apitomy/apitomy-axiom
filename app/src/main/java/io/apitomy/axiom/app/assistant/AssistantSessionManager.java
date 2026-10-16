@@ -1,8 +1,8 @@
 package io.apitomy.axiom.app.assistant;
 
+import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
@@ -12,15 +12,17 @@ import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriverFactory;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
-import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
-import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import jakarta.enterprise.event.Event;
 import io.quarkus.runtime.ShutdownEvent;
@@ -37,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,6 +62,8 @@ public class AssistantSessionManager {
     private static final Logger LOG = Logger.getLogger(AssistantSessionManager.class);
 
     private static final String ASSISTANT_MCP_DIR_NAME = "assistant-mcp-server";
+    private static final String WORKBENCH_MCP_DIR_NAME = "workbench-mcp-server";
+    private static final String COMPOSITION_MARKER = "composition";
     private static final String[] MCP_TEMPLATE_FILES = { "package.json", "server.js" };
 
     @ConfigProperty(name = "axiom.assistant.max-sessions", defaultValue = "3")
@@ -83,6 +88,9 @@ public class AssistantSessionManager {
     AssistantItemValidator itemValidator;
 
     @Inject
+    AssistantReferenceGenerator referenceGenerator;
+
+    @Inject
     ImportExportService importExportService;
 
     @Inject
@@ -104,29 +112,80 @@ public class AssistantSessionManager {
     InteractiveSessionDriverFactory interactiveSessionDriverFactory;
 
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, HistoryJournal> journals = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
 
-    private volatile Path assistantMcpServerDir;
+    private final Map<String, Path> installedMcpServers = new ConcurrentHashMap<>();
 
     /**
      * Creates and starts a new assistant session.
      *
      * @param name the user-visible session name
      * @param templateId the template to create the session from
-     * @param projectId optional project ID to scope the session to
+     * @param subjectId optional subject ID to scope the session to
      * @return the started session
      * @throws IOException if the session cannot be created
      * @throws IllegalStateException if the AI engine is not Claude Code or the
      *         session limit has been reached
      */
     public AssistantSession createSession(String name, String templateId,
-                                          Long projectId) throws IOException {
+                                          Long subjectId) throws IOException {
+        return createSession(name, templateId, subjectId, null, List.of());
+    }
+
+    /**
+     * Creates and starts a new assistant session, optionally bound to a workbench composition and seeded with
+     * earlier history.
+     *
+     * @param name the user-visible session name
+     * @param templateId the template to create the session from
+     * @param subjectId optional subject ID to scope the session to
+     * @param compositionId optional composition ID, passed to the workbench MCP server
+     * @param seedHistory events restored into the history (and journal) before the session starts
+     * @return the started session
+     * @throws IOException if the session cannot be created
+     * @throws IllegalStateException if the AI engine does not support interactive sessions or the
+     *         session limit has been reached
+     */
+    public AssistantSession createSession(String name, String templateId, Long subjectId,
+                                          Long compositionId, List<SseEvent> seedHistory) throws IOException {
+        return createSession(name, templateId, subjectId, compositionId, seedHistory, null, null);
+    }
+
+    /**
+     * Creates and starts a new assistant session with optional engine and model overrides.
+     *
+     * <p>An engine override replaces the template's engine. A model override replaces the template's model;
+     * without one, the template's model is used only when the engine is the template's own (a model for one
+     * engine is meaningless to another), otherwise the engine's default model is used.
+     *
+     * @param name the user-visible session name
+     * @param templateId the template to create the session from
+     * @param subjectId optional subject ID to scope the session to
+     * @param compositionId optional composition ID, passed to the workbench MCP server
+     * @param seedHistory events restored into the history (and journal) before the session starts
+     * @param engineOverride engine type to use instead of the template's, or null
+     * @param modelOverride model to use instead of the template's, or null
+     * @return the started session
+     * @throws IOException if the session cannot be created
+     * @throws IllegalStateException if the AI engine does not support interactive sessions or the
+     *         session limit has been reached
+     */
+    public AssistantSession createSession(String name, String templateId, Long subjectId, Long compositionId,
+                                          List<SseEvent> seedHistory, String engineOverride,
+                                          String modelOverride) throws IOException {
+        List<SseEvent> seed = seedHistory != null ? seedHistory : List.of();
         SessionTemplateService.SessionTemplate template = templateService.getTemplate(templateId);
         if (template == null) {
             throw new IllegalArgumentException("Template not found: " + templateId);
         }
 
-        Agent agent = resolveSessionAgent(template);
+        String engine = trimToNull(engineOverride);
+        Agent agent = engine != null ? resolveAgentByType(engine, "composition") : resolveSessionAgent(template);
+        String model = trimToNull(modelOverride);
+        if (model == null && (engine == null || engine.equals(trimToNull(template.engine())))) {
+            model = trimToNull(template.model());
+        }
         if (!agent.supportsInteractiveSessions()) {
             throw new IllegalStateException(
                     "The AI Assistant requires an engine that supports interactive sessions. "
@@ -142,36 +201,44 @@ public class AssistantSessionManager {
         }
 
         try {
-            // Look up project if scoped
-            ProjectEntity project = null;
-            if (projectId != null) {
-                project = ProjectEntity.findById(projectId);
-                if (project == null) {
-                    throw new IllegalArgumentException("Project not found: " + projectId);
+            // Look up subject if scoped
+            SubjectEntity subject = null;
+            if (subjectId != null) {
+                subject = SubjectEntity.findById(subjectId);
+                if (subject == null) {
+                    throw new IllegalArgumentException("Subject not found: " + subjectId);
                 }
             }
 
             // Resolve environment variables early — MCP server resolution needs
             // them (e.g. @axiom-tools passes env to the tools MCP server).
             Map<String, String> resolvedEnv = new LinkedHashMap<>();
-            if (environmentResolver.hasCustomEnvironment(template.environment())) {
+            try {
                 resolvedEnv.putAll(environmentResolver.resolve(template.environment()));
+            } catch (MissingSecretException e) {
+                throw new IllegalArgumentException(
+                        "Session template '" + template.name() + "': " + e.getMessage(), e);
             }
 
-            // Inject project environment variables
-            if (project != null) {
-                resolvedEnv.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
-                resolvedEnv.put("AXIOM_PROJECT_NAME", project.name);
-                resolvedEnv.put("AXIOM_REF", project.ref);
-                resolvedEnv.put("AXIOM_REPOSITORY", project.repository != null ? project.repository : "");
+            // Inject subject environment variables
+            if (subject != null) {
+                resolvedEnv.put("AXIOM_SUBJECT_ID", String.valueOf(subject.id));
+                resolvedEnv.put("AXIOM_SUBJECT_NAME", subject.name);
+                resolvedEnv.put("AXIOM_REF", subject.ref);
+                resolvedEnv.put("AXIOM_REPOSITORY", subject.repository != null ? subject.repository : "");
             }
 
             // Create session directory first — MCP server resolution may need
             // to write files there (e.g. tools.json for @axiom-tools).
             String sessionId = UUID.randomUUID().toString();
+            String mcpToken = AssistantSession.newToken();
             Path sessionDir = contextBuilder.createSessionDirectory(sessionId, null);
 
             try {
+            if (compositionId != null) {
+                Files.writeString(sessionDir.resolve(COMPOSITION_MARKER), String.valueOf(compositionId));
+            }
+
             // Resolve allowed tools first — MCP server resolution needs them
             // to auto-include servers implied by tool names.
             List<String> resolvedAllowedTools = resolveAllowedTools(template);
@@ -179,8 +246,8 @@ public class AssistantSessionManager {
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
             Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(template, project, sessionDir, resolvedEnv,
-                            resolvedAllowedTools);
+                    resolveMcpServers(sessionId, mcpToken, template, subject, compositionId, sessionDir,
+                            resolvedEnv, resolvedAllowedTools);
 
             // Build and write MCP config JSON to session directory
             String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
@@ -196,15 +263,15 @@ public class AssistantSessionManager {
                     throw new IOException("Template working directory does not exist: "
                             + template.workingDirectory());
                 }
-            } else if (project != null) {
-                Path projectWorkspace = workspaceService.getWorkspacePath(project);
-                if (Files.isDirectory(projectWorkspace)) {
-                    workDir = projectWorkspace;
+            } else if (subject != null) {
+                Path subjectWorkspace = workspaceService.getWorkspacePath(subject);
+                if (Files.isDirectory(subjectWorkspace)) {
+                    workDir = subjectWorkspace;
                 } else {
-                    workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
+                    workDir = contextBuilder.createWorkingDirectory(sessionDir, template.capabilities());
                 }
             } else {
-                workDir = contextBuilder.createWorkingDirectory(sessionDir, templateId);
+                workDir = contextBuilder.createWorkingDirectory(sessionDir, template.capabilities());
             }
 
             // Run init script if configured
@@ -213,20 +280,20 @@ public class AssistantSessionManager {
                         template.initScriptType());
             }
 
-            // Build system prompt, augmenting with project context if applicable
-            String systemPrompt = buildSystemPrompt(template, project);
+            // Build system prompt, augmenting with subject context if applicable
+            String systemPrompt = buildSystemPrompt(template, subject);
 
-            // Build welcome message, substituting project placeholders
+            // Build welcome message, substituting subject placeholders
             String welcomeMessage = template.welcomeMessage();
-            if (project != null && welcomeMessage != null) {
-                welcomeMessage = welcomeMessage.replace("{{projectName}}", project.name);
+            if (subject != null && welcomeMessage != null) {
+                welcomeMessage = welcomeMessage.replace("{{subjectName}}", subject.name);
             }
 
             String sessionName = name != null && !name.isBlank() ? name : "Assistant Session";
-            String projectName = project != null ? project.name : null;
+            String subjectName = subject != null ? subject.name : null;
 
             List<String> command = buildCommand(workDir, sessionDir, systemPrompt,
-                    template.model(), resolvedAllowedTools, mcpConfig != null);
+                    model, resolvedAllowedTools, mcpConfig != null);
 
             AtomicReference<AssistantSession> sessionRef = new AtomicReference<>();
             Consumer<AssistantEventParser.SseEvent> eventSink = event -> {
@@ -249,23 +316,34 @@ public class AssistantSessionManager {
                             workDir,
                             command,
                             resolvedEnv,
-                            projectId,
-                            projectName,
+                            subjectId,
+                            subjectName,
                             eventSink,
                             autoApprovalSink,
-                            template.model(),
+                            model,
                             sessionName,
                             mcpConfigs,
                             systemPrompt,
                             resolvedAllowedTools));
 
-            AssistantSession session = new AssistantSession(sessionName, templateId, sessionDir,
-                    workDir, command, resolvedEnv, agent.getType(), projectId, projectName, driver);
+            AssistantSession session = new AssistantSession(sessionId, sessionName, templateId, sessionDir,
+                    workDir, command, resolvedEnv, agent.getType(), subjectId, subjectName, driver);
+            session.setCapabilities(template.capabilities());
+            session.setEngineLabel(agent.getLabel());
+            session.setModel(model);
+            session.setMcpToken(mcpToken);
+            session.seedHistory(seed);
             sessionRef.set(session);
+            // Persist every event (including the welcome message and startup events) to history.jsonl.
+            // Seeded events are written directly so the new directory holds the complete history.
+            HistoryJournal journal = new HistoryJournal(sessionDir.resolve(HistoryJournal.FILE_NAME), objectMapper);
+            journals.put(sessionId, journal);
+            seed.forEach(journal::accept);
+            session.addListener(journal);
             session.start();
 
-            // Add welcome message to event history so it replays on reconnect
-            if (welcomeMessage != null && !welcomeMessage.isBlank()) {
+            // Add welcome message to event history so it replays on reconnect (a resumed session already has it)
+            if (seed.isEmpty() && welcomeMessage != null && !welcomeMessage.isBlank()) {
                 ObjectNode welcomeData = objectMapper.createObjectNode();
                 welcomeData.put("text", welcomeMessage);
                 session.addEvent(new AssistantEventParser.SseEvent("assistant_text", welcomeData));
@@ -285,7 +363,7 @@ public class AssistantSessionManager {
             });
 
             // Config Assistant validation listener
-            if ("axiom-config-assistant".equals(templateId)) {
+            if (session.hasCapability(SessionCapability.VALIDATION_FEEDBACK)) {
                 session.addListener(createValidationListener(session));
             }
 
@@ -295,8 +373,8 @@ public class AssistantSessionManager {
 
             // Send initial user message if configured
             String initialMessage = template.initialMessage();
-            if (project != null && initialMessage != null) {
-                initialMessage = initialMessage.replace("{{projectName}}", project.name);
+            if (subject != null && initialMessage != null) {
+                initialMessage = initialMessage.replace("{{subjectName}}", subject.name);
             }
             if (initialMessage != null && !initialMessage.isBlank()) {
                 session.sendMessage(initialMessage);
@@ -304,10 +382,12 @@ public class AssistantSessionManager {
 
             return session;
             } catch (SessionCompatibilityException e) {
+                closeJournal(sessionId);
                 contextBuilder.deleteSessionDirectory(sessionDir);
                 throw e;
             } catch (Exception e) {
-                // Clean up the session directory if setup fails after creation
+                // Clean up the journal and session directory if setup fails after creation
+                closeJournal(sessionId);
                 contextBuilder.deleteSessionDirectory(sessionDir);
                 throw e;
             }
@@ -328,12 +408,56 @@ public class AssistantSessionManager {
     }
 
     /**
+     * Validates a draft configuration item in the context of a session: items already written to the
+     * session's working directory count as existing.
+     *
+     * @param sessionId the session identifier
+     * @param type the item type (JSON name, e.g. {@code workflow})
+     * @param item the item JSON
+     * @return the problems found (empty when valid)
+     * @throws IllegalArgumentException if the session does not exist
+     */
+    public List<ConfigProblem> validateItem(String sessionId, String type, JsonNode item) {
+        AssistantSession session = sessions.get(sessionId);
+        if (session == null) {
+            throw new IllegalArgumentException("Assistant session not found: " + sessionId);
+        }
+        return itemValidator.validateItem(ConfigItemType.fromName(type), item, session.getWorkingDirectory());
+    }
+
+    /**
      * Returns all active sessions.
      *
      * @return list of active sessions
      */
     public List<AssistantSession> listSessions() {
         return List.copyOf(sessions.values());
+    }
+
+    /**
+     * Returns the history journal of a live session, for tests that need to flush it.
+     *
+     * @param sessionId the session identifier
+     * @return the journal, or null if the session has none
+     */
+    public HistoryJournal journal(String sessionId) {
+        return journals.get(sessionId);
+    }
+
+    private void closeJournal(String sessionId) {
+        HistoryJournal journal = journals.remove(sessionId);
+        if (journal != null) {
+            journal.close();
+        }
+    }
+
+    /**
+     * Returns the number of open history journals, for tests.
+     *
+     * @return the number of journals currently tracked
+     */
+    int journalCount() {
+        return journals.size();
     }
 
     /**
@@ -345,6 +469,18 @@ public class AssistantSessionManager {
      */
     @jakarta.transaction.Transactional
     public void destroySession(String sessionId) {
+        destroySession(sessionId, false);
+    }
+
+    /**
+     * Destroys a session: kills the subprocess, closes its journal and records usage. The session directory
+     * is deleted unless {@code keepDirectory} is true.
+     *
+     * @param sessionId the session to destroy
+     * @param keepDirectory whether to keep the session directory on disk
+     */
+    @jakarta.transaction.Transactional
+    public void destroySession(String sessionId, boolean keepDirectory) {
         AssistantSession session = sessions.remove(sessionId);
         if (session != null) {
             sessionCount.decrementAndGet();
@@ -355,7 +491,10 @@ public class AssistantSessionManager {
                 LOG.debugf("Could not record usage for session %s: %s",
                         sessionId, e.getMessage());
             }
-            contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
+            closeJournal(sessionId);
+            if (!keepDirectory) {
+                contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
+            }
             LOG.infof("Destroyed assistant session %s (cost=$%.4f, turns=%d)",
                     sessionId, session.getTotalCostUsd(), session.getTurnCount());
         }
@@ -415,11 +554,7 @@ public class AssistantSessionManager {
         usage.invocationType = "assistant-session";
         usage.actionType = "assistant-session";
         usage.engine = session.getEngineType();
-        SessionTemplateService.SessionTemplate template =
-                templateService.getTemplate(session.getTemplateId());
-        if (template != null && template.model() != null && !template.model().isBlank()) {
-            usage.model = template.model();
-        }
+        usage.model = session.getModel();
         usage.costUsd = session.getTotalCostUsd();
         usage.inputTokens = session.getTotalInputTokens();
         usage.outputTokens = session.getTotalOutputTokens();
@@ -446,13 +581,11 @@ public class AssistantSessionManager {
 
         collectItems(workDir, "tools", items);
         collectItems(workDir, "action-types", items);
-        collectItems(workDir, "report-definitions", items);
         collectItems(workDir, "toolsets", items);
         collectItems(workDir, "session-templates", items);
-        collectItems(workDir, "connections", items);
+        collectItems(workDir, "event-sources", items);
         collectItems(workDir, "subscriptions", items);
         collectItems(workDir, "workflows", items);
-        collectItems(workDir, "scheduled-jobs", items);
 
         return items;
     }
@@ -461,7 +594,7 @@ public class AssistantSessionManager {
      * Returns the full content of a specific generated item.
      *
      * @param sessionId the session identifier
-     * @param itemType the item type directory (tools, action-types, report-definitions)
+     * @param itemType the item type directory (tools, action-types, toolsets, ...)
      * @param itemName the item file name (without .json extension)
      * @return the parsed JSON content
      * @throws IOException if the file cannot be read
@@ -509,25 +642,31 @@ public class AssistantSessionManager {
             throw new ValidationException("Items have validation errors", allErrors);
         }
 
-        // Build configuration pack
-        JsonNode pack = buildConfigPack(session, items);
+        // Refuse to "succeed" with nothing: the working directory may have been removed externally.
+        Path workDir = session.getWorkingDirectory();
+        if (workDir == null || !Files.isDirectory(workDir)) {
+            throw new ValidationException("Nothing to apply", List.of("Nothing to apply: the session's working "
+                    + "directory no longer exists (" + workDir + "). The session was kept; ask the assistant to "
+                    + "write the items again."));
+        }
 
-        // Import or update via the upsert service
-        ImportExportService.UpsertResult result = importExportService.importOrUpdatePack(pack);
-
-        // Apply workflow definitions separately (not part of config pack)
-        Path workflowsDir = session.getWorkingDirectory().resolve("workflows");
-        int[] wfCounts = applyWorkflowDefinitions(workflowsDir);
-        result = new ImportExportService.UpsertResult(
-                result.toolsCreated(), result.toolsUpdated(),
-                result.actionTypesCreated(), result.actionTypesUpdated(),
-                result.reportDefinitionsCreated(), result.reportDefinitionsUpdated(),
-                result.toolsetsCreated(), result.toolsetsUpdated(),
-                result.sessionTemplatesCreated(), result.sessionTemplatesUpdated(),
-                result.scheduledJobsCreated(), result.scheduledJobsUpdated(),
-                result.connectionsCreated(), result.connectionsUpdated(),
-                result.subscriptionsCreated(), result.subscriptionsUpdated(),
-                wfCounts[0], wfCounts[1]);
+        // Build configuration pack from the working directory and apply it (validated, transactional)
+        ObjectNode pack = AssistantPackBuilder.fromDirectory(workDir, objectMapper);
+        if (AssistantPackBuilder.itemCount(pack) == 0) {
+            throw new ValidationException("Nothing to apply", List.of("Nothing to apply: the session has no items. "
+                    + "Ask the assistant to create or update configuration items first."));
+        }
+        ObjectNode metadata = pack.putObject("metadata");
+        metadata.put("name", "AI Assistant Session - " + session.getName());
+        ImportExportService.UpsertResult result;
+        try {
+            result = importExportService.importOrUpdatePack(pack);
+        } catch (ConfigValidationException e) {
+            List<String> errors = new ArrayList<>();
+            e.problemsByItem().forEach((key, problems) -> problems.forEach(
+                    p -> errors.add(key + " " + p.path() + ": " + p.message())));
+            throw new ValidationException("Items have validation errors", errors);
+        }
 
         // Destroy session on success
         destroySession(sessionId);
@@ -595,18 +734,54 @@ public class AssistantSessionManager {
      * @param event the startup event
      */
     void onStartup(@Observes StartupEvent event) {
-        Path sessionsRoot = Path.of(System.getProperty("user.home"),
-                ".axiom", "assistant", "sessions");
+        Path sessionsRoot = AxiomHome.resolve("assistant", "sessions");
         if (!Files.isDirectory(sessionsRoot)) {
             return;
         }
+        Instant now = Instant.now();
         try (Stream<Path> dirs = Files.list(sessionsRoot)) {
             dirs.filter(Files::isDirectory).forEach(dir -> {
+                if (Files.exists(dir.resolve(COMPOSITION_MARKER))) {
+                    LOG.infof("Keeping composition session directory %s", dir.getFileName());
+                    return;
+                }
+                if (!isStale(dir, now, STALE_SESSION_GRACE)) {
+                    LOG.warnf("Keeping session directory %s: it changed within the last %d minutes, so another "
+                            + "Axiom instance may be using it", dir.getFileName(), STALE_SESSION_GRACE.toMinutes());
+                    return;
+                }
                 contextBuilder.deleteSessionDirectory(dir);
-                LOG.infof("Cleaned up stale session directory: %s", dir.getFileName());
+                LOG.warnf("Removed stale session directory %s left behind by a previous run", dir.getFileName());
             });
         } catch (IOException e) {
             LOG.warnf(e, "Failed to clean up stale session directories");
+        }
+    }
+
+    /** Session directories with activity more recent than this are never removed at startup. */
+    static final Duration STALE_SESSION_GRACE = Duration.ofMinutes(10);
+
+    /**
+     * Whether a session directory has had no activity within {@code grace}: the newest modification time of
+     * the directory or anything under it is older than {@code now - grace}.
+     *
+     * @param dir   the session directory
+     * @param now   the current time
+     * @param grace how long after its last change a directory is protected
+     * @return true if it can be removed
+     */
+    static boolean isStale(Path dir, Instant now, Duration grace) {
+        Instant cutoff = now.minus(grace);
+        try (Stream<Path> paths = Files.walk(dir)) {
+            return paths.noneMatch(p -> {
+                try {
+                    return Files.getLastModifiedTime(p).toInstant().isAfter(cutoff);
+                } catch (IOException e) {
+                    return true;
+                }
+            });
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -617,56 +792,72 @@ public class AssistantSessionManager {
      */
     void onShutdown(@Observes ShutdownEvent event) {
         LOG.info("Shutting down — destroying all assistant sessions");
-        for (String sessionId : new ArrayList<>(sessions.keySet())) {
-            destroySession(sessionId);
+        for (AssistantSession session : new ArrayList<>(sessions.values())) {
+            destroySession(session.getId(), session.hasCapability(SessionCapability.COMPOSITION));
         }
     }
 
     /**
-     * Builds the system prompt, augmenting the template prompt with project context
-     * if a project is specified.
+     * Returns the directory of an assistant session.
+     *
+     * @param sessionId the session identifier
+     * @return {@code ${axiom.home}/assistant/sessions/<sessionId>}
+     */
+    public static Path sessionDirectory(String sessionId) {
+        return AxiomHome.resolve("assistant", "sessions", sessionId);
+    }
+
+    /**
+     * Builds the system prompt: replaces {@code {{reference}}} with the generated configuration reference and
+     * augments the template prompt with subject context if a subject is specified.
      */
     private String buildSystemPrompt(SessionTemplateService.SessionTemplate template,
-                                     ProjectEntity project) {
+                                     SubjectEntity subject) {
         String prompt = template.systemPrompt() != null ? template.systemPrompt() : "";
+        if (prompt.contains("{{reference}}")) {
+            prompt = prompt.replace("{{reference}}", referenceGenerator.generate());
+        }
+        if (prompt.contains("{{changesetReference}}")) {
+            prompt = prompt.replace("{{changesetReference}}", referenceGenerator.generateChangeSetReference());
+        }
 
-        if (project == null) {
+        if (subject == null) {
             return prompt;
         }
 
         StringBuilder context = new StringBuilder();
-        context.append("\n\n## Project Context\n\n");
-        context.append("This session is scoped to the following project:\n\n");
-        context.append("- **Name**: ").append(project.name).append("\n");
-        if (project.body != null && !project.body.isBlank()) {
-            context.append("- **Description**: ").append(project.body).append("\n");
+        context.append("\n\n## Subject Context\n\n");
+        context.append("This session is scoped to the following subject:\n\n");
+        context.append("- **Name**: ").append(subject.name).append("\n");
+        if (subject.body != null && !subject.body.isBlank()) {
+            context.append("- **Description**: ").append(subject.body).append("\n");
         }
-        context.append("- **Type**: ").append(project.type).append("\n");
-        context.append("- **Status**: ").append(project.status).append("\n");
-        if (project.refSource != null && !project.refSource.isBlank()) {
-            context.append("- **Source**: ").append(project.refSource).append("\n");
+        context.append("- **Type**: ").append(subject.type).append("\n");
+        context.append("- **Active**: ").append(SubjectEntity.isActive(subject.id)).append("\n");
+        if (subject.refSource != null && !subject.refSource.isBlank()) {
+            context.append("- **Source**: ").append(subject.refSource).append("\n");
         }
-        context.append("- **Reference**: ").append(project.ref).append("\n");
-        if (project.repository != null && !project.repository.isBlank()) {
-            context.append("- **Repository**: ").append(project.repository).append("\n");
+        context.append("- **Reference**: ").append(subject.ref).append("\n");
+        if (subject.repository != null && !subject.repository.isBlank()) {
+            context.append("- **Repository**: ").append(subject.repository).append("\n");
         }
-        if (project.labels != null && !project.labels.isEmpty()) {
-            context.append("- **Labels**: ").append(String.join(", ", project.labels)).append("\n");
+        if (subject.labels != null && !subject.labels.isEmpty()) {
+            context.append("- **Labels**: ").append(String.join(", ", subject.labels)).append("\n");
         }
-        context.append("\nUse the project-scoped MCP tools (prefixed with `axiom_project_`) to ")
-                .append("access project tasks, discussion thread, events, and traces.\n");
+        context.append("\nUse the subject-scoped MCP tools (prefixed with `axiom_subject_`) to ")
+                .append("access subject tasks, discussion thread, events, and traces.\n");
 
-        String projectContext = context.toString();
+        String subjectContext = context.toString();
 
-        // Substitute {{projectContext}} placeholder if present, otherwise append
-        if (prompt.contains("{{projectContext}}")) {
-            prompt = prompt.replace("{{projectContext}}", projectContext);
+        // Substitute {{subjectContext}} placeholder if present, otherwise append
+        if (prompt.contains("{{subjectContext}}")) {
+            prompt = prompt.replace("{{subjectContext}}", subjectContext);
         } else {
-            prompt = prompt + projectContext;
+            prompt = prompt + subjectContext;
         }
 
-        // Substitute {{projectName}} placeholder
-        prompt = prompt.replace("{{projectName}}", project.name);
+        // Substitute {{subjectName}} placeholder
+        prompt = prompt.replace("{{subjectName}}", subject.name);
 
         return prompt;
     }
@@ -723,13 +914,14 @@ public class AssistantSessionManager {
             try {
                 validateAndFeedback(workDir, "tools", session, tracker);
                 validateAndFeedback(workDir, "action-types", session, tracker);
-                validateAndFeedback(workDir, "report-definitions", session, tracker);
                 validateAndFeedback(workDir, "toolsets", session, tracker);
                 validateAndFeedback(workDir, "session-templates", session, tracker);
-                validateAndFeedback(workDir, "connections", session, tracker);
+                validateAndFeedback(workDir, "event-sources", session, tracker);
                 validateAndFeedback(workDir, "subscriptions", session, tracker);
                 validateAndFeedback(workDir, "workflows", session, tracker);
-                validateAndFeedback(workDir, "scheduled-jobs", session, tracker);
+                if (tracker.transitionedToAllValid()) {
+                    session.sendMessage("All configuration items in this session are valid.");
+                }
             } catch (Exception e) {
                 LOG.warnf(e, "Validation listener error in session %s",
                         session.getId());
@@ -799,128 +991,9 @@ public class AssistantSessionManager {
         }
     }
 
-    private JsonNode buildConfigPack(AssistantSession session, List<AssistantItem> items)
-            throws IOException {
-        ObjectNode pack = objectMapper.createObjectNode();
-
-        ObjectNode metadata = pack.putObject("metadata");
-        metadata.put("name", "AI Assistant Session - " + session.getName());
-        metadata.put("description", "Generated by AI Assistant on "
-                + Instant.now().toString());
-        metadata.put("version", "2.0");
-        metadata.put("exportedAt", Instant.now().toString());
-
-        ArrayNode toolsArr = pack.putArray("tools");
-        ArrayNode actionTypesArr = pack.putArray("actionTypes");
-        ArrayNode reportDefsArr = pack.putArray("reportDefinitions");
-        ArrayNode toolsetsArr = pack.putArray("toolsets");
-        ArrayNode templatesArr = pack.putArray("sessionTemplates");
-        ArrayNode connectionsArr = pack.putArray("connections");
-        ArrayNode subscriptionsArr = pack.putArray("subscriptions");
-        ArrayNode scheduledJobsArr = pack.putArray("scheduledJobs");
-
-        for (AssistantItem item : items) {
-            Path file = session.getWorkingDirectory()
-                    .resolve(item.type()).resolve(item.name() + ".json");
-            JsonNode content = objectMapper.readTree(Files.readString(file));
-
-            switch (item.type()) {
-                case "tools" -> toolsArr.add(content);
-                case "action-types" -> actionTypesArr.add(content);
-                case "report-definitions" -> reportDefsArr.add(content);
-                case "toolsets" -> toolsetsArr.add(content);
-                case "session-templates" -> templatesArr.add(content);
-                case "connections" -> connectionsArr.add(content);
-                case "subscriptions" -> subscriptionsArr.add(content);
-                case "workflows" -> {} // Handled separately in applyWorkflowDefinitions
-                case "scheduled-jobs" -> scheduledJobsArr.add(content);
-            }
-        }
-
-        return pack;
-    }
-
-    private int[] applyWorkflowDefinitions(Path workflowsDir) throws IOException {
-        if (!Files.isDirectory(workflowsDir)) {
-            return new int[]{0, 0};
-        }
-        int created = 0;
-        int updated = 0;
-
-        try (Stream<Path> files = Files.list(workflowsDir)) {
-            for (Path file : files.filter(f -> f.toString().endsWith(".json")).toList()) {
-                JsonNode json = objectMapper.readTree(Files.readString(file));
-                String name = json.path("name").asText(null);
-                if (name == null) {
-                    continue;
-                }
-
-                JsonNode content = json.path("content");
-                String description = json.has("description")
-                        ? json.path("description").asText() : null;
-
-                // Find existing definition by name
-                WorkflowDefinitionEntity existing = WorkflowDefinitionEntity
-                        .<WorkflowDefinitionEntity>find("name", name).firstResult();
-
-                if (existing == null) {
-                    // Create new definition
-                    WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
-                    entity.name = name;
-                    entity.description = description;
-                    entity.createdOn = Instant.now();
-                    entity.updatedOn = Instant.now();
-
-                    if (content != null && !content.isMissingNode()) {
-                        entity.content = objectMapper.writeValueAsString(content);
-                    }
-
-                    entity.persist();
-
-                    if (content != null && !content.isMissingNode()) {
-                        WorkflowDefinitionVersionEntity version =
-                                new WorkflowDefinitionVersionEntity();
-                        version.definitionId = entity.id;
-                        version.version = 1;
-                        version.content = objectMapper.writeValueAsString(content);
-                        version.createdOn = Instant.now();
-                        version.persist();
-                        entity.currentVersion = 1;
-                    }
-
-                    created++;
-                } else {
-                    // Update existing definition
-                    if (description != null) {
-                        existing.description = description;
-                    }
-                    existing.updatedOn = Instant.now();
-
-                    if (content != null && !content.isMissingNode()) {
-                        existing.content = objectMapper.writeValueAsString(content);
-                        int nextVersion = (existing.currentVersion != null
-                                ? existing.currentVersion : 0) + 1;
-                        WorkflowDefinitionVersionEntity version =
-                                new WorkflowDefinitionVersionEntity();
-                        version.definitionId = existing.id;
-                        version.version = nextVersion;
-                        version.content = objectMapper.writeValueAsString(content);
-                        version.createdOn = Instant.now();
-                        version.persist();
-                        existing.currentVersion = nextVersion;
-                    }
-
-                    updated++;
-                }
-            }
-        }
-
-        return new int[]{created, updated};
-    }
-
     private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
-            SessionTemplateService.SessionTemplate template,
-            ProjectEntity project, Path sessionDir,
+            String sessionId, String mcpToken, SessionTemplateService.SessionTemplate template,
+            SubjectEntity subject, Long compositionId, Path sessionDir,
             Map<String, String> sessionEnv,
             List<String> allowedTools) throws IOException {
         Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
@@ -935,21 +1008,36 @@ public class AssistantSessionManager {
 
         for (String serverName : serverNames) {
             if ("@axiom-assistant".equals(serverName)) {
-                // Built-in MCP server for project-scoped assistant tools
-                Path mcpServerDir = ensureAssistantMcpServerInstalled();
+                // Built-in MCP server for subject-scoped assistant tools
+                Path mcpServerDir = ensureMcpServerInstalled(ASSISTANT_MCP_DIR_NAME,
+                        "templates/axiom-assistant-mcp/");
                 String serverJsPath = mcpServerDir.resolve("server.js")
                         .toAbsolutePath().toString();
                 Map<String, String> env = new LinkedHashMap<>();
                 env.put("AXIOM_API_URL", apiUrl);
-                if (project != null) {
-                    env.put("AXIOM_PROJECT_ID", String.valueOf(project.id));
+                if (subject != null) {
+                    env.put("AXIOM_SUBJECT_ID", String.valueOf(subject.id));
                 }
+                env.put("AXIOM_ASSISTANT_SESSION_ID", sessionId);
+                env.put("AXIOM_SESSION_TOKEN", mcpToken);
                 configs.put("axiom", AssistantContextBuilder.McpServerConfig.stdio(
                         "node", List.of(serverJsPath), env));
 
+            } else if ("@axiom-workbench".equals(serverName)) {
+                // Built-in MCP server for workbench composition tools
+                Path serverDir = ensureMcpServerInstalled(WORKBENCH_MCP_DIR_NAME, "templates/axiom-workbench-mcp/");
+                Map<String, String> env = new LinkedHashMap<>();
+                env.put("AXIOM_API_URL", apiUrl);
+                if (compositionId != null) {
+                    env.put("AXIOM_COMPOSITION_ID", String.valueOf(compositionId));
+                }
+                env.put("AXIOM_SESSION_TOKEN", mcpToken);
+                configs.put("workbench", AssistantContextBuilder.McpServerConfig.stdio("node",
+                        List.of(serverDir.resolve("server.js").toAbsolutePath().toString()), env));
+
             } else if ("@axiom-tools".equals(serverName)) {
                 // Built-in MCP server for user-defined script tools.
-                // Same server project as the task execution path — loads
+                // Same server subject as the task execution path — loads
                 // tool definitions from a generated tools.json file.
                 List<ToolDefinitionEntity> scriptTools =
                         ToolDefinitionEntity.listAll();
@@ -971,7 +1059,7 @@ public class AssistantSessionManager {
                 }
 
             } else if ("@axiom-sdk".equals(serverName)) {
-                // Built-in MCP server for Axiom SDK tools (project/task management)
+                // Built-in MCP server for Axiom SDK tools (subject/task management)
                 Path serverDir = mcpConfigGenerator.ensureMcpServerInstalled();
                 Map<String, String> env = new LinkedHashMap<>();
                 env.put("AXIOM_API_URL", apiUrl);
@@ -1047,6 +1135,9 @@ public class AssistantSessionManager {
         // which is registered under the name "axiom".
         boolean needsAxiomAssistant = !serverNames.contains("@axiom-assistant")
                 && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__axiom__"));
+        // "mcp__workbench__*" tools come from the built-in @axiom-workbench server.
+        boolean needsAxiomWorkbench = !serverNames.contains("@axiom-workbench")
+                && allowedTools.stream().anyMatch(t -> t.startsWith("mcp__workbench__"));
 
         if (needsAxiomTools) {
             LOG.infof("Auto-including @axiom-tools server (implied by allowed tools)");
@@ -1060,12 +1151,17 @@ public class AssistantSessionManager {
             LOG.infof("Auto-including @axiom-assistant server (implied by allowed tools)");
             serverNames.add("@axiom-assistant");
         }
+        if (needsAxiomWorkbench) {
+            LOG.infof("Auto-including @axiom-workbench server (implied by allowed tools)");
+            serverNames.add("@axiom-workbench");
+        }
 
         // Auto-include external MCP servers referenced in allowed tools
         for (String tool : allowedTools) {
             if (tool.startsWith("mcp__") && !tool.startsWith("mcp__axiom-tools__")
                     && !tool.startsWith("mcp__axiom-sdk__")
-                    && !tool.startsWith("mcp__axiom__")) {
+                    && !tool.startsWith("mcp__axiom__")
+                    && !tool.startsWith("mcp__workbench__")) {
                 int secondSep = tool.indexOf("__", 5);
                 if (secondSep > 5) {
                     String externalName = tool.substring(5, secondSep);
@@ -1111,39 +1207,40 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Ensures the assistant MCP server Node.js project is installed at
-     * {@code ~/.axiom/assistant-mcp-server/}.
+     * Ensures a built-in Node.js MCP server is installed at {@code ${axiom.home}/<dirName>/}: copies its
+     * {@code package.json} and {@code server.js} from the classpath and runs {@code npm install} once.
+     *
+     * @param dirName the install directory name under the Axiom home
+     * @param resourceDir the classpath directory holding the server files (with trailing slash)
+     * @return the install directory
      */
-    private Path ensureAssistantMcpServerInstalled() throws IOException {
-        if (assistantMcpServerDir != null
-                && Files.exists(assistantMcpServerDir.resolve("node_modules"))) {
-            return assistantMcpServerDir;
+    private Path ensureMcpServerInstalled(String dirName, String resourceDir) throws IOException {
+        Path installed = installedMcpServers.get(dirName);
+        if (installed != null && Files.exists(installed.resolve("node_modules"))) {
+            return installed;
         }
 
         synchronized (this) {
-            if (assistantMcpServerDir != null
-                    && Files.exists(assistantMcpServerDir.resolve("node_modules"))) {
-                return assistantMcpServerDir;
+            installed = installedMcpServers.get(dirName);
+            if (installed != null && Files.exists(installed.resolve("node_modules"))) {
+                return installed;
             }
 
-            Path axiomHome = Path.of(System.getProperty("user.home"), ".axiom");
-            Path serverDir = axiomHome.resolve(ASSISTANT_MCP_DIR_NAME);
+            Path serverDir = AxiomHome.path().resolve(dirName);
             Files.createDirectories(serverDir);
 
             for (String fileName : MCP_TEMPLATE_FILES) {
-                String resourcePath = "templates/axiom-assistant-mcp/" + fileName;
-                try (InputStream is = getClass().getClassLoader()
-                        .getResourceAsStream(resourcePath)) {
+                String resourcePath = resourceDir + fileName;
+                try (InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
                     if (is == null) {
                         throw new IOException("Template resource not found: " + resourcePath);
                     }
-                    Files.copy(is, serverDir.resolve(fileName),
-                            StandardCopyOption.REPLACE_EXISTING);
+                    Files.copy(is, serverDir.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
                 }
             }
-            LOG.infof("Copied assistant MCP server template to %s", serverDir);
+            LOG.infof("Copied MCP server template %s to %s", resourceDir, serverDir);
 
-            LOG.info("Running npm install for assistant MCP server...");
+            LOG.infof("Running npm install for MCP server %s...", dirName);
             ProcessBuilder pb = new ProcessBuilder("npm", "install", "--production")
                     .directory(serverDir.toFile())
                     .redirectErrorStream(true);
@@ -1158,20 +1255,19 @@ public class AssistantSessionManager {
             }
 
             if (exitCode != 0) {
-                throw new IOException(
-                        "npm install failed (exit code " + exitCode + "): " + output);
+                throw new IOException("npm install failed (exit code " + exitCode + "): " + output);
             }
-            LOG.infof("npm install completed for assistant MCP server in %s", serverDir);
+            LOG.infof("npm install completed for MCP server in %s", serverDir);
 
-            assistantMcpServerDir = serverDir;
-            return assistantMcpServerDir;
+            installedMcpServers.put(dirName, serverDir);
+            return serverDir;
         }
     }
 
     /**
      * Describes a generated configuration item with its validation status.
      *
-     * @param type the item type directory (tools, action-types, report-definitions)
+     * @param type the item type directory (tools, action-types, toolsets, ...)
      * @param name the item name (file name without .json)
      * @param errors validation errors that block apply
      * @param warnings advisory messages that don't block apply

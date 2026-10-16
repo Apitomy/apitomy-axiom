@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -57,7 +57,7 @@ class WorkflowWaitSchedulerTest {
 
     @Test
     void findDueWaitIdsOnlyReturnsElapsedWaits() {
-        long[] ids = createProjectAndDefinition("Wait Scheduler Project");
+        long[] ids = createSubjectAndDefinition("Wait Scheduler Subject");
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
 
@@ -85,7 +85,7 @@ class WorkflowWaitSchedulerTest {
 
     @Test
     void resumeWaitDeletesRowAndAdvancesRunToCompleted() {
-        long[] ids = createProjectAndDefinition("Wait Resume Project");
+        long[] ids = createSubjectAndDefinition("Wait Resume Subject");
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
 
@@ -115,19 +115,18 @@ class WorkflowWaitSchedulerTest {
         return wait != null && wait.runId == runId;
     }
 
-    private long[] createProjectAndDefinition(String projectName) {
+    private long[] createSubjectAndDefinition(String subjectName) {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = projectName;
-            project.type = "other";
-            project.status = "new";
-            project.ref = "test/" + projectName.toLowerCase().replace(" ", "-");
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = subjectName;
+            subject.type = "other";
+            subject.ref = "test/" + subjectName.toLowerCase().replace(" ", "-");
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
-            def.name = projectName + " WF";
+            def.name = subjectName + " WF";
             def.content = WAIT_CONTENT;
             def.currentVersion = 1;
             def.createdOn = Instant.now();
@@ -141,7 +140,7 @@ class WorkflowWaitSchedulerTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
     }
 }

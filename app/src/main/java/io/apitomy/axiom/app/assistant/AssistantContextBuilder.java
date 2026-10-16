@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -43,7 +44,7 @@ public class AssistantContextBuilder {
      * @throws IOException if directory creation fails
      */
     public Path createSessionDirectory(String sessionId, String mcpConfig) throws IOException {
-        Path axiomHome = Path.of(System.getProperty("user.home"), ".axiom");
+        Path axiomHome = AxiomHome.path();
         Path sessionsRoot = axiomHome.resolve("assistant").resolve("sessions");
         Path sessionDir = sessionsRoot.resolve(sessionId);
 
@@ -62,25 +63,24 @@ public class AssistantContextBuilder {
      * template does not specify an external working directory.
      *
      * @param sessionDir the session directory
-     * @param templateId the template this session was created from
+     * @param capabilities the capabilities of the template this session was created from
      * @return the path to the created working directory
      * @throws IOException if directory creation fails
      */
-    public Path createWorkingDirectory(Path sessionDir, String templateId) throws IOException {
+    public Path createWorkingDirectory(Path sessionDir, java.util.Set<SessionCapability> capabilities)
+            throws IOException {
         Path workDir = sessionDir.resolve("workDir");
         Files.createDirectories(workDir);
 
         // Config Assistant needs item subdirectories
-        if ("axiom-config-assistant".equals(templateId)) {
+        if (capabilities.contains(SessionCapability.CONFIG_ITEMS)) {
             Files.createDirectories(workDir.resolve("tools"));
             Files.createDirectories(workDir.resolve("action-types"));
-            Files.createDirectories(workDir.resolve("report-definitions"));
             Files.createDirectories(workDir.resolve("toolsets"));
             Files.createDirectories(workDir.resolve("session-templates"));
-            Files.createDirectories(workDir.resolve("connections"));
+            Files.createDirectories(workDir.resolve("event-sources"));
             Files.createDirectories(workDir.resolve("subscriptions"));
             Files.createDirectories(workDir.resolve("workflows"));
-            Files.createDirectories(workDir.resolve("scheduled-jobs"));
         }
 
         LOG.infof("Created working directory: %s", workDir);

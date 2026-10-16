@@ -1,7 +1,7 @@
 package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
@@ -72,14 +72,13 @@ class WorkflowRunBeanMapperTest {
     @Test
     void toBeanToleratesNullCurrentNodeIdWithMultipleActiveBranches() throws Exception {
         long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Fork Run Project";
-            project.type = "other";
-            project.status = "new";
-            project.ref = "test/fork-run";
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Fork Run Subject";
+            subject.type = "other";
+            subject.ref = "test/fork-run";
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Fork Run WF";
@@ -96,7 +95,7 @@ class WorkflowRunBeanMapperTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
 
         WorkflowInstance forkedInstance = WorkflowInstance.builder()
@@ -112,7 +111,8 @@ class WorkflowRunBeanMapperTest {
                 .build();
 
         WorkflowRunEntity entity = new WorkflowRunEntity();
-        entity.projectId = ids[0];
+        entity.title = "Test run";
+        entity.subjectId = ids[0];
         entity.definitionId = ids[1];
         entity.definitionVersion = 1;
         entity.status = "waiting";
@@ -163,14 +163,13 @@ class WorkflowRunBeanMapperTest {
     @Test
     void toBeanMapsActiveBranchesAndHistoryBranchId() throws Exception {
         long[] ids = QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "Active Branches Project";
-            project.type = "other";
-            project.status = "new";
-            project.ref = "test/active-branches";
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Active Branches Subject";
+            subject.type = "other";
+            subject.ref = "test/active-branches";
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
             def.name = "Active Branches WF";
@@ -187,7 +186,7 @@ class WorkflowRunBeanMapperTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
 
         WorkflowInstance forkedInstance = WorkflowInstance.builder()
@@ -207,7 +206,8 @@ class WorkflowRunBeanMapperTest {
                 .build();
 
         WorkflowRunEntity entity = new WorkflowRunEntity();
-        entity.projectId = ids[0];
+        entity.title = "Test run";
+        entity.subjectId = ids[0];
         entity.definitionId = ids[1];
         entity.definitionVersion = 1;
         entity.status = "waiting";

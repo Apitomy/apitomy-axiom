@@ -101,12 +101,6 @@ function renderDetail(nodeType: string, entityType: string | undefined,
     if (nodeType === "decision-processed" && entityType === "activity-log") {
         return <DecisionDetail detail={detail} />;
     }
-    if (nodeType === "report-ai-invoked" && entityType === "report") {
-        return <ReportExecutionLogDetail detail={detail} />;
-    }
-    if (nodeType === "report-triggered" && entityType === "report") {
-        return <ReportLinkDetail detail={detail} />;
-    }
     if ((nodeType === "event-ignored" || nodeType === "escalation") && entityType === "activity-log") {
         return <ReasoningDetail detail={detail} />;
     }
@@ -127,8 +121,6 @@ function renderDetail(nodeType: string, entityType: string | undefined,
             return <WorkflowWaitDetail detail={detail} />;
         case "workflow-event-subscription":
             return <WorkflowEventSubscriptionDetail detail={detail} />;
-        case "scheduled-job-run":
-            return <ScheduledJobRunDetail detail={detail} />;
         default:
             return <RawJsonDetail detail={detail} />;
     }
@@ -159,37 +151,6 @@ function ReasoningDetail({ detail }: { detail: Record<string, unknown> }) {
                 isReadOnly
                 height="200px"
                 options={{ wordWrap: "on" }}
-            />
-        </>
-    );
-}
-
-function ReportLinkDetail({ detail }: { detail: Record<string, unknown> }) {
-    const reportId = detail.id;
-    const title = detail.title ? String(detail.title) : `Report #${reportId}`;
-    return (
-        <DescriptionList isHorizontal isCompact>
-            <DescriptionListGroup>
-                <DescriptionListTerm>Report</DescriptionListTerm>
-                <DescriptionListDescription>
-                    <Link to={`/reports/${reportId}`}>{title}</Link>
-                </DescriptionListDescription>
-            </DescriptionListGroup>
-        </DescriptionList>
-    );
-}
-
-function ReportExecutionLogDetail({ detail }: { detail: Record<string, unknown> }) {
-    const effectiveTheme = useEffectiveTheme();
-    return (
-        <>
-            <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Execution Log</h4>
-            <CodeEditor
-                code={String(detail.executionLog || "")}
-                language={Language.markdown}
-                isDarkTheme={effectiveTheme === "dark"}
-                isReadOnly
-                height="400px"
             />
         </>
     );
@@ -345,7 +306,7 @@ function ActivityLogDetail({ detail }: { detail: Record<string, unknown> }) {
                         <DescriptionListDescription>{String(detail.summary)}</DescriptionListDescription>
                     </DescriptionListGroup>
                 )}
-                <ProjectGroup detail={detail} />
+                <SubjectGroup detail={detail} />
                 {detail.traceId != null && (
                     <DescriptionListGroup>
                         <DescriptionListTerm>Activity</DescriptionListTerm>
@@ -391,14 +352,14 @@ function StatusGroup({ label, status }: { label: string; status: unknown }) {
     );
 }
 
-function ProjectGroup({ detail }: { detail: Record<string, unknown> }) {
-    if (detail.projectId == null) return null;
-    const name = detail.projectName ? String(detail.projectName) : `Project #${detail.projectId}`;
+function SubjectGroup({ detail }: { detail: Record<string, unknown> }) {
+    if (detail.subjectId == null) return null;
+    const name = detail.subjectName ? String(detail.subjectName) : `Subject #${detail.subjectId}`;
     return (
         <DescriptionListGroup>
-            <DescriptionListTerm>Project</DescriptionListTerm>
+            <DescriptionListTerm>Subject</DescriptionListTerm>
             <DescriptionListDescription>
-                <Link to={`/projects/${detail.projectId}`}>{name}</Link>
+                <Link to={`/subjects/${detail.subjectId}`}>{name}</Link>
             </DescriptionListDescription>
         </DescriptionListGroup>
     );
@@ -413,7 +374,7 @@ function WorkflowRunGroup({ detail }: { detail: Record<string, unknown> }) {
         <DescriptionListGroup>
             <DescriptionListTerm>Workflow Run</DescriptionListTerm>
             <DescriptionListDescription>
-                <Link to={`/logs/workflow-runs/${detail.runId}`}>{label}</Link>
+                <Link to={`/runs/${detail.runId}`}>{label}</Link>
             </DescriptionListDescription>
         </DescriptionListGroup>
     );
@@ -424,7 +385,7 @@ function WorkflowRunDetail({ detail }: { detail: Record<string, unknown> }) {
         <DescriptionList isHorizontal isCompact>
             <WorkflowRunGroup detail={{ ...detail, runId: detail.id }} />
             <StatusGroup label="Run Status" status={detail.status} />
-            <ProjectGroup detail={detail} />
+            <SubjectGroup detail={detail} />
             <DescriptionListGroup>
                 <DescriptionListTerm>Current Node</DescriptionListTerm>
                 <DescriptionListDescription>
@@ -470,7 +431,7 @@ function WorkflowWaitDetail({ detail }: { detail: Record<string, unknown> }) {
                 </DescriptionListGroup>
             )}
             <WorkflowRunGroup detail={detail} />
-            <ProjectGroup detail={detail} />
+            <SubjectGroup detail={detail} />
         </DescriptionList>
     );
 }
@@ -502,46 +463,8 @@ function WorkflowEventSubscriptionDetail({ detail }: { detail: Record<string, un
                 </DescriptionListGroup>
             )}
             <WorkflowRunGroup detail={detail} />
-            <ProjectGroup detail={detail} />
+            <SubjectGroup detail={detail} />
         </DescriptionList>
-    );
-}
-
-function ScheduledJobRunDetail({ detail }: { detail: Record<string, unknown> }) {
-    const effectiveTheme = useEffectiveTheme();
-    const jobName = detail.jobName
-        ? String(detail.jobName)
-        : detail.jobId != null ? `Job #${detail.jobId}` : "—";
-    return (
-        <>
-            <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Scheduled Job</DescriptionListTerm>
-                    <DescriptionListDescription>
-                        {detail.jobId != null ? (
-                            <Link to={`/scheduled-jobs/${detail.jobId}`}>{jobName}</Link>
-                        ) : jobName}
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
-                <StatusGroup label="Run Status" status={detail.status} />
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Trigger</DescriptionListTerm>
-                    <DescriptionListDescription>{String(detail.trigger || "—")}</DescriptionListDescription>
-                </DescriptionListGroup>
-            </DescriptionList>
-            {detail.executionLog != null && detail.executionLog !== "" && (
-                <>
-                    <h4 style={{ marginBottom: "4px", fontWeight: "bold" }}>Execution Log</h4>
-                    <CodeEditor
-                        code={String(detail.executionLog)}
-                        language={Language.markdown}
-                        isDarkTheme={effectiveTheme === "dark"}
-                        isReadOnly
-                        height="400px"
-                    />
-                </>
-            )}
-        </>
     );
 }
 

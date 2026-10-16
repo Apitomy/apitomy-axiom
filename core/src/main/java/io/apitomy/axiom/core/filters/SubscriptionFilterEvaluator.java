@@ -39,6 +39,22 @@ public class SubscriptionFilterEvaluator {
     }
 
     /**
+     * Evaluates a filter expression against an event map, reporting errors instead of treating them as no
+     * match. Used by previews; live matching uses {@link #matches}.
+     *
+     * @param filterExpression the EL expression (null or blank = match all)
+     * @param eventMap the event data, exposed as the "event" variable
+     * @return whether the event matches
+     * @throws RuntimeException when the expression cannot be evaluated
+     */
+    public boolean evaluate(String filterExpression, Map<String, Object> eventMap) {
+        if (filterExpression == null || filterExpression.isBlank()) {
+            return true;
+        }
+        return conditionEvaluator.evaluate(filterExpression, Map.of(), eventMap);
+    }
+
+    /**
      * Validates whether a filter expression is syntactically valid.
      *
      * @param filterExpression the expression to validate

@@ -3,6 +3,11 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.SubscriptionRoutingResolver;
+import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.NewSubscription;
 import io.apitomy.axiom.api.beans.Payload;
@@ -47,6 +52,15 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
+
+    @Inject
+    ConfigItemValidationService validationService;
+
+    @Inject
+    ValidationContextFactory contextFactory;
+
+    @Inject
+    SubscriptionRoutingResolver routingResolver;
 
     /**
      * {@inheritDoc}
@@ -149,13 +163,24 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
         List<SubscriptionPreviewResult> results = new ArrayList<>();
         long totalMatched = 0;
+        int errorCount = 0;
+        String firstError = null;
 
         for (StreamEventEntity entity : entities) {
             boolean beforeCutoff = fromTs != null && entity.timestamp != null
                     && entity.timestamp.isBefore(fromTs);
             Map<String, Object> eventMap = buildEventMap(entity);
-            boolean matched = !beforeCutoff
-                    && filterEvaluator.matches(filterExpression, eventMap);
+            boolean matched = false;
+            if (!beforeCutoff) {
+                try {
+                    matched = filterEvaluator.evaluate(filterExpression, eventMap);
+                } catch (RuntimeException e) {
+                    errorCount++;
+                    if (firstError == null) {
+                        firstError = e.getMessage() != null ? e.getMessage() : e.toString();
+                    }
+                }
+            }
 
             SubscriptionPreviewResult result = new SubscriptionPreviewResult();
             result.setEvent(toStreamEventBean(entity));
@@ -177,6 +202,8 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         response.setTotalMatched(totalMatched);
         response.setPage(pageNum);
         response.setLimit(pageSize);
+        response.setErrorCount(errorCount);
+        response.setFirstError(firstError);
         return response;
     }
 
@@ -225,7 +252,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         }
         map.put("type", event.type);
         map.put("source", event.source);
-        map.put("connectionId", event.connectionId);
+        map.put("eventSourceId", event.eventSourceId);
         map.put("ref", event.ref);
         map.put("timestamp", event.timestamp.toString());
 
@@ -266,7 +293,7 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         bean.setId(entity.id);
         bean.setSourceEventId(entity.sourceEventId);
         bean.setSource(entity.source);
-        bean.setConnectionId(entity.connectionId);
+        bean.setEventSourceId(entity.eventSourceId);
         bean.setType(entity.type);
         bean.setRef(entity.ref);
         bean.setTimestamp(Date.from(entity.timestamp));
@@ -302,18 +329,11 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
      * @param data the API bean with new values
      */
     private void applyFields(EventSubscriptionEntity entity, NewSubscription data) {
+        validate(data);
         entity.name = data.getName();
         entity.description = data.getDescription();
         entity.enabled = data.getEnabled() != null ? data.getEnabled() : false;
-        if (data.getFilterExpression() != null && !data.getFilterExpression().isBlank()) {
-            if (!filterEvaluator.isValid(data.getFilterExpression())) {
-                throw new WebApplicationException(
-                        "Invalid filter expression: " + data.getFilterExpression(), 400);
-            }
-            entity.filters = data.getFilterExpression();
-        } else {
-            entity.filters = data.getFilterExpression(); // null or blank
-        }
+        entity.filters = data.getFilterExpression();
         entity.labels.clear();
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
@@ -323,37 +343,32 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
             entity.processEventsFrom = data.getProcessEventsFrom().toInstant();
         }
 
-        // Routing rules
-        if (data.getRouting() != null) {
-            // Validate routing rules
-            for (io.apitomy.axiom.api.beans.RoutingRule rule : data.getRouting()) {
-                if (rule.getType() == null) {
-                    throw new WebApplicationException("Routing rule missing required 'type' field", 400);
-                }
-                switch (rule.getType()) {
-                    case CREATE_WORKFLOW -> {
-                        if (rule.getWorkflowDefinitionId() == null) {
-                            throw new WebApplicationException(
-                                    "create-workflow routing rule requires workflowDefinitionId", 400);
-                        }
-                    }
-                    case INVOKE_ACTION -> {
-                        if (rule.getActionTypeId() == null) {
-                            throw new WebApplicationException(
-                                    "invoke-action routing rule requires actionTypeId", 400);
-                        }
-                    }
-                    default -> { /* manager and workflow-dispatch need no extra config */ }
-                }
-            }
+        // Routing rules (validated in validate(); names resolved to ids here)
+        JsonNode routing = routingResolver.resolve(objectMapper.valueToTree(data.getRouting()));
+        if (routing != null) {
             try {
-                entity.routing = objectMapper.writeValueAsString(data.getRouting());
+                entity.routing = objectMapper.writeValueAsString(routing);
             } catch (Exception e) {
                 throw new WebApplicationException("Failed to serialize routing rules", 500);
             }
         } else {
             entity.routing = null;
         }
+    }
+
+    /**
+     * Validates the subscription with the shared configuration validation service and throws a 400 with the
+     * first error message, if any.
+     *
+     * @param data the API bean to validate
+     */
+    private void validate(NewSubscription data) {
+        JsonNode item = objectMapper.valueToTree(data);
+        List<ConfigProblem> problems = validationService.validate(ConfigItemType.SUBSCRIPTION, item,
+                contextFactory.databaseOnly());
+        problems.stream().filter(ConfigProblem::isError).findFirst().ifPresent(p -> {
+            throw new WebApplicationException(p.message(), 400);
+        });
     }
 
     /**

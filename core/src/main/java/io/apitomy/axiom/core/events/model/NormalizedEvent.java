@@ -6,12 +6,12 @@ import io.apitomy.axiom.core.events.model.payloads.EventPayload;
 
 /**
  * The complete event envelope for a normalized event in the event stream.
- * Every event produced by an EventSourceConnection is wrapped in this envelope.
+ * Every event produced by an EventSource is wrapped in this envelope.
  *
  * @param id            system-generated unique event ID (UUID string)
  * @param sourceEventId original ID from the source system, used for deduplication
  * @param source        source system identifier: "github" or "jira"
- * @param connectionId  slug of the EventSourceConnection that produced this event
+ * @param eventSourceId  slug of the EventSource that produced this event
  * @param type          normalized event type
  * @param ref           full URL uniquely identifying the subject of the event
  * @param timestamp     when the event occurred in the source system (ISO-8601)
@@ -24,7 +24,7 @@ public record NormalizedEvent(
         String id,
         String sourceEventId,
         String source,
-        String connectionId,
+        String eventSourceId,
         EventType type,
         String ref,
         String timestamp,

@@ -95,19 +95,6 @@ public class CopilotAgent implements Agent {
     /**
      * {@inheritDoc}
      *
-     * <p>Copilot CLI does not have a native {@code --json-schema} flag, so structured
-     * output is achieved by appending schema instructions to the prompt, instructing
-     * the model to respond with only a valid JSON object conforming to the schema.</p>
-     */
-    @Override
-    public CompletableFuture<AgentResult> executeWithSchema(AgentRequest request,
-                                                             String jsonSchema) {
-        return executeInternal(request, jsonSchema);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
      * <p>Kills the running Copilot CLI subprocess associated with the given
      * execution identifier, if one exists.</p>
      */
@@ -191,8 +178,7 @@ public class CopilotAgent implements Agent {
     }
 
     /**
-     * Core execution logic shared by {@link #execute(AgentRequest)} and
-     * {@link #executeWithSchema(AgentRequest, String)}.
+     * Core execution logic of {@link #execute(AgentRequest)}.
      */
     private CompletableFuture<AgentResult> executeInternal(AgentRequest request,
                                                             String jsonSchema) {

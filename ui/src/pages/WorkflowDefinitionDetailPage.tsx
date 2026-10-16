@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
@@ -38,7 +38,8 @@ import {
     WorkflowEditor,
     WorkflowDiffViewer,
 } from "@apitomy/flow-ui";
-import type { Workflow, ValidationProblem, EditorSpi, ActionTypeDescriptor } from "@apitomy/flow-ui";
+import type { ChangeMeta, Workflow, ValidationProblem } from "@apitomy/flow-ui";
+import { findActionTypeIdByName, useWorkflowEditorSpi } from "../hooks/useWorkflowEditorSpi";
 import {
     type WorkflowDefinition,
     type WorkflowDefinitionVersion,
@@ -51,12 +52,12 @@ import {
     listWorkflowDefinitionVersions,
     getWorkflowDefinitionVersion,
     fetchWorkflowDefinitionRuns,
-    fetchActionTypes,
     type WorkflowRunSummary,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
-import { fetchSdkFunctions } from "../config/sdkTools";
+import { createComposition } from "../config/compositions";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { WorkflowTriggersTab } from "../components/WorkflowTriggersTab";
 import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import RocketIcon from "@patternfly/react-icons/dist/esm/icons/rocket-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
@@ -91,6 +92,8 @@ export function WorkflowDefinitionDetailPage() {
     const [definition, setDefinition] = useState<WorkflowDefinition | null>(null);
     const [editorContent, setEditorContent] = useState<Workflow | null>(null);
     const [dirty, setDirty] = useState(false);
+    const [openingWorkbench, setOpeningWorkbench] = useState<boolean>(false);
+    const openingWorkbenchRef = useRef<boolean>(false);
     const savedContentRef = useRef<string>("");
     const [saving, setSaving] = useState(false);
     const [publishing, setPublishing] = useState(false);
@@ -117,36 +120,20 @@ export function WorkflowDefinitionDetailPage() {
     const [diffBaseWorkflow, setDiffBaseWorkflow] = useState<Workflow | null>(null);
     const [diffCompareWorkflow, setDiffCompareWorkflow] = useState<Workflow | null>(null);
 
-    // EditorSpi for action types — memoized to avoid re-renders
-    const spi: EditorSpi = useMemo(() => ({
-        actionTypes: async () => {
-            const [results, sdkFunctions] = await Promise.all([
-                fetchActionTypes(1, 1000, undefined, undefined, undefined, true),
-                fetchSdkFunctions(),
-            ]);
-            const configured = results.items.map((at): ActionTypeDescriptor => ({
-                value: at.name,
-                label: at.name,
-                description: at.description,
-                inputs: at.inputs,
-                outputs: at.outputs,
-            }));
-            const sdkActions = sdkFunctions
-                .filter(fn => fn.sdkCallSupported)
-                .map((fn): ActionTypeDescriptor => ({
-                    value: `sdk:${fn.name}`,
-                    label: `SDK: ${fn.name.replace(/^axiom_/, "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}`,
-                    description: fn.description,
-                    inputs: fn.parameters?.map(p => ({
-                        name: p.name,
-                        type: (p.type || "string") as "string" | "number" | "boolean" | "object",
-                        required: p.required,
-                        description: p.description,
-                    })),
-                }));
-            return [...configured, ...sdkActions];
-        },
-    }), []);
+    const openActionType = useCallback(({ value, resolved }: { value: string; resolved: boolean }) => {
+        if (dirty && !window.confirm("Leave without saving workflow changes?")) {
+            return;
+        }
+        if (!resolved) {
+            navigate("/action-types");
+            return;
+        }
+        findActionTypeIdByName(value)
+            .then(id => navigate(id !== undefined ? `/action-types/${id}` : "/action-types"))
+            .catch(() => navigate("/action-types"));
+    }, [dirty, navigate]);
+
+    const spi = useWorkflowEditorSpi({ openActionType });
 
     const loadDefinition = useCallback(() => {
         if (!id) return;
@@ -224,7 +211,7 @@ export function WorkflowDefinitionDetailPage() {
         return () => { clearTimeout(timeout); unsubscribe(); };
     }, [activeTab, loadRuns]);
 
-    const handleEditorChange = useCallback((updated: Workflow) => {
+    const handleEditorChange = useCallback((updated: Workflow, _meta?: ChangeMeta) => {
         setEditorContent(updated);
         const isDirty = JSON.stringify(updated) !== savedContentRef.current;
         setDirty(isDirty);
@@ -371,6 +358,21 @@ export function WorkflowDefinitionDetailPage() {
     }
 
     const hasErrors = validationErrors.length > 0;
+
+    const handleOpenInWorkbench = () => {
+        if (openingWorkbenchRef.current) {
+            return;
+        }
+        openingWorkbenchRef.current = true;
+        setOpeningWorkbench(true);
+        createComposition({ name: definition.name, seedWorkflowId: id })
+            .then((composition) => navigate(`/workbench/${composition.id}`))
+            .catch(console.error)
+            .finally(() => {
+                openingWorkbenchRef.current = false;
+                setOpeningWorkbench(false);
+            });
+    };
     const canPublish = !dirty && !publishing && !hasErrors;
 
     return (
@@ -412,6 +414,20 @@ export function WorkflowDefinitionDetailPage() {
                     </FlexItem>
                     <FlexItem>
                         <Flex spaceItems={{ default: "spaceItemsSm" }}>
+                            <FlexItem>
+                                {dirty ? (
+                                    <Tooltip content="Save first">
+                                        <Button variant="secondary" isAriaDisabled>
+                                            Open in workbench
+                                        </Button>
+                                    </Tooltip>
+                                ) : (
+                                    <Button variant="secondary" onClick={handleOpenInWorkbench}
+                                        isDisabled={openingWorkbench} isLoading={openingWorkbench}>
+                                        Open in workbench
+                                    </Button>
+                                )}
+                            </FlexItem>
                             <FlexItem>
                                 <Button
                                     variant="secondary"
@@ -486,6 +502,7 @@ export function WorkflowDefinitionDetailPage() {
                             </TabTitleText>
                         }
                     />
+                    <Tab eventKey={3} title={<TabTitleText>Triggers</TabTitleText>} />
                 </Tabs>
 
                 <div className="workflow-definition-detail__tab-content">
@@ -684,7 +701,7 @@ export function WorkflowDefinitionDetailPage() {
                                     <Thead>
                                         <Tr>
                                             <Th>Status</Th>
-                                            <Th>Project</Th>
+                                            <Th>Subject</Th>
                                             <Th>Version</Th>
                                             <Th>Started</Th>
                                             <Th>Duration</Th>
@@ -703,8 +720,8 @@ export function WorkflowDefinitionDetailPage() {
                                                     </Label>
                                                 </Td>
                                                 <Td>
-                                                    <Link to={`/projects/${run.projectId}`}>
-                                                        {run.projectName || `Project #${run.projectId}`}
+                                                    <Link to={`/subjects/${run.subjectId}`}>
+                                                        {run.subjectName || `Subject #${run.subjectId}`}
                                                     </Link>
                                                 </Td>
                                                 <Td>v{run.definitionVersion}</Td>
@@ -715,7 +732,7 @@ export function WorkflowDefinitionDetailPage() {
                                                     {formatDuration(run.startedOn, run.completedOn)}
                                                 </Td>
                                                 <Td>
-                                                    <Link to={`/logs/workflow-runs/${run.runId}`}>
+                                                    <Link to={`/runs/${run.runId}`}>
                                                         View details
                                                     </Link>
                                                 </Td>
@@ -724,6 +741,12 @@ export function WorkflowDefinitionDetailPage() {
                                     </Tbody>
                                 </Table>
                             )}
+                        </div>
+                    )}
+
+                    {activeTab === 3 && (
+                        <div className="workflow-definition-detail__panel">
+                            <WorkflowTriggersTab definitionId={id} />
                         </div>
                     )}
                 </div>

@@ -44,12 +44,22 @@ interface CreateSessionModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSessionCreated: (session: AssistantSessionInfo) => void;
-    projectId?: number;
+    subjectId?: number;
     defaultName?: string;
 }
 
+/**
+ * Whether a template can be started from the AI Assistant. Templates with the `composition` capability (the
+ * Workflow Workbench) only work inside the workbench, so they are hidden from the picker.
+ * @param template the template
+ * @returns true when it should be listed
+ */
+export function isPickableTemplate(template: SessionTemplate): boolean {
+    return !(template.capabilities ?? []).includes("composition");
+}
+
 export function CreateSessionModal({
-    isOpen, onClose, onSessionCreated, projectId, defaultName,
+    isOpen, onClose, onSessionCreated, subjectId, defaultName,
 }: CreateSessionModalProps) {
     const [templates, setTemplates] = useState<SessionTemplate[]>([]);
     const [templateFilter, setTemplateFilter] = useState("");
@@ -64,7 +74,7 @@ export function CreateSessionModal({
     useEffect(() => {
         if (isOpen) {
             fetchAssistantTemplates()
-                .then(setTemplates)
+                .then((all) => setTemplates(all.filter(isPickableTemplate)))
                 .catch(console.error);
             setTemplateFilter("");
         }
@@ -73,7 +83,7 @@ export function CreateSessionModal({
     useEffect(() => {
         if (isOpen && defaultEngine === null) {
             fetchSystemConfig()
-                .then((c) => setDefaultEngine(c.defaultEngine || c.engine || ""))
+                .then((c) => setDefaultEngine(c.defaultEngine || ""))
                 .catch(console.error);
         }
     }, [isOpen, defaultEngine]);
@@ -112,7 +122,7 @@ export function CreateSessionModal({
         setCreateError("");
         try {
             const session = await createAssistantSession(
-                selectedTemplate.templateId, newName || undefined, projectId);
+                selectedTemplate.templateId, newName || undefined, subjectId);
             onSessionCreated(session);
         } catch (err: unknown) {
             const e = err as { message?: string };

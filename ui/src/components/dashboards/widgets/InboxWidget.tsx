@@ -33,13 +33,13 @@ function InboxWidget({ config, labels }: WidgetProps) {
     return (
         <Table aria-label="Inbox" variant="compact" isStickyHeader>
             <Thead><Tr>
-                <Th>Project</Th><Th>Action</Th><Th>Age</Th>
+                <Th>Subject</Th><Th>Action</Th><Th>Age</Th>
             </Tr></Thead>
             <Tbody>
                 {items.map(item => (
                     <Tr key={item.id} isClickable
                         onRowClick={() => navigate(`/inbox`)}>
-                        <Td>{item.projectName || "—"}</Td>
+                        <Td>{item.subjectName || "—"}</Td>
                         <Td><Label isCompact>{item.actionType}</Label></Td>
                         <Td>{formatAge(item.createdOn)}</Td>
                     </Tr>
@@ -55,7 +55,7 @@ function InboxWidget({ config, labels }: WidgetProps) {
 registerWidget({
     type: "inbox",
     name: "Inbox",
-    description: "Pending human tasks awaiting input with project name and age.",
+    description: "Pending human tasks awaiting input with subject name and age.",
     category: "Operations",
     defaultSize: { w: 4, h: 3 },
     minSize: { w: 3, h: 2 },

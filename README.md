@@ -2,44 +2,55 @@
 
 # Apitomy Axiom
 
-Event-driven project orchestration platform that monitors GitHub and Jira issues, creates
-long-lived projects around them, and delegates work to human and AI actors.
+Workflow-first, event-driven orchestration platform that monitors GitHub and Jira activity and runs
+versioned workflows that delegate work to AI agents, scripts, and humans.
 
 ## What It Does
 
-- Watches GitHub/Jira repositories for issue activity (webhooks or polling)
-- An AI Manager triages events and decides what actions to take
-- Tasks are assigned to Actors (AI agents or humans)
-- Projects track the full lifecycle of work tied to each issue
-- A UI provides visibility into projects, tasks, activity, and configuration
+- Polls GitHub/Jira for activity and records it in a normalized event stream
+- Subscriptions route matching events to workflows: `create-workflow` starts a run on the event's subject,
+  `workflow-dispatch` delivers the event to runs waiting for it
+- Schedule triggers start workflow runs on a cron schedule against a fixed subject
+- Workflow action nodes run action types through a pool of AI agents (or as scripts); human-task nodes
+  wait in the Inbox
+- Subjects (issues, pull requests, named subjects) hold the workspace and thread shared by their runs
+- The Workflow Workbench is an authoring workspace where you build a workflow together with its action
+  types, tools and the subscriptions that start it, test them, and work with an AI Assistant that proposes
+  changes
+- Workflows declare the standard inputs they need on their Start node (`subject`, `event`); Axiom fills
+  them in when a run starts
+- A UI with Runs as its landing page provides visibility into runs, subjects, tasks, and configuration
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Backend | Java 25 / Quarkus 3.33 LTS |
+| Backend | Java 25 / Quarkus 3.40 |
 | Frontend | TypeScript / React / PatternFly |
 | Database | H2 (in-memory dev, file-based prod) |
-| AI | Pluggable: Claude Code CLI or OpenCode (configurable) |
+| AI | Pluggable: Claude Code CLI, OpenCode or GitHub Copilot CLI (configurable) |
+| Workflow editor/engine | Apitomy Flow 3.0.2 (`@apitomy/flow-ui`, `apitomy-flow-engine`) |
 | API | Contract-first OpenAPI + apitomy-codegen |
 
 ## AI Engine
 
-Axiom's AI engine is pluggable. Set `axiom.ai-engine` in `application.properties` to
-select which engine to use:
+Axiom's AI engine is pluggable. Set `axiom.agent.default-type` (for example with the
+`AXIOM_AGENT_DEFAULT_TYPE` environment variable) or use **Settings > AI Engine** in the UI to select the
+default engine:
 
 | Engine | Config Value | Binary | Install |
 |--------|-------------|--------|---------|
 | Claude Code | `claude-code` (default) | `claude` | `npm install -g @anthropic-ai/claude-code` |
 | OpenCode | `opencode` | `opencode` | `curl -fsSL https://opencode.ai/install \| bash` |
+| GitHub Copilot CLI | `copilot` | `copilot` | `npm install -g @github/copilot` |
 
-Only the selected engine's binary needs to be installed. Both can coexist for testing.
+Only the selected engine's binary needs to be installed. Several engines can coexist.
 
 ## Prerequisites
 
 - Java 25+
 - Maven 3.9+
-- Node.js 20+ (for UI and MCP tool server)
+- Node.js 20.19+ or 22.12+ (for UI and MCP tool server)
 - One of the AI engine CLIs (see table above)
 - API key for your LLM provider (e.g. `ANTHROPIC_API_KEY`)
 
@@ -48,6 +59,12 @@ Only the selected engine's binary needs to be installed. Both can coexist for te
 ```bash
 # Standard build (backend only, no UI)
 ./build.sh
+
+# Backend + UI build, including the UI unit tests (Vitest)
+./build.sh -Pui
+
+# UI unit tests only
+cd ui && npm test
 
 # Release build (backend + UI bundled into uber-jar)
 ./build-release.sh
@@ -79,72 +96,63 @@ dev server side by side:
 - UI starts on **http://localhost:9191** (proxies API requests to the backend)
 - Both run in the foreground — **Ctrl+C** stops everything
 
-To run the backend only (no UI):
+Other options:
 
 ```bash
-./dev.sh --skip-ui
+./dev.sh --skip-ui          # backend only (no UI)
+./dev.sh --persist          # use the persist profile (file-based H2 database in ~/.axiom/data)
+./dev.sh --dataDir=/path    # store the H2 database in /path (implies --persist)
+./dev.sh --portOffset=100   # offset both ports (backend 9190, UI 9291)
 ```
+
+Without `--persist` the backend uses the `dev` profile: an in-memory database that is recreated on every
+restart.
 
 ## Project Structure
 
 ```
 common/api/          OpenAPI contract + generated JAX-RS interfaces
-core/                Domain entities, lifecycle, workspace management
-engine/spi/          Pluggable AI engine abstraction layer
-engine/opencode/     OpenCode engine implementation
-manager/             AI Manager (event triage and decision-making)
-actors/spi/          Actor interface
-actors/claude-code/  Claude Code CLI subprocess actor + engine
-actors/human/        Human actor (notification-driven)
-events/core/         Event queue and pipeline orchestrator
-events/github/       GitHub webhooks + API polling
-events/jira/         Jira integration (planned)
-notifications/       Slack, Telegram channels (planned)
+core/                Domain entities, workspace management, SDK function registry
+agents/spi/          Pluggable AI agent abstraction (agent pool)
+agents/claude-code/  Claude Code CLI agent
+agents/opencode/     OpenCode agent
+agents/copilot/      GitHub Copilot CLI agent
+events/core/         Event stream and pipeline support
+events/github/       GitHub event source poller
+events/jira/         Jira event source poller
+notifications/       Notification channels (Slack, Telegram)
 app/                 Quarkus application (assembles everything)
 ui/                  React frontend
+ui-bundle/           Maven module that builds and tests the UI for release builds
 ```
 
 ## Database Migrations (Flyway)
 
 Schema migrations are managed by [Flyway](https://flywaydb.org/) and run automatically on
-startup for persistent databases (the `persist` and `prod` profiles). Migration files are
-located in `app/src/main/resources/db/migration/`.
-
-### How it works
+startup for persistent databases (the `persist` and `prod` profiles). The schema is a single baseline
+file, `app/src/main/resources/db/migration/V1__baseline.sql`.
 
 - **Dev mode** (`quarkus:dev`): Uses Hibernate's `drop-and-create` — no Flyway, schema is
-  recreated on every restart. Fast for development.
+  recreated on every restart.
 - **Persist/Prod mode**: Flyway runs migrations at startup. Hibernate schema generation is
   set to `none` — Flyway owns the schema.
 
-### Adding a new migration
-
-1. Create a new SQL file in `app/src/main/resources/db/migration/` following the naming
-   convention: `V<number>__<description>.sql` (e.g. `V3__add_priority_to_task.sql`)
-2. Write standard SQL DDL statements. Use `IF NOT EXISTS` / `IF EXISTS` guards for safety.
-3. The migration runs automatically on the next startup of a persistent database.
-
-### Existing databases
-
-Flyway is configured with `baseline-on-migrate=true` and `baseline-version=1`. This means
-existing databases that were created before Flyway was introduced will be automatically
-baselined — Flyway skips V1 (the full schema creation) and applies only new migrations
-(V2+).
-
-### Example migration
-
-```sql
--- V3__add_priority_to_task.sql
-ALTER TABLE task ADD COLUMN IF NOT EXISTS priority VARCHAR(255) DEFAULT 'normal';
-```
+`V1__baseline.sql` is frozen as of 3.0.0: every schema change is a new, incremental `V2__…` migration,
+applied automatically at startup. `MigrationSchemaValidationTest` verifies that the migrations match the
+entity model. Axiom 3 refuses to start on a database created by Axiom 2.x or older.
+See [Database & Migrations](docs/developer-guide/database-and-migrations.md).
 
 ## Documentation
 
-- [Functional Design](docs/design-v2.md)
-- [Architecture](docs/architecture-v2.md)
-- [Implementation Plan](docs/implementation-plan.md)
-- [OpenCode Migration Plan](docs/opencode-migration-plan.md)
-- [Claude Code Integration Research](docs/research-claude-code-integration.md)
+- [Running Axiom](docs/getting-started/running-axiom.md)
+- [Configuring Axiom](docs/getting-started/configuring-axiom.md)
+- [Concepts](docs/user-guide/concepts.md)
+- [Navigating the UI](docs/user-guide/navigating-the-ui.md)
+- [Workflows](docs/user-guide/workflows.md)
+- [Workflow Workbench](docs/user-guide/workbench.md)
+- [Workflow Input Contract](docs/developer-guide/workflow-input-contract.md)
+- [Upgrading and Backups](docs/developer-guide/upgrading-and-backups.md)
+- [Stack & Architecture](docs/developer-guide/stack-and-architecture.md)
 
 ## License
 

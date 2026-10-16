@@ -9,8 +9,14 @@ import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,6 +41,51 @@ public class AssistantSession {
     private static final Logger LOG = Logger.getLogger(AssistantSession.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final String RAW_EVENTS_FILE = "raw-events.jsonl";
+
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    private volatile String mcpToken = newToken();
+
+    /**
+     * Generates a new random session token (32 bytes, URL-safe Base64 without padding).
+     *
+     * @return the token
+     */
+    static String newToken() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * Sets this session's MCP token. Called once by the session manager, which generates the token before the
+     * session is constructed so it can be written into the MCP configuration.
+     *
+     * @param token the token
+     */
+    void setMcpToken(String token) {
+        this.mcpToken = token;
+    }
+
+    /**
+     * Returns the secret token this session's MCP servers present to Axiom REST.
+     *
+     * @return the token
+     */
+    public String getMcpToken() {
+        return mcpToken;
+    }
+
+    /**
+     * Checks a presented token against this session's token in constant time.
+     *
+     * @param presented the value of the {@code X-Axiom-Session-Token} header, possibly null
+     * @return true if it matches
+     */
+    public boolean verifyMcpToken(String presented) {
+        return presented != null && MessageDigest.isEqual(
+                mcpToken.getBytes(StandardCharsets.UTF_8), presented.getBytes(StandardCharsets.UTF_8));
+    }
 
     /** Possible session states. */
     public enum Status { STARTING, RUNNING, STOPPED, ERROR }
@@ -67,8 +118,8 @@ public class AssistantSession {
     private volatile boolean allowAll;
     private final Set<String> subagentAllowAll = ConcurrentHashMap.newKeySet();
     private final Map<String, String> subagentTaskToToolUseId = new ConcurrentHashMap<>();
-    private final Long projectId;
-    private final String projectName;
+    private final Long subjectId;
+    private final String subjectName;
 
     /**
      * A session-scoped rule for automatically approving tool permissions.
@@ -95,15 +146,15 @@ public class AssistantSession {
      * @param command the legacy command line for direct subprocess mode
      * @param environment resolved environment variables for direct subprocess mode
      * @param engineType the interactive engine type resolved for this session
-     * @param projectId optional project ID if session is scoped to a project
-     * @param projectName optional project name if session is scoped to a project
+     * @param subjectId optional subject ID if session is scoped to a subject
+     * @param subjectName optional subject name if session is scoped to a subject
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
                               Path workingDirectory, List<String> command,
-                              Map<String, String> environment, String engineType, Long projectId,
-                              String projectName) {
+                              Map<String, String> environment, String engineType, Long subjectId,
+                              String subjectName) {
         this(name, templateId, sessionDirectory, workingDirectory, command,
-                environment, engineType, projectId, projectName, null);
+                environment, engineType, subjectId, subjectName, null);
     }
 
     /**
@@ -116,15 +167,39 @@ public class AssistantSession {
      * @param command the legacy command line used by Claude runtime mode
      * @param environment resolved environment variables used by Claude runtime mode
      * @param engineType the interactive engine type resolved for this session
-     * @param projectId optional project ID if session is scoped to a project
-     * @param projectName optional project name if session is scoped to a project
+     * @param subjectId optional subject ID if session is scoped to a subject
+     * @param subjectName optional subject name if session is scoped to a subject
      * @param driver runtime driver used for interactive session I/O
      */
     public AssistantSession(String name, String templateId, Path sessionDirectory,
                               Path workingDirectory, List<String> command,
-                              Map<String, String> environment, String engineType, Long projectId,
-                              String projectName, InteractiveSessionDriver driver) {
-        this.id = UUID.randomUUID().toString();
+                              Map<String, String> environment, String engineType, Long subjectId,
+                              String subjectName, InteractiveSessionDriver driver) {
+        this(UUID.randomUUID().toString(), name, templateId, sessionDirectory, workingDirectory, command,
+                environment, engineType, subjectId, subjectName, driver);
+    }
+
+    /**
+     * Creates a new assistant session with an explicit id and an injected runtime driver. The id must be the
+     * same one used for the session directory and handed to the session's MCP servers.
+     *
+     * @param id the session id
+     * @param name the user-visible session name
+     * @param templateId the template this session was created from
+     * @param sessionDirectory the Axiom-managed session directory (always deleted on end)
+     * @param workingDirectory the assistant working directory
+     * @param command the legacy command line used by Claude runtime mode
+     * @param environment resolved environment variables used by Claude runtime mode
+     * @param engineType the interactive engine type resolved for this session
+     * @param subjectId optional subject ID if session is scoped to a subject
+     * @param subjectName optional subject name if session is scoped to a subject
+     * @param driver runtime driver used for interactive session I/O
+     */
+    public AssistantSession(String id, String name, String templateId, Path sessionDirectory,
+                              Path workingDirectory, List<String> command,
+                              Map<String, String> environment, String engineType, Long subjectId,
+                              String subjectName, InteractiveSessionDriver driver) {
+        this.id = id;
         this.name = name;
         this.templateId = templateId;
         this.sessionDirectory = sessionDirectory;
@@ -134,8 +209,8 @@ public class AssistantSession {
         this.engineType = engineType;
         this.createdAt = Instant.now();
         this.lastActivityAt = this.createdAt;
-        this.projectId = projectId;
-        this.projectName = projectName;
+        this.subjectId = subjectId;
+        this.subjectName = subjectName;
         AssistantEventParser eventParser = new AssistantEventParser();
         this.driver = driver != null
                 ? driver
@@ -169,12 +244,26 @@ public class AssistantSession {
      * @throws IOException if the message cannot be written
      */
     public void sendMessage(String message) throws IOException {
+        sendMessage(message, message);
+    }
+
+    /**
+     * Sends a message to the agent while recording a different text in the conversation. The
+     * {@code user_message} event carries {@code displayText}; the driver receives {@code agentText} (for
+     * example the display text prefixed with context the user should not see). Failure handling is the same
+     * as {@link #sendMessage(String)}.
+     *
+     * @param displayText the text shown in the conversation
+     * @param agentText the text sent to the agent
+     * @throws IOException if the message cannot be written
+     */
+    public void sendMessage(String displayText, String agentText) throws IOException {
         ObjectNode userData = MAPPER.createObjectNode();
-        userData.put("content", message);
+        userData.put("content", displayText);
         addEvent(new SseEvent("user_message", userData));
 
         try {
-            driver.sendUserMessage(message);
+            driver.sendUserMessage(agentText);
         } catch (IOException | RuntimeException e) {
             recordUndeliveredMessage(e);
             throw e;
@@ -190,6 +279,18 @@ public class AssistantSession {
         errorData.put("name", "MessageNotDelivered");
         errorData.put("message", "Message was not delivered: " + reason);
         addEvent(new SseEvent("session_error", errorData));
+    }
+
+    /**
+     * Restores earlier events into the history without notifying listeners. Must be called before any
+     * listener is attached and before {@link #start()}.
+     *
+     * @param events the events, oldest first
+     */
+    void seedHistory(List<SseEvent> events) {
+        synchronized (eventLock) {
+            eventHistory.addAll(events);
+        }
     }
 
     /**
@@ -412,6 +513,77 @@ public class AssistantSession {
         return engineType;
     }
 
+    private volatile String engineLabel;
+    private volatile String model;
+
+    /**
+     * Returns the human-readable name of the engine, or null when unknown.
+     *
+     * @return the engine label
+     */
+    public String getEngineLabel() {
+        return engineLabel;
+    }
+
+    /**
+     * Sets the human-readable name of the engine.
+     *
+     * @param engineLabel the engine label
+     */
+    public void setEngineLabel(String engineLabel) {
+        this.engineLabel = engineLabel;
+    }
+
+    /**
+     * Returns the model passed to the engine, or null when the engine uses its default model.
+     *
+     * @return the model
+     */
+    public String getModel() {
+        return model;
+    }
+
+    /**
+     * Sets the model passed to the engine.
+     *
+     * @param model the model, or null for the engine's default
+     */
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    private volatile Set<SessionCapability> capabilities = Collections.emptySet();
+
+    /**
+     * Returns the capabilities of the template this session was created from.
+     *
+     * @return an unmodifiable set, empty if none
+     */
+    public Set<SessionCapability> getCapabilities() {
+        return capabilities;
+    }
+
+    /**
+     * Sets the capabilities of this session. Called once by the session manager before the session starts.
+     *
+     * @param capabilities the template's capabilities
+     */
+    public void setCapabilities(Set<SessionCapability> capabilities) {
+        this.capabilities = capabilities.isEmpty()
+                ? Collections.emptySet()
+                : Collections.unmodifiableSet(EnumSet.copyOf(capabilities));
+    }
+
+    /**
+     * Returns whether this session has a capability.
+     *
+     * @param capability the capability
+     * @return true if the session's template declares it
+     */
+    public boolean hasCapability(SessionCapability capability) {
+        return capabilities.contains(capability);
+    }
+
     /**
      * Returns the session's total cost in USD, derived from the cumulative per-turn {@code costUsd} and
      * carried across conversation resets (which restart the engine's cumulative counter).
@@ -445,17 +617,17 @@ public class AssistantSession {
     }
 
     /**
-     * @return the project ID if this session is scoped to a project, null otherwise
+     * @return the subject ID if this session is scoped to a subject, null otherwise
      */
-    public Long getProjectId() {
-        return projectId;
+    public Long getSubjectId() {
+        return subjectId;
     }
 
     /**
-     * @return the project name if this session is scoped to a project, null otherwise
+     * @return the subject name if this session is scoped to a subject, null otherwise
      */
-    public String getProjectName() {
-        return projectName;
+    public String getSubjectName() {
+        return subjectName;
     }
 
     /**

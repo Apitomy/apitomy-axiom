@@ -5,26 +5,20 @@ import { Page } from "@patternfly/react-core";
 
 import { DashboardsPage } from "./pages/DashboardsPage";
 import { DashboardViewPage } from "./pages/DashboardViewPage";
-import { ProjectsPage } from "./pages/ProjectsPage";
+import { SubjectsPage } from "./pages/SubjectsPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { AgentDetailPage } from "./pages/AgentDetailPage";
-import { ManagerConfigPage } from "./pages/ManagerConfigPage";
 import { ActionTypesPage } from "./pages/ActionTypesPage";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventStreamPage } from "./pages/EventStreamPage";
-import { ManagerDecisionsPage } from "./pages/ManagerDecisionsPage";
 import { TasksPage } from "./pages/TasksPage";
-import { ConnectionsPage } from "./pages/ConnectionsPage";
-import { ProjectDetailPage } from "./pages/ProjectDetailPage";
+import { EventSourcesPage } from "./pages/EventSourcesPage";
+import { SubjectDetailPage } from "./pages/SubjectDetailPage";
 import { ActionTypeDetailPage } from "./pages/ActionTypeDetailPage";
 import { ToolsPage } from "./pages/ToolsPage";
 import { McpServersPage } from "./pages/McpServersPage";
 import { McpServerDetailPage } from "./pages/McpServerDetailPage";
-import { ReportsPage } from "./pages/ReportsPage";
-import { ReportDetailPage } from "./pages/ReportDetailPage";
-import { ReportDefinitionsPage } from "./pages/ReportDefinitionsPage";
-import { ReportDefinitionDetailPage } from "./pages/ReportDefinitionDetailPage";
 import { AiUsagePage } from "./pages/AiUsagePage";
 import { DiskUsagePage } from "./pages/DiskUsagePage";
 import { ToolDetailPage } from "./pages/ToolDetailPage";
@@ -37,7 +31,7 @@ import { ConfigurationWarning } from "./components/ConfigurationWarning";
 import { ConfigurationPacksPage } from "./pages/ConfigurationPacksPage";
 import { DataRetentionPage } from "./pages/DataRetentionPage";
 import { EngineSettingsPage } from "./pages/EngineSettingsPage";
-import { ConnectionDetailPage } from "./pages/ConnectionDetailPage";
+import { EventSourceDetailPage } from "./pages/EventSourceDetailPage";
 import { SubscriptionsPage } from "./pages/SubscriptionsPage";
 import { SubscriptionDetailPage } from "./pages/SubscriptionDetailPage";
 import { AssistantPage } from "./pages/AssistantPage";
@@ -47,13 +41,12 @@ import { TraceDetailPage } from "./pages/TraceDetailPage";
 import { InboxPage } from "./pages/InboxPage";
 import { SessionTemplatesPage } from "./pages/SessionTemplatesPage";
 import { SessionTemplateDetailPage } from "./pages/SessionTemplateDetailPage";
-import { ScheduledJobsPage } from "./pages/ScheduledJobsPage";
-import { ScheduledJobDetailPage } from "./pages/ScheduledJobDetailPage";
-import { ScheduledJobRunsPage } from "./pages/ScheduledJobRunsPage";
 import { WorkflowDefinitionsPage } from "./pages/WorkflowDefinitionsPage";
 import { WorkflowDefinitionDetailPage } from "./pages/WorkflowDefinitionDetailPage";
 import { WorkflowRunsPage } from "./pages/WorkflowRunsPage";
 import { WorkflowRunDetailPage } from "./pages/WorkflowRunDetailPage";
+import { WorkbenchListPage } from "./pages/WorkbenchListPage";
+import { WorkbenchPage } from "./pages/workbench/WorkbenchPage";
 import { type StartupCheck, fetchSystemHealth, fetchSystemConfig } from "./config/api";
 import { sseClient } from "./config/sse";
 
@@ -80,7 +73,7 @@ export function App() {
                     setAppVersion(config.version);
                 }
                 // Resolve default engine label from engines array
-                const defaultType = config.defaultEngine || config.engine;
+                const defaultType = config.defaultEngine;
                 const defaultInfo = (config.engines || []).find(
                     (e) => e.type === defaultType
                 );
@@ -103,15 +96,18 @@ export function App() {
 
     const hasCheckErrors = startupChecks != null &&
         startupChecks.some((c) => c.status === "error");
-    const isBreakout = new URLSearchParams(location.search).get("breakout") === "true";
+    const searchParams = new URLSearchParams(location.search);
+    const isBreakout = searchParams.get("breakout") === "true" || searchParams.get("chrome") === "none";
+    const isWorkbenchFocus = location.pathname.startsWith("/workbench/") && searchParams.get("focus") === "1";
+    const hideChrome = isBreakout || isWorkbenchFocus;
 
     return (
         <EffectiveThemeContext.Provider value={effectiveTheme}>
             <Page
-                masthead={isBreakout ? undefined : <AppMasthead engineLabel={engineLabel} assistantAvailable={assistantAvailable} appVersion={appVersion} {...themeProps} />}
-                sidebar={hasCheckErrors || isAssistantPage || isBreakout ? undefined : <AppSidebar />}
+                masthead={hideChrome ? undefined : <AppMasthead engineLabel={engineLabel} assistantAvailable={assistantAvailable} appVersion={appVersion} {...themeProps} />}
+                sidebar={hasCheckErrors || isAssistantPage || hideChrome ? undefined : <AppSidebar />}
                 isContentFilled
-                style={isBreakout ? {
+                style={hideChrome ? {
                     paddingTop: 8,
                     "--pf-v6-c-page__sidebar--Width": "0px",
                     "--pf-v6-c-page__sidebar--xl--Width": "0px",
@@ -121,16 +117,15 @@ export function App() {
                     <ConfigurationWarning checks={startupChecks!} />
                 ) : (
                     <Routes>
-                        <Route path="/" element={<Navigate to="/dashboards" replace />} />
+                        <Route path="/" element={<Navigate to="/runs" replace />} />
                         <Route path="/dashboards" element={<DashboardsPage />} />
                         <Route path="/dashboards/:dashboardId" element={<DashboardViewPage />} />
                         <Route path="/inbox" element={<InboxPage />} />
-                        <Route path="/projects" element={<ProjectsPage />} />
-                        <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
+                        <Route path="/subjects" element={<SubjectsPage />} />
+                        <Route path="/subjects/:subjectId" element={<SubjectDetailPage />} />
                         <Route path="/engine" element={<EngineSettingsPage />} />
                         <Route path="/agents" element={<AgentsPage />} />
                         <Route path="/agents/:agentId" element={<AgentDetailPage />} />
-                        <Route path="/manager" element={<ManagerConfigPage />} />
                         <Route path="/action-types" element={<ActionTypesPage />} />
                         <Route path="/action-types/:actionTypeId" element={<ActionTypeDetailPage />} />
                         <Route path="/tools" element={<ToolsPage />} />
@@ -142,32 +137,26 @@ export function App() {
                         <Route path="/logs/activity" element={<ActivityLogPage />} />
                         <Route path="/events/stream" element={<EventStreamPage />} />
                         <Route path="/events/stream/:eventId" element={<EventDetailPage />} />
-                        <Route path="/logs/manager" element={<ManagerDecisionsPage />} />
                         <Route path="/logs/tasks" element={<TasksPage />} />
-                        <Route path="/logs/job-runs" element={<ScheduledJobRunsPage />} />
                         <Route path="/logs/traces" element={<TracesPage />} />
                         <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
-                        <Route path="/logs/workflow-runs" element={<WorkflowRunsPage />} />
-                        <Route path="/logs/workflow-runs/:runId" element={<WorkflowRunDetailPage />} />
-                        <Route path="/reports" element={<ReportsPage />} />
-                        <Route path="/reports/:reportId" element={<ReportDetailPage />} />
-                        <Route path="/report-definitions" element={<ReportDefinitionsPage />} />
-                        <Route path="/report-definitions/:definitionId" element={<ReportDefinitionDetailPage />} />
+                        <Route path="/runs" element={<WorkflowRunsPage />} />
+                        <Route path="/runs/:runId" element={<WorkflowRunDetailPage />} />
                         <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
                         <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
-                        <Route path="/events/connections" element={<ConnectionsPage />} />
-                        <Route path="/events/connections/:connectionId" element={<ConnectionDetailPage />} />
+                        <Route path="/events/sources" element={<EventSourcesPage />} />
+                        <Route path="/events/sources/:eventSourceId" element={<EventSourceDetailPage />} />
                         <Route path="/events/subscriptions" element={<SubscriptionsPage />} />
                         <Route path="/events/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
                         <Route path="/secrets" element={<SecretsPage />} />
                         <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
                         <Route path="/data-retention" element={<DataRetentionPage />} />
-                        <Route path="/scheduled-jobs" element={<ScheduledJobsPage />} />
-                        <Route path="/scheduled-jobs/:jobId" element={<ScheduledJobDetailPage />} />
                         <Route path="/session-templates" element={<SessionTemplatesPage />} />
                         <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
                         <Route path="/components/workflows" element={<WorkflowDefinitionsPage />} />
                         <Route path="/components/workflows/:workflowDefinitionId" element={<WorkflowDefinitionDetailPage />} />
+                        <Route path="/workbench" element={<WorkbenchListPage />} />
+                        <Route path="/workbench/:compositionId" element={<WorkbenchPage />} />
                         <Route path="/assistant" element={<AssistantPage />} />
                         <Route path="/assistant/:sessionId" element={<AssistantSessionPage />} />
                     </Routes>

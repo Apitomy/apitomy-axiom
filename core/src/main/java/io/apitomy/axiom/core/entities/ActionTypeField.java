@@ -13,7 +13,7 @@ public class ActionTypeField {
     @Column(name = "name", nullable = false)
     public String name;
 
-    /** One of: string, number, boolean, object. */
+    /** One of: string, number, boolean, object ({@code object} is any JSON structure: an object or an array). */
     @Column(name = "type", nullable = false)
     public String type;
 

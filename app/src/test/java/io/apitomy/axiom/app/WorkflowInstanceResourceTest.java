@@ -10,12 +10,12 @@ import static org.hamcrest.Matchers.*;
 @QuarkusTest
 class WorkflowInstanceResourceTest {
 
-    private static final String PROJECTS_PATH = "/api/v1/projects";
+    private static final String SUBJECTS_PATH = "/api/v1/subjects";
     private static final String WORKFLOWS_PATH = "/api/v1/workflow/definitions";
 
     @Test
     void testTriggerAndGetWorkflow() {
-        int projectId = createProject("WF Trigger Test Project");
+        int subjectId = createSubject("WF Trigger Test Subject");
         int definitionId = createAndPublishDefinition(
                 "Trigger Test WF");
 
@@ -27,11 +27,11 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("id", notNullValue())
-                    .body("projectId", equalTo(projectId))
+                    .body("subjectId", equalTo(subjectId))
                     .body("definitionId", equalTo(definitionId))
                     .body("definitionVersion", equalTo(1))
                     .body("definitionName", equalTo("Trigger Test WF"))
@@ -43,16 +43,16 @@ class WorkflowInstanceResourceTest {
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
-                    .body("projectId", equalTo(projectId))
+                    .body("subjectId", equalTo(subjectId))
                     .body("definitionName", equalTo("Trigger Test WF"));
     }
 
     @Test
     void testTriggerWithMissingRequiredFieldReturns400() {
-        int projectId = createProject("WF Missing Field Project");
+        int subjectId = createSubject("WF Missing Field Subject");
 
         // Body present but missing the required workflowDefinitionId field.
         given()
@@ -63,27 +63,27 @@ class WorkflowInstanceResourceTest {
                     }
                     """)
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(400);
     }
 
     @Test
     void testTriggerWithEmptyBodyReturns400() {
-        int projectId = createProject("WF Empty Body Project");
+        int subjectId = createSubject("WF Empty Body Subject");
 
         given()
                 .contentType(ContentType.JSON)
                 .body("{}")
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(400);
     }
 
     @Test
     void testTriggerDuplicateReturns409() {
-        int projectId = createProject("WF Dup Test Project");
+        int subjectId = createSubject("WF Dup Test Subject");
         int definitionId = createAndPublishActionWorkflow(
                 "Dup Test WF");
 
@@ -95,7 +95,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -108,14 +108,14 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(409);
     }
 
     @Test
     void testTriggerUnpublishedReturns400() {
-        int projectId = createProject("WF Unpub Test Project");
+        int subjectId = createSubject("WF Unpub Test Subject");
         int definitionId = createDefinition("Unpublished Test WF");
 
         given()
@@ -126,7 +126,7 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(400);
     }
@@ -179,7 +179,7 @@ class WorkflowInstanceResourceTest {
 
     @Test
     void testHumanTaskWorkflowSurfacesInboxItemAndAdvancesOnCompletion() {
-        int projectId = createProject("WF Human Task Project");
+        int subjectId = createSubject("WF Human Task Subject");
         int definitionId = createDefinition("Human Task WF");
 
         given()
@@ -224,7 +224,7 @@ class WorkflowInstanceResourceTest {
                     {"workflowDefinitionId": %d}
                     """.formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -234,10 +234,10 @@ class WorkflowInstanceResourceTest {
                     .get("/api/v1/inbox")
                 .then()
                     .statusCode(200)
-                    .body("items.find { it.projectId == " + projectId + " }.actionType",
+                    .body("items.find { it.subjectId == " + subjectId + " }.actionType",
                             equalTo("Approve"))
                     .extract()
-                    .path("items.find { it.projectId == " + projectId + " }.id");
+                    .path("items.find { it.subjectId == " + subjectId + " }.id");
 
         given()
                 .contentType(ContentType.JSON)
@@ -251,7 +251,7 @@ class WorkflowInstanceResourceTest {
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
@@ -259,32 +259,20 @@ class WorkflowInstanceResourceTest {
 
     @Test
     void testCancelWorkflow() {
-        int projectId = createProject("WF Cancel Test Project");
+        int subjectId = createSubject("WF Cancel Test Subject");
         int definitionId = createAndPublishActionWorkflow(
                 "Cancel Test WF");
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("waiting"));
+        int runId = triggerAndExpect(subjectId, definitionId, "waiting");
 
         given()
                 .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post("/api/v1/workflow/runs/" + runId + "/cancel")
                 .then()
                     .statusCode(204);
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("cancelled"));
@@ -292,101 +280,104 @@ class WorkflowInstanceResourceTest {
 
     @Test
     void testCancelTerminalReturns409() {
-        int projectId = createProject("WF Cancel Term Project");
+        int subjectId = createSubject("WF Cancel Term Subject");
         int definitionId = createAndPublishDefinition(
                 "Cancel Term WF");
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("completed"));
+        int runId = triggerAndExpect(subjectId, definitionId, "completed");
 
         given()
                 .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post("/api/v1/workflow/runs/" + runId + "/cancel")
                 .then()
                     .statusCode(409);
     }
 
     @Test
-    void testCancelActiveRunCancelsLatestNotPriorTerminal() {
-        int projectId = createProject("WF Cancel Active Run Project");
-        int definitionId = createAndPublishActionWorkflow(
-                "Cancel Active Run WF");
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("waiting"));
-
+    void testCancelUnknownRunReturns404() {
         given()
                 .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(204);
-
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                    {
-                        "workflowDefinitionId": %d
-                    }
-                    """.formatted(definitionId))
-                .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("waiting"));
-
-        given()
-                .when()
-                    .delete(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(204);
-
-        given()
-                .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
-                .then()
-                    .statusCode(200)
-                    .body("status", equalTo("cancelled"));
-    }
-
-    @Test
-    void testGetNoInstanceReturns404() {
-        int projectId = createProject("WF No Instance Project");
-
-        given()
-                .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post("/api/v1/workflow/runs/999999999/cancel")
                 .then()
                     .statusCode(404);
     }
 
     @Test
-    void testHasWorkflowInstanceOnProject() {
-        int projectId = createProject(
-                "WF HasInstance Test Project");
+    void testSameDefinitionCanRunAgainAfterCancel() {
+        int subjectId = createSubject("WF Cancel Active Run Subject");
+        int definitionId = createAndPublishActionWorkflow(
+                "Cancel Active Run WF");
+        int firstRunId = triggerAndExpect(subjectId, definitionId, "waiting");
+
+        // A second active run of the same definition on the same subject conflicts
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "workflowDefinitionId": %d
+                    }
+                    """.formatted(definitionId))
+                .when()
+                    .post(TestRunsResource.path(subjectId))
+                .then()
+                    .statusCode(409);
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId)
+                    .post("/api/v1/workflow/runs/" + firstRunId + "/cancel")
+                .then()
+                    .statusCode(204);
+
+        int secondRunId = triggerAndExpect(subjectId, definitionId, "waiting");
+
+        given()
+                .when()
+                    .post("/api/v1/workflow/runs/" + secondRunId + "/cancel")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .get("/api/v1/workflow/runs/" + firstRunId)
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("cancelled"));
+    }
+
+    private int triggerAndExpect(int subjectId, int definitionId, String expectedStatus) {
+        return given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "workflowDefinitionId": %d
+                    }
+                    """.formatted(definitionId))
+                .when()
+                    .post(TestRunsResource.path(subjectId))
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo(expectedStatus))
+                    .extract().path("id");
+    }
+
+    @Test
+    void testGetNoInstanceReturns404() {
+        int subjectId = createSubject("WF No Instance Subject");
+
+        given()
+                .when()
+                    .get(TestRunsResource.path(subjectId))
+                .then()
+                    .statusCode(404);
+    }
+
+    @Test
+    void testHasWorkflowInstanceOnSubject() {
+        int subjectId = createSubject(
+                "WF HasInstance Test Subject");
+
+        given()
+                .when()
+                    .get(SUBJECTS_PATH + "/" + subjectId)
                 .then()
                     .statusCode(200)
                     .body("hasWorkflowInstance", equalTo(false));
@@ -402,13 +393,13 @@ class WorkflowInstanceResourceTest {
                     }
                     """.formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200);
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId)
+                    .get(SUBJECTS_PATH + "/" + subjectId)
                 .then()
                     .statusCode(200)
                     .body("hasWorkflowInstance", equalTo(true));
@@ -416,7 +407,68 @@ class WorkflowInstanceResourceTest {
 
     // -- Helpers --
 
-    private int createProject(String name) {
+    @Test
+    void aRunStartedWithoutATitleHasNoTitle() {
+        int subjectId = createSubject("WF No Title Subject");
+        int definitionId = createAndPublishDefinition("No Title WF");
+        given().contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
+                .when().post(TestRunsResource.path(subjectId))
+                .then().statusCode(200)
+                .body("title", nullValue())
+                .body("definitionName", equalTo("No Title WF"))
+                .body("subjectName", equalTo("WF No Title Subject"));
+    }
+
+    @Test
+    void rerunsAFailedRunAsANewRunOfTheLatestVersion() {
+        int subjectId = createSubject("WF Rerun Subject");
+        int definitionId = createAndPublishDefinition("Rerun WF");
+        long failedRunId = persistRun(subjectId, definitionId, "failed",
+                "{\"team\":\"core\"}", "{\"attempts\":2}");
+
+        int newRunId = given().contentType(ContentType.JSON)
+                .when().post("/api/v1/workflow/runs/" + failedRunId + "/rerun")
+                .then().statusCode(200)
+                .body("subjectId", equalTo(subjectId))
+                .body("definitionId", equalTo(definitionId))
+                .body("definitionVersion", equalTo(1))
+                .body("title", equalTo("Original title"))
+                .body("labels.team", equalTo("core"))
+                .body("labels.rerunOf", equalTo(String.valueOf(failedRunId)))
+                .extract().path("runId");
+        org.junit.jupiter.api.Assertions.assertNotEquals(failedRunId, (long) newRunId);
+    }
+
+    @Test
+    void rerunRejectsRunsThatDidNotFailAndUnknownRuns() {
+        int subjectId = createSubject("WF Rerun Rejects Subject");
+        int definitionId = createAndPublishDefinition("Rerun Rejects WF");
+        long completed = persistRun(subjectId, definitionId, "completed", null, null);
+        given().when().post("/api/v1/workflow/runs/" + completed + "/rerun").then().statusCode(409);
+        given().when().post("/api/v1/workflow/runs/999999999/rerun").then().statusCode(404);
+    }
+
+    /** Persists a terminal run directly (no engine), as the run to re-run. */
+    private static long persistRun(int subjectId, int definitionId, String status, String labels, String inputs) {
+        return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> {
+            io.apitomy.axiom.core.entities.WorkflowRunEntity run = new io.apitomy.axiom.core.entities.WorkflowRunEntity();
+            run.subjectId = (long) subjectId;
+            run.definitionId = (long) definitionId;
+            run.definitionVersion = 1;
+            run.title = "Original title";
+            run.labels = labels;
+            run.inputs = inputs;
+            run.instanceState = "{}";
+            run.status = status;
+            run.startedOn = java.time.Instant.now();
+            run.completedOn = java.time.Instant.now();
+            run.persist();
+            return run.id;
+        });
+    }
+
+    private int createSubject(String name) {
         return given()
                 .contentType(ContentType.JSON)
                 .body(String.format("""
@@ -428,7 +480,7 @@ class WorkflowInstanceResourceTest {
                     """, name,
                         "test/" + name.toLowerCase().replace(" ", "-")))
                 .when()
-                    .post(PROJECTS_PATH)
+                    .post(SUBJECTS_PATH)
                 .then()
                     .statusCode(200)
                     .extract().path("id");

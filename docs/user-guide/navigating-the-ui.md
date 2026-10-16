@@ -10,7 +10,7 @@ find things.
 
 The masthead runs across the top of every page. It contains:
 
-- **Apitomy Axiom** — click the title to return to the Dashboards page from any page
+- **Apitomy Axiom** — click the title to return to the Runs page (the landing page) from any page
 - **Robot icon** — opens the [AI Assistant](ai-assistant.md) (visible only when at
   least one registered agent supports interactive sessions)
 - **Theme toggle** — cycles between light, dark, and system theme
@@ -21,9 +21,8 @@ The masthead runs across the top of every page. It contains:
 
 ## Dashboards
 
-Dashboards are the landing page. Rather than a single fixed view, Axiom supports
-multiple **user-configurable dashboards**, each populated with widgets chosen from a
-built-in catalog.
+Rather than a single fixed view, Axiom supports multiple **user-configurable dashboards**, each populated with
+widgets chosen from a built-in catalog.
 
 ### Dashboard List
 
@@ -54,7 +53,7 @@ search widgets organized by category.
 Dashboards support labels for organization. Dashboard labels also serve as **data
 filters** — when a dashboard has labels, its widgets filter their data to show only
 items matching those labels. For example, a dashboard labeled `"team-a"` would show
-only projects, events, and activity associated with that label.
+only subjects, events, and activity associated with that label.
 
 ### Widget Catalog
 
@@ -62,14 +61,13 @@ Axiom ships with built-in widget types across several categories:
 
 | Category | Widgets |
 |----------|---------|
-| **Projects** | Project Status Summary, Active Projects, Project Spotlight |
+| **Subjects** | Active Subjects, Subject Spotlight |
 | **Operations** | Recent Activity, Inbox, Recent Events |
-| **AI & Cost** | AI Cost Summary, AI Cost by Project |
-| **Reports** | Recent Reports |
-| **System** | System Status, Event Source Health, Disk Usage Breakdown |
+| **AI & Cost** | AI Cost Summary, AI Cost by Subject |
+| **System** | System Status, Action Types, Disk Usage Breakdown |
 
 Each widget has a default size but can be resized on the grid. Many widgets support
-per-widget configuration — for example, the Active Projects widget has a configurable
+per-widget configuration — for example, the Active Subjects widget has a configurable
 maximum row count, and the AI Cost Summary widget lets you choose a time window
 (24 hours, 7 days, 30 days, or 90 days). Click the gear icon on a widget in edit mode
 to adjust its settings.
@@ -78,62 +76,72 @@ to adjust its settings.
 
 ## Sidebar Navigation
 
-The sidebar organizes the UI into these sections: Dashboards, Inbox, Reports, Projects,
-Events, Logs, Metrics, Components, and Settings.
+The sidebar lists, in order: Runs, Subjects, Inbox, Dashboards, the **Events** section (Event Sources,
+Subscriptions, Event Stream), Workbench, and the **Logs**, **Metrics**, **Components** and **Settings**
+sections.
+
+### Runs
+
+**Runs** is the landing page (`/runs`). It lists every workflow run across all subjects with its status,
+start time and duration. The **Run** column names each run as `<subject> — <workflow> v<version>`, with the
+run's title below it when the run has one. Filter chips narrow the list by **Status**, **Workflow** (name or
+ID), **Subject ID**, and **Label** (`key:value`; add several labels to require all of them). Clicking a run's
+status adds it as a filter. Click anywhere else on a row to open the run's detail page, which shows the
+workflow graph with the current node highlighted, the run's resolved standard inputs (the `subject`; the
+event is shown as the triggering event instead) and labels, the triggering event, the tasks created by its
+nodes (with their outputs), and a **Cancel** button for active runs.
+See [Workflows](workflows.md#following-a-run).
+
+### Subjects
+
+The **Subjects** page lists all subjects with their name, derived active state, ref, labels, and last
+update. A subject is *active* when it has a running or waiting workflow run. You can filter by name or
+labels.
+
+Click any subject to open its detail page, which has several tabs:
+
+- **Runs** — a timeline of every workflow run on this subject, active and past. Failed runs have a
+  **Re-run** button; see [Re-running a Failed Run](workflows.md#re-running-a-failed-run)
+- **Body** — the subject's Markdown body
+- **Tasks** — all tasks created by runs on this subject, with status and execution details
+- **Thread** — a chronological log of everything that happened on the subject (events received, task
+  results, notes)
+- **Events** — raw stream events from event sources associated with this subject
+- **Metrics** — AI cost, token usage, and disk usage for this subject
+
+From the subject detail page you can also edit labels and delete the subject.
+
+### Inbox
+
+The **Inbox** page shows tasks with status **AwaitingInput** — tasks created by workflow `human-task`
+nodes that are waiting for a person. A badge on the sidebar shows the count of pending items. Click any
+item to review its context and respond; the waiting workflow run then resumes.
 
 ### Dashboards
 
 See [Dashboards](#dashboards) above.
 
-### Inbox
-
-The **Inbox** page shows tasks with status **AwaitingInput** — human tasks routed
-directly to a person, low-confidence Manager decisions escalated for review, tasks
-where an AI agent asked a question, and workflow runs parked at a human-task node. A
-badge on the sidebar shows the count of unreviewed items. Click any item to review its
-context and respond.
-
-### Reports
-
-The **Reports** page lists all generated reports with their title, status, time range,
-labels, and generation date. You can filter by title, status, or labels and paginate
-through results.
-
-Click any report to view its full rendered content, metadata (cost, duration, time
-range), and execution log.
-
-### Projects
-
-The **Projects** page lists all projects with their name, status, ref, labels, and last
-update. You can filter by name, status, or labels.
-
-Click any project to open its detail page, which has several tabs:
-
-- **Summary** — project status, ref, repository, labels, and key metrics
-- **Tasks** — all tasks assigned within this project, with status and execution details
-- **Thread** — a chronological log of everything that happened in the project (events
-  received, manager decisions, task results)
-- **Events** — raw stream events from connections associated with this project
-
-From the project detail page you can also:
-
-- **Trigger an action** — manually run a user-triggerable action type against this
-  project
-- **Run a workflow** — start a workflow definition on this project (if none is already
-  running)
-- **Edit labels** — add or remove labels for organization and filtering
-- **Delete** — remove a completed project and all its data
-
 ### Events
 
-The **Events** section covers the connection-based event pipeline described in
-[Event-Driven Automation](concepts.md#event-driven-automation):
+The **Events** section covers the event pipeline described in
+[Events and Subscriptions](concepts.md#events-and-subscriptions):
 
 | Page | What it shows |
 |------|--------------|
-| **Event Stream** | Every normalized event Axiom has recorded from its connections, browsable and filterable. Click a row to view the full typed payload. |
-| **Connections** | Configured links to GitHub/Jira, their poll status, and poll log history |
-| **Subscriptions** | Filtered, routed views over the event stream — create, edit, and preview filter expressions here |
+| **Event Sources** | Configured event sources to GitHub/Jira, their poll status, and poll log history |
+| **Subscriptions** | Filtered, routed views over the event stream (`create-workflow` and `workflow-dispatch` rules) — create, edit, and preview filter expressions here |
+| **Event Stream** | Every normalized event Axiom has recorded from its event sources. Filter chips narrow it by **Event Type**, **Event Source**, **Ref** and **Actor** (exact login, case-insensitive); clicking a type, source or actor in a row adds it as a filter. Click a row to open the event. |
+
+The event detail page shows the full typed payload (**Event** tab), how subscriptions processed it
+(**Processing** tab), and the runs started from it (**Runs** tab). **Run workflow…** starts a run of any
+published workflow with the event, listing suggested workflows first; such runs get the label
+`trigger:manual`.
+
+### Workbench
+
+The **Workbench** (`/workbench`) lists compositions. Open one to design a workflow together with its
+action types and tools, with an AI Assistant chat beside the canvas, test script and Node.js items, review
+the composition's runs, and publish the drafts. See [Workbench](workbench.md).
 
 ### Logs
 
@@ -142,24 +150,19 @@ activity:
 
 | Page | What it shows |
 |------|--------------|
-| **All Activity** | Unified feed of all system events — project creation, task execution, report generation, manager decisions |
-| **Manager Decisions** | The AI Manager's triage results — what action it chose for each event and its confidence score |
+| **All Activity** | Unified feed of all system events — subject creation, workflow runs, task execution |
 | **Tasks** | Task execution history — which agent ran what action type, duration, cost, and outcome |
-| **Job Runs** | Scheduled job execution history |
-| **Traces** | Browse and filter execution traces across manager evaluations, workflow runs, scheduled job runs, and report generation |
-| **Workflow Runs** | All workflow instances across all projects, with status and current node |
+| **Traces** | Browse and filter workflow run execution traces |
 
 Each log page supports filtering and pagination.
 
 The **Traces** page deserves special mention. While the other log pages show tabular
 data, a trace detail page renders the node tree as an interactive tree. Each node
-represents a step in the run (event received, decision processed, task created, tool
-executed, etc.) and is color-coded by status. Click any node to open a detail view
-showing the full data for that step, including tool input/output for tool executions
-and AI reasoning for manager evaluations.
+represents a step in the run (node entered, task created, tool executed, etc.) and is
+color-coded by status. Click any node to open a detail view showing the full data for
+that step, including tool input/output for tool executions.
 
-You can also navigate to a trace directly from a **report detail page** — click
-**View Execution Trace** — or from a project's tasks and workflow runs.
+You can also navigate to a trace directly from a workflow run or a subject's tasks.
 
 ### Metrics
 
@@ -167,26 +170,23 @@ The **Metrics** section has two sub-pages:
 
 | Page | What it shows |
 |------|--------------|
-| **AI Usage** | Token costs broken down by invocation type (task, manager, report, scheduled job), action type, and date range. Shows summary totals at the top. |
-| **Disk Usage** | Workspace storage consumed by each project's git clone. Shows total disk usage and per-project breakdown. |
+| **AI Usage** | Token costs broken down by invocation type, action type, and date range. Shows summary totals at the top. |
+| **Disk Usage** | Workspace storage consumed by each subject's workspace. Shows total disk usage and per-subject breakdown. |
 
 ### Components
 
-The **Components** section contains configuration for the units of work Axiom can
-execute:
+The **Components** section contains workflows and the building blocks they and the AI Assistant use:
 
 | Page | Purpose |
 |------|---------|
-| **Action Types** | Define kinds of work — prompt templates, allowed tools, execution mode, and manager/user triggerability |
+| **Action Types** | Define the kinds of work that workflow `action` nodes run — execution mode (agent, script or Node.js), prompt, script or code template, inputs and outputs, allowed tools, and model/engine overrides |
 | **Agents** | Register AI agent slots with capabilities that determine which work they're eligible for |
 | **AI Assistant** (Session Templates) | Define AI Assistant session templates with system prompts, agent type, tools, and MCP servers |
 | **MCP Servers** | Register external MCP tool servers (HTTP or stdio) |
-| **Report Definitions** | Create report templates with schedules, time windows, and prompts |
-| **Scheduled Jobs** | Define CRON-style automation with schedules, prompt or script templates, and allowed tools |
-| **Secrets** | Store encrypted credentials injected into subprocesses |
+| **Secrets** | Store encrypted credentials; processes receive only the secrets their environment declares |
 | **Tools** | Define script-based tools with parameters and bash templates |
 | **Toolsets** | Group tools into named collections for reuse |
-| **Workflows** | Author, version, and publish workflow definitions |
+| **Workflows** | Workflow definitions (`/components/workflows`); each detail page has the **Design**, **Versions**, **Runs** and **Triggers** (schedule triggers) tabs. See [Workflows](workflows.md) |
 
 ### Settings
 
@@ -195,8 +195,7 @@ The **Settings** section contains instance-wide configuration:
 | Page | Purpose |
 |------|---------|
 | **AI Engine** | View and change the default agent type, health checks, and available models per registered agent |
-| **Manager** | Edit the Manager's system prompt and prompt template |
-| **Data Retention** | Configure how long closed projects, traces, events, job runs, reports, workflow runs, activity and AI usage are kept before automatic cleanup (0 keeps history forever) |
+| **Data Retention** | Configure how long inactive subjects, traces, events, workflow runs, activity and AI usage are kept before automatic cleanup (0 keeps history forever) |
 | **Configuration Packs** | Export and import bundles of configuration as JSON |
 
 Most configuration pages follow the same pattern: a list view with a **Create** button,
@@ -220,5 +219,5 @@ A few interactions work the same way throughout the UI:
 - **Delete confirmation** — destructive actions always show a confirmation dialog before
   proceeding.
 - **Real-time updates** — the UI receives server-sent events (SSE) for live updates.
-  Activity feeds, task statuses, and report progress update automatically without
+  Activity feeds, run and task statuses update automatically without
   refreshing the page.

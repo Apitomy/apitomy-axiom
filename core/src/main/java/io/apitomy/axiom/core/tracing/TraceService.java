@@ -33,8 +33,7 @@ public class TraceService {
      * @param traceType       trace category (e.g. "event-pipeline")
      * @param summary         human-readable trace summary
      * @param eventId         associated stream event ID (nullable)
-     * @param projectId       associated project ID (nullable)
-     * @param reportId        associated report ID (nullable)
+     * @param subjectId       associated subject ID (nullable)
      * @param rootNodeType       node type for the root node
      * @param rootNodeSummary    summary for the root node
      * @param rootEntityType     entity type for the root node (nullable)
@@ -42,7 +41,7 @@ public class TraceService {
      * @return a {@link TraceContext} with the root node on the stack
      */
     public TraceContext createTrace(String traceType, String summary,
-            UUID eventId, Long projectId, Long reportId,
+            UUID eventId, Long subjectId,
             String rootNodeType, String rootNodeSummary,
             String rootEntityType, Long rootEntityId) {
         TraceContext ctx = QuarkusTransaction.requiringNew().call(() -> {
@@ -54,8 +53,7 @@ public class TraceService {
             trace.status = "in-progress";
             trace.summary = truncate(summary, 1024);
             trace.eventId = eventId;
-            trace.projectId = projectId;
-            trace.reportId = reportId;
+            trace.subjectId = subjectId;
             trace.startedOn = now;
             trace.persist();
 
@@ -262,20 +260,20 @@ public class TraceService {
     }
 
     /**
-     * Associates a trace with a project after it was created (for example when the
-     * project only becomes known while the trace is running).
+     * Associates a trace with a subject after it was created (for example when the
+     * subject only becomes known while the trace is running).
      *
      * @param traceId   the trace to update
-     * @param projectId the project ID to set
+     * @param subjectId the subject ID to set
      */
-    public void setProjectId(UUID traceId, Long projectId) {
+    public void setSubjectId(UUID traceId, Long subjectId) {
         QuarkusTransaction.requiringNew().run(() -> {
             TraceEntity trace = TraceEntity.findById(traceId);
             if (trace == null) {
-                LOG.warnf("Trace %s not found for project association", traceId);
+                LOG.warnf("Trace %s not found for subject association", traceId);
                 return;
             }
-            trace.projectId = projectId;
+            trace.subjectId = subjectId;
         });
         sseEvents.fire(SseEvent.traceUpdated(traceId));
     }

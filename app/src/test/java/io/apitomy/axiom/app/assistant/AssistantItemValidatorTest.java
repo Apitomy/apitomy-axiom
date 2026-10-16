@@ -1,6 +1,9 @@
 package io.apitomy.axiom.app.assistant;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -9,14 +12,12 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Unit tests for {@link AssistantItemValidator}. Uses a temporary directory
- * for JSON files and directly injects the ObjectMapper — no Quarkus container
- * required.
+ * Unit tests for {@link AssistantItemValidator}. Uses a temporary directory for JSON files and wires the
+ * validation service directly — no Quarkus container, so referenced names are not checked.
  */
 class AssistantItemValidatorTest {
 
@@ -27,10 +28,14 @@ class AssistantItemValidatorTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        ObjectMapper mapper = new ObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        ConfigItemValidationService service = new ConfigItemValidationService();
+        inject(service, "objectMapper", mapper);
+        inject(service, "filterEvaluator", new SubscriptionFilterEvaluator());
         validator = new AssistantItemValidator();
-        Field omField = AssistantItemValidator.class.getDeclaredField("objectMapper");
-        omField.setAccessible(true);
-        omField.set(validator, new ObjectMapper());
+        validator.objectMapper = mapper;
+        validator.validationService = service;
     }
 
     // ── Tool validation ─────────────────────────────────────────────
@@ -167,9 +172,7 @@ class AssistantItemValidatorTest {
                   "name": "my-action",
                   "description": "A test action",
                   "executionMode": "agent",
-                  "userTriggerable": true,
-                  "managerTriggerable": false,
-                  "promptTemplate": "Do the thing: {{input}}"
+                  "promptTemplate": "Do the thing"
                 }
                 """);
 
@@ -251,103 +254,52 @@ class AssistantItemValidatorTest {
         assertTrue(vr.errors().stream().anyMatch(e -> e.contains("scriptTemplate")));
     }
 
-    // ── Report definition validation ────────────────────────────────
+    // ── Workflow and event source validation ────────────────────────
+
+    private static final String VALID_WORKFLOW = """
+        {"name": "triage", "content": {
+          "id": "triage", "name": "triage",
+          "nodes": [
+            {"id": "s", "type": "start", "name": "Start", "config": {}, "position": {"x": 0, "y": 0}},
+            {"id": "a", "type": "action", "name": "Do", "config": {"actionType": "do-it"},
+             "position": {"x": 200, "y": 0}},
+            {"id": "e", "type": "end", "name": "End", "config": {}, "position": {"x": 400, "y": 0}}
+          ],
+          "edges": [
+            {"id": "e1", "source": "s", "target": "a", "priority": 0, "isDefault": true},
+            {"id": "e2", "source": "a", "target": "e", "priority": 0, "isDefault": true}
+          ]}}
+        """;
 
     @Test
-    void validReportDefinitionPassesValidation() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/weekly.json", """
-                {
-                  "name": "weekly-status",
-                  "description": "Weekly status report",
-                  "schedule": "weekly",
-                  "scheduleTime": "08:00",
-                  "scheduleDayOfWeek": "monday",
-                  "timeWindow": "last-7d",
-                  "promptTemplate": "Generate a report for {{repositories}}"
-                }
-                """);
+    void lowercaseWorkflowPasses() throws IOException {
+        Path file = writeJson(tempDir, "workflows/triage.json", VALID_WORKFLOW);
 
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertTrue(vr.isValid(), "Valid report should have no errors: " + vr.errors());
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "workflows");
+        assertTrue(vr.isValid(), "Lowercase workflow should be valid: " + vr.errors());
     }
 
     @Test
-    void reportDefinitionMissingScheduleFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/no-schedule.json", """
-                {
-                  "name": "no-schedule",
-                  "description": "Report without schedule",
-                  "promptTemplate": "Generate report"
-                }
-                """);
+    void uppercaseWorkflowNodeTypeFails() throws IOException {
+        Path file = writeJson(tempDir, "workflows/upper.json",
+                VALID_WORKFLOW.replace("\"type\": \"start\"", "\"type\": \"START\""));
 
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "workflows");
         assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("schedule")));
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("lowercase")), vr.errors().toString());
     }
 
     @Test
-    void reportDefinitionInvalidScheduleFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/bad-schedule.json", """
-                {
-                  "name": "bad-schedule",
-                  "description": "Report with invalid schedule",
-                  "schedule": "biweekly",
-                  "promptTemplate": "Generate report"
-                }
+    void eventSourceWithBadRepositoryFails() throws IOException {
+        Path file = writeJson(tempDir, "event-sources/gh.json", """
+                {"id": "gh", "name": "GH", "sourceType": "github", "baseUrl": "https://api.github.com",
+                 "configuration": {"repositories": ["bad"]}}
                 """);
 
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
+        AssistantItemValidator.ValidationResult vr = validator.validate(file, "event-sources");
         assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("schedule") && e.contains("biweekly")));
-    }
-
-    @Test
-    void reportDefinitionCronScheduleIsValid() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/cron.json", """
-                {
-                  "name": "cron-report",
-                  "description": "Report with cron schedule",
-                  "schedule": "0 8 * * 1",
-                  "timeWindow": "last-7d",
-                  "promptTemplate": "Generate report"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertTrue(vr.isValid(), "Cron schedule should be accepted: " + vr.errors());
-    }
-
-    @Test
-    void reportDefinitionInvalidTimeWindowFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/bad-tw.json", """
-                {
-                  "name": "bad-tw",
-                  "description": "Report with bad time window",
-                  "schedule": "daily",
-                  "timeWindow": "last-year",
-                  "promptTemplate": "Generate report"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("timeWindow")));
-    }
-
-    @Test
-    void reportDefinitionMissingPromptFails() throws IOException {
-        Path file = writeJson(tempDir, "report-definitions/no-prompt.json", """
-                {
-                  "name": "no-prompt",
-                  "description": "Report without prompt",
-                  "schedule": "daily"
-                }
-                """);
-
-        AssistantItemValidator.ValidationResult vr = validator.validate(file, "report-definitions");
-        assertFalse(vr.isValid());
-        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("promptTemplate")));
+        assertTrue(vr.errors().stream().anyMatch(e -> e.contains("configuration.repositories[0]")),
+                vr.errors().toString());
     }
 
     // ── General validation ──────────────────────────────────────────
@@ -407,10 +359,13 @@ class AssistantItemValidatorTest {
         assertEquals("action-types", validator.detectItemType(file, tempDir));
     }
 
+    /**
+     * Report definitions were removed; their directory is no longer a known item type.
+     */
     @Test
-    void detectItemTypeForReportDefinitions() {
+    void detectItemTypeReturnsNullForRemovedReportsDirectory() {
         Path file = tempDir.resolve("report-definitions/my-report.json");
-        assertEquals("report-definitions", validator.detectItemType(file, tempDir));
+        assertNull(validator.detectItemType(file, tempDir));
     }
 
     @Test
@@ -420,6 +375,12 @@ class AssistantItemValidatorTest {
     }
 
     // ── Helper ──────────────────────────────────────────────────────
+
+    private static void inject(Object target, String fieldName, Object value) throws Exception {
+        Field field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        field.set(target, value);
+    }
 
     private Path writeJson(Path base, String relativePath, String content) throws IOException {
         Path file = base.resolve(relativePath);

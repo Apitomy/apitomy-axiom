@@ -103,7 +103,7 @@ export function SessionTemplateDetailPage() {
                 const engines = (systemConfig.engines || [])
                     .filter((engine) => engine.supportsInteractiveSessions);
                 setInteractiveEngines(engines);
-                const defaultEngine = systemConfig.defaultEngine || systemConfig.engine || "";
+                const defaultEngine = systemConfig.defaultEngine || "";
                 setGlobalDefaultEngine(defaultEngine);
 
                 const modelEngine = resolveModelEngine(t.engine, defaultEngine);
@@ -240,7 +240,7 @@ export function SessionTemplateDetailPage() {
                                 <HelperText>
                                     <HelperTextItem>
                                         Message automatically sent to the AI when a session
-                                        starts. Supports {"{{projectName}}"} placeholder.
+                                        starts. Supports {"{{subjectName}}"} placeholder.
                                         Leave empty for none.
                                     </HelperTextItem>
                                 </HelperText>
@@ -483,7 +483,7 @@ export function SessionTemplateDetailPage() {
                                 <HelperTextItem>
                                     Optional script that runs in the working directory when a
                                     session is created. Use this to clone repositories, install
-                                    dependencies, or set up project files. The script must
+                                    dependencies, or set up subject files. The script must
                                     complete within 60 seconds.
                                 </HelperTextItem>
                             </HelperText>

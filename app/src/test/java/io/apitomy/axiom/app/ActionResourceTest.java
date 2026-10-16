@@ -4,6 +4,9 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
 
+import java.util.Map;
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
@@ -16,7 +19,9 @@ class ActionResourceTest {
     private static final String ACTION_TYPES_PATH = "/api/v1/action-types";
 
     @Test
-    void testSeedDataLoaded() {
+    void testListActionTypes() {
+        createScriptActionType("listed-script-action");
+
         given()
             .when()
                 .get(ACTION_TYPES_PATH)
@@ -24,45 +29,46 @@ class ActionResourceTest {
                 .statusCode(200)
                 .contentType(ContentType.JSON)
                 .body("items.size()", greaterThanOrEqualTo(1))
-                .body("items.name", hasItems("close-project"));
-    }
-
-    @Test
-    void testGetSeedActionType() {
-        int id = given()
-            .when()
-                .get(ACTION_TYPES_PATH)
-            .then()
-                .statusCode(200)
-                .extract().path("items.find { it.name == 'close-project' }.id");
-
-        given()
-            .when()
-                .get(ACTION_TYPES_PATH + "/" + id)
-            .then()
-                .statusCode(200)
-                .body("name", equalTo("close-project"))
-                .body("executionMode", equalTo("script"));
+                .body("items.name", hasItems("listed-script-action"));
     }
 
     @Test
     void testScriptActionType() {
-        int id = given()
-            .when()
-                .get(ACTION_TYPES_PATH)
-            .then()
-                .statusCode(200)
-                .extract().path("items.find { it.name == 'close-project' }.id");
+        int id = createScriptActionType("fetched-script-action");
 
         given()
             .when()
                 .get(ACTION_TYPES_PATH + "/" + id)
             .then()
                 .statusCode(200)
-                .body("name", equalTo("close-project"))
+                .body("name", equalTo("fetched-script-action"))
                 .body("executionMode", equalTo("script"))
-                .body("userTriggerable", equalTo(true))
-                .body("emitsEvent", equalTo(false));
+                .body("$", not(hasKey("userTriggerable")))
+                .body("$", not(hasKey("managerTriggerable")))
+                .body("$", not(hasKey("emitsEvent")))
+                .body("$", not(hasKey("workflowEnabled")));
+    }
+
+    @Test
+    void nodeActionTypeRoundTripsCodeTemplate() {
+        String name = "node-rt-" + UUID.randomUUID();
+        String code = "export async function run(){ return {}; }";
+        int id = given()
+            .contentType(ContentType.JSON)
+            .body(Map.of("name", name, "executionMode", "node", "codeTemplate", code))
+            .when()
+                .post(ACTION_TYPES_PATH)
+            .then()
+                .statusCode(200)
+                .extract().path("id");
+
+        given()
+            .when()
+                .get(ACTION_TYPES_PATH + "/" + id)
+            .then()
+                .statusCode(200)
+                .body("executionMode", equalTo("node"))
+                .body("codeTemplate", equalTo(code));
     }
 
     @Test
@@ -74,9 +80,7 @@ class ActionResourceTest {
                     "name": "custom-action",
                     "description": "A custom action for testing",
                     "executionMode": "agent",
-                    "promptTemplate": "Do the thing: {{input}}",
-                    "userTriggerable": true,
-                    "emitsEvent": false
+                    "promptTemplate": "Do the thing"
                 }
                 """)
             .when()
@@ -85,8 +89,6 @@ class ActionResourceTest {
                 .statusCode(200)
                 .body("name", equalTo("custom-action"))
                 .body("executionMode", equalTo("agent"))
-                .body("userTriggerable", equalTo(true))
-                .body("emitsEvent", equalTo(false))
                 .extract().path("id");
 
         given()
@@ -148,8 +150,7 @@ class ActionResourceTest {
                 {
                     "name": "invalid-field-type-action",
                     "executionMode": "agent",
-                    "promptTemplate": "Do: {{input}}",
-                    "workflowEnabled": true,
+                    "promptTemplate": "Do it",
                     "inputs": [{ "name": "issueNumber", "type": "integer", "required": true }]
                 }
                 """)
@@ -172,8 +173,7 @@ class ActionResourceTest {
                     "name": "updated-action",
                     "description": "Updated description",
                     "executionMode": "script",
-                    "scriptTemplate": "echo updated",
-                    "emitsEvent": true
+                    "scriptTemplate": "echo updated"
                 }
                 """)
             .when()
@@ -182,8 +182,7 @@ class ActionResourceTest {
                 .statusCode(200)
                 .body("name", equalTo("updated-action"))
                 .body("description", equalTo("Updated description"))
-                .body("executionMode", equalTo("script"))
-                .body("emitsEvent", equalTo(true));
+                .body("executionMode", equalTo("script"));
     }
 
     @Test
@@ -212,6 +211,24 @@ class ActionResourceTest {
                 .statusCode(404);
     }
 
+    private int createScriptActionType(String name) {
+        return given()
+            .contentType(ContentType.JSON)
+            .body(String.format("""
+                {
+                    "name": "%s",
+                    "executionMode": "script",
+                    "scriptTemplate": "echo {{inputs.ref}}",
+                    "inputs": [{ "name": "ref", "type": "string", "required": true }]
+                }
+                """, name))
+            .when()
+                .post(ACTION_TYPES_PATH)
+            .then()
+                .statusCode(200)
+                .extract().path("id");
+    }
+
     private int createActionType(String name) {
         return given()
             .contentType(ContentType.JSON)
@@ -219,7 +236,7 @@ class ActionResourceTest {
                 {
                     "name": "%s",
                     "executionMode": "agent",
-                    "promptTemplate": "Do: {{input}}"
+                    "promptTemplate": "Do it"
                 }
                 """, name))
             .when()

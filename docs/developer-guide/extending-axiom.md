@@ -1,6 +1,6 @@
 # Extending Axiom
 
-Axiom is designed to be extended at several key points: AI agents, event connections,
+Axiom is designed to be extended at several key points: AI agents, event sources,
 and notification channels. Extension points generally follow the same pattern —
 define an interface in an SPI module, implement it in a sibling module, and let CDI
 discover it at runtime.
@@ -25,8 +25,8 @@ configuration or, for agent pool work, by capability matching.
 
 ## Adding an AI Agent
 
-An agent provides the ability to invoke an LLM for Manager evaluations, task
-execution, report generation, and agent-mode scheduled jobs. Axiom ships with three
+An agent provides the ability to invoke an LLM for task execution (workflow action
+nodes) and AI Assistant sessions (including the Workflow Workbench chat). Axiom ships with three
 agent implementations: Claude Code, OpenCode, and GitHub Copilot CLI.
 
 ### Interface: `Agent`
@@ -38,9 +38,10 @@ Location: `agents/spi/src/main/java/io/apitomy/axiom/agents/spi/Agent.java`
 | `String getType()` | Agent type identifier (e.g. `"claude-code"`, `"opencode"`, `"copilot"`) |
 | `String getLabel()` | Human-readable display label |
 | `List<String> getAvailableModels()` | Models available for the UI model picker |
-| `boolean supportsInteractiveSessions()` | Whether this agent can back AI Assistant sessions |
+| `String getModelSource()` | `"configured"` (default) or `"dynamic"` (models discovered at runtime) |
+| `void refreshAvailableModels()` | Refresh a cached model list (default: no-op) |
+| `boolean supportsInteractiveSessions()` | Whether this agent can back AI Assistant sessions (default: `false`) |
 | `CompletableFuture<AgentResult> execute(AgentRequest request)` | Invoke the agent with a prompt |
-| `CompletableFuture<AgentResult> executeWithSchema(AgentRequest request, String jsonSchema)` | Invoke with a JSON schema constraint for structured output |
 | `void cancel(String executionId)` | Best-effort cancellation of a running execution |
 | `List<AgentCheckResult> healthCheck()` | Startup health checks |
 
@@ -87,10 +88,12 @@ type when the `Agent` implementation also implements `AgentMcpManager`.
 
 Registered agents don't self-select work — `AgentPool` leases an enabled, idle
 `AgentEntity` to a caller based on a requested capability string (e.g.
-`action:Auto-Label Issue`, `report:weekly-status`, `job:cleanup`). See
-[AI Agents](../user-guide/concepts.md#ai-agents) for the capability-matching model
-that all agent-consuming services (`TaskExecutionService`, `ReportExecutionService`,
-`ScheduledJobExecutionService`) share.
+`action:Auto-Label Issue`). `TaskExecutionService` requests `action:<action type>` for every task
+created by a workflow action node, together with the action type's engine: when the engine is set, only
+agents of that `agentType` are considered (an explicit agent assignment of another type is ignored); when it
+is blank, any type may run the task. If a suitable agent exists but is busy the task waits; if no enabled
+agent of the engine exists the task fails with a message naming the missing engine. See
+[AI Agents](../user-guide/concepts.md#ai-agents) for the capability-matching model.
 
 ### Interactive Assistant Session Drivers
 
@@ -99,18 +102,23 @@ session lifecycle, prompt submission, permission handling, and interrupt/teardow
 `InteractiveSessionDriverFactory` selects the concrete driver per session
 (`ClaudeInteractiveSessionDriver` or `OpenCodeInteractiveSessionDriver`) based on the
 session's resolved agent type, and enforces fail-closed OpenCode compatibility checks
-before allowing session startup.
+before allowing session startup. Only Claude Code and OpenCode have interactive session drivers; the GitHub
+Copilot CLI agent runs tasks only.
+
+Workflow Workbench compositions use the same session runtime with the built-in `axiom-workbench` session
+template and `@axiom-workbench` MCP server (see
+[Stack & Architecture](stack-and-architecture.md#workflow-workbench)).
 
 ---
 
-## Adding a Connection Type
+## Adding an Event Source Type
 
-A Connection polls an external system for activity and produces normalized events for
-the event stream. Axiom ships with GitHub and Jira connection types.
+An Event Source polls an external system for activity and produces normalized events for
+the event stream. Axiom ships with GitHub and Jira event source types.
 
 ### Pattern
 
-Connection pollers are `@Scheduled` beans that use `EventStreamService` to persist
+Event source pollers are `@Scheduled` beans that use `EventStreamService` to persist
 normalized events. There is no formal SPI interface — the pattern is convention-based,
 built around a shared normalized event model (`NormalizedEvent` and its typed payload
 records) defined in `core`.
@@ -126,27 +134,51 @@ Location: `events/core/src/main/java/io/apitomy/axiom/events/core/EventStreamSer
 ### Implementation Pattern
 
 1. Create a scheduled poller with `@Scheduled` and `concurrentExecution = SKIP`
-2. Find enabled connections of your source type from `EventSourceConnectionEntity`
-3. Check if the connection's poll interval has elapsed since `lastPolledAt`
+2. Find enabled event sources of your source type from `EventSourceEntity`
+3. Check if the event source's poll interval has elapsed since `lastPolledAt`
 4. Fetch activity from the external API
 5. Normalize each item into a `NormalizedEvent` with a typed payload and call
    `eventStreamService.persistEvent()`
-6. Update `lastPolledAt` on the connection
-7. Record the poll result in `ConnectionPollLogEntity`
+6. Update `lastPolledAt` on the event source
+7. Record the poll result in `EventSourcePollLogEntity`
 
-New connections do not need any corresponding Subscription configuration to start
-recording events — subscriptions are what route recorded events onward to the Manager,
-a workflow, or an action.
+New event sources do not need any corresponding Subscription configuration to start
+recording events — subscriptions are what route recorded events onward to workflows
+(`create-workflow` and `workflow-dispatch` routing rules).
 
 ### Reference Implementations
 
-- **GitHub**: `events/github/src/main/java/.../v2/GitHubConnectionPoller.java` —
+- **GitHub**: `events/github/src/main/java/.../v2/GitHubEventSourcePoller.java` —
   polls the GitHub Repository Events API, backfilling PR payloads as needed
-- **Jira**: `events/jira/src/main/java/.../v2/JiraConnectionPoller.java` — polls the
+- **Jira**: `events/jira/src/main/java/.../v2/JiraEventSourcePoller.java` — polls the
   Jira REST API using JQL search with changelog expansion
 
 See [Event System — Design Document](event-sourcing-design.md) for the full event
 schema and per-source normalization details.
+
+---
+
+## Adding an Axiom SDK Function
+
+The Axiom SDK is the set of `axiom_*` functions agents call through the `axiom-sdk` MCP server and that
+workflows call directly from `sdk:` action nodes (see
+[Axiom SDK Functions](../user-guide/workflows.md#axiom-sdk-functions) for the current list). An SDK change
+must update all of these consistently:
+
+| Location | Purpose |
+|----------|---------|
+| `core/src/main/resources/axiom-sdk-functions.json` | Authoritative function definitions (name, description, parameters) |
+| `core/.../SdkFunctionRegistry.java` | Loads the definitions |
+| `app/.../SdkCallService.java` | Implementations used by `sdk:` action nodes |
+| `app/.../rest/SdkResource.java` | REST endpoint used by the MCP server |
+| `app/src/main/resources/templates/axiom-mcp-server/sdk-server.js` | The `axiom-sdk` MCP server |
+| `app/src/main/resources/templates/axiom-assistant-mcp/server.js`, `templates/assistant-templates/axiom-config-assistant.json` | Assistant templates that reference SDK tools |
+| `core/.../services/ActionTypeValidator.java` | Validates SDK tool names in an action type's allowed tools |
+| `ui/src/config/sdkTools.ts`, `ui/src/components/assistant/toolNames.ts` | UI tool pickers and display names |
+| `SdkResourceTest`, `McpConfigGeneratorTest`, `ActionTypeValidatorTest` | Tests |
+
+SDK functions must not start work outside a workflow: there are no functions for creating tasks directly,
+closing or reopening subjects, or reports.
 
 ---
 
@@ -189,3 +221,38 @@ When adding a new extension module:
 
 5. **Add as a dependency** in `app/pom.xml` so the app module includes your
    implementation
+
+## Configuration Item Validation
+
+`io.apitomy.axiom.app.validation.ConfigItemValidationService` is the single place where configuration items
+(tools, action types, toolsets, session templates, workflows, event sources, and subscriptions) are
+validated. It is called by:
+
+- `ToolsResourceImpl` — tool validate and create endpoints
+- `ActionResourceImpl` — action type validate and create endpoints
+- `SubscriptionsResourceImpl` — subscription create and update
+- `ImportExportService` — configuration-pack import (including import from the UI) and assistant Apply
+- `AssistantItemValidator` — the Configuration Assistant's live feedback, the `axiom_validate_item` MCP
+  tool, and `POST /api/v1/assistant/sessions/{sessionId}/validate`
+- `CompositionValidator` and `CompositionPublisher` — Workflow Workbench draft validation and publishing
+
+Workflow publishing does not call the service. `WorkflowPublisher` calls
+`WorkflowContentRules.engineProblems` and `WorkflowContentRules.startInputViolation` directly. The service's
+workflow validation uses those same `WorkflowContentRules` checks and adds cross-reference checks: referenced
+action types exist, `sdk:` functions are valid, and `receive-event` event types are known.
+
+When adding or changing a rule: graph and Start-input rules belong in `WorkflowContentRules` (shared by
+publishing and the service); cross-reference checks belong in `ConfigItemValidationService`. Do not add
+ad-hoc checks in REST resources.
+
+Configuration-pack import and assistant Apply validate the whole pack before writing anything. Any error
+aborts the operation with nothing written (REST import returns `400` with `{message, problems}`). Items are
+then written in dependency order — tools, toolsets, action types, session templates, workflows, event
+sources, subscriptions — workflows are published (skipped when unchanged), and `workflowDefinitionName` in
+subscription routing rules is resolved to `workflowDefinitionId` by `SubscriptionRoutingResolver`.
+
+The Configuration Assistant's system prompt reference is generated by `AssistantReferenceGenerator` and
+substituted for the `{{reference}}` placeholder. Its worked examples live under
+`app/src/main/resources/templates/assistant-reference/examples/` and are listed in `index.txt`.
+`AssistantReferenceTest` validates and applies every listed example, so any new example must be added to
+`index.txt` and must pass validation.

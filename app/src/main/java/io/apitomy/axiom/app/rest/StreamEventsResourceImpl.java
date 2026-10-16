@@ -3,6 +3,8 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
 import io.apitomy.axiom.app.EventStreamOrchestrator;
+import io.apitomy.axiom.app.RunRequest;
+import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.EventProcessingEntry;
 import io.apitomy.axiom.api.beans.EventProcessingOutcome;
@@ -12,13 +14,17 @@ import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.SourceData;
 import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.StreamEventSearchResults;
+import io.apitomy.axiom.api.beans.StreamEventWorkflowSuggestion;
+import io.apitomy.axiom.api.beans.TriggerWorkflow;
+import io.apitomy.axiom.api.beans.WorkflowInstance;
 import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeEntity;
 import io.apitomy.axiom.core.entities.RoutingOutcomeItemEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
@@ -31,6 +37,7 @@ import org.jboss.logging.Logger;
 import java.math.BigInteger;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -52,10 +59,27 @@ public class StreamEventsResourceImpl implements StreamResource {
     @Inject
     EventStreamOrchestrator orchestrator;
 
+    @Inject
+    WorkflowRunBeanMapper runBeanMapper;
+
+    /** Escapes LIKE wildcards (and the escape character) in a literal pattern fragment. */
+    private static String likeEscape(String text) {
+        return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+    }
+
+    /** Encodes a value as a JSON string literal, the way the actor JSON was written. */
+    private String jsonString(String value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Override
     public StreamEventSearchResults listStreamEvents(BigInteger page, BigInteger limit,
-                                                     String filterType, String filterConnectionId,
-                                                     String filterRef) {
+                                                     String filterType, String filterEventSourceId,
+                                                     String filterRef, String filterActor) {
         int pageNum = page != null ? page.intValue() : 1;
         int pageSize = limit != null ? limit.intValue() : 20;
 
@@ -66,13 +90,18 @@ public class StreamEventsResourceImpl implements StreamResource {
             hql.append(" and lower(type) like :type");
             params.put("type", filterType.toLowerCase() + "%");
         }
-        if (filterConnectionId != null && !filterConnectionId.isBlank()) {
-            hql.append(" and connectionId = :connectionId");
-            params.put("connectionId", filterConnectionId);
+        if (filterEventSourceId != null && !filterEventSourceId.isBlank()) {
+            hql.append(" and eventSourceId = :eventSourceId");
+            params.put("eventSourceId", filterEventSourceId);
         }
         if (filterRef != null && !filterRef.isBlank()) {
             hql.append(" and lower(ref) like :ref");
             params.put("ref", "%" + filterRef.toLowerCase() + "%");
+        }
+        if (filterActor != null && !filterActor.isBlank()) {
+            // The actor is stored as compact JSON ({"login":"...",...}); match the login exactly, ignoring case.
+            hql.append(" and lower(actor) like :actor escape '\\'");
+            params.put("actor", "%" + likeEscape("\"login\":" + jsonString(filterActor.trim().toLowerCase())) + "%");
         }
 
         long totalCount = StreamEventEntity.count(hql.toString(), params);
@@ -168,6 +197,90 @@ public class StreamEventsResourceImpl implements StreamResource {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public WorkflowInstance triggerStreamEventWorkflow(String eventId, TriggerWorkflow data) {
+        if (data == null || data.getWorkflowDefinitionId() == null) {
+            throw new WebApplicationException(
+                    "Missing required 'workflowDefinitionId' field", 400);
+        }
+        StreamEventEntity event = findEventOrThrow(eventId);
+        Map<String, String> labels = new LinkedHashMap<>();
+        if (data.getLabels() != null && data.getLabels().getAdditionalProperties() != null) {
+            data.getLabels().getAdditionalProperties().forEach((key, value) ->
+                    labels.put(key, value != null ? String.valueOf(value) : null));
+        }
+        labels.put("trigger", "manual");
+        RunRequest request = new RunRequest(data.getTitle(), labels);
+        WorkflowRunEntity run = orchestrator.startRunFromEvent(event, data.getWorkflowDefinitionId(),
+                request, null);
+        return runBeanMapper.toBean(run);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<StreamEventWorkflowSuggestion> listStreamEventWorkflowSuggestions(String eventId) {
+        StreamEventEntity event = findEventOrThrow(eventId);
+        List<EventProcessingLedgerEntity> entries = EventProcessingLedgerEntity
+                .find("eventId = ?1 AND status = 'completed' ORDER BY createdOn ASC", event.id).list();
+        Map<String, StreamEventWorkflowSuggestion> suggestions = new LinkedHashMap<>();
+        Map<Long, WorkflowDefinitionEntity> definitions = new HashMap<>();
+        for (EventProcessingLedgerEntity entry : entries) {
+            EventSubscriptionEntity sub = EventSubscriptionEntity.findById(entry.subscriptionId);
+            if (sub == null || sub.routing == null || sub.routing.isBlank()) {
+                continue;
+            }
+            List<io.apitomy.axiom.api.beans.RoutingRule> rules;
+            try {
+                rules = objectMapper.readValue(sub.routing, objectMapper.getTypeFactory()
+                        .constructCollectionType(List.class, io.apitomy.axiom.api.beans.RoutingRule.class));
+            } catch (Exception ex) {
+                LOG.warnf("Failed to parse routing rules for subscription %d", sub.id);
+                continue;
+            }
+            for (io.apitomy.axiom.api.beans.RoutingRule rule : rules) {
+                Long definitionId = rule.getWorkflowDefinitionId();
+                if (!"create-workflow".equals(String.valueOf(rule.getType())) || definitionId == null) {
+                    continue;
+                }
+                String key = definitionId + "/" + sub.id;
+                if (suggestions.containsKey(key)) {
+                    continue;
+                }
+                WorkflowDefinitionEntity definition = definitions.computeIfAbsent(definitionId,
+                        id -> WorkflowDefinitionEntity.findById(id));
+                if (definition == null) {
+                    continue;
+                }
+                StreamEventWorkflowSuggestion suggestion = new StreamEventWorkflowSuggestion();
+                suggestion.setWorkflowDefinitionId(definitionId);
+                suggestion.setWorkflowName(definition.name);
+                suggestion.setSubscriptionId(sub.id);
+                suggestion.setSubscriptionName(sub.name);
+                suggestions.put(key, suggestion);
+            }
+        }
+        return List.copyOf(suggestions.values());
+    }
+
+    private StreamEventEntity findEventOrThrow(String eventId) {
+        UUID id;
+        try {
+            id = UUID.fromString(eventId);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Stream event not found: " + eventId, 404);
+        }
+        StreamEventEntity event = StreamEventEntity.findById(id);
+        if (event == null) {
+            throw new WebApplicationException("Stream event not found: " + eventId, 404);
+        }
+        return event;
+    }
+
+    /**
      * Converts ledger entries to API beans with their subscription, routing rules and the
      * outcomes of every attempt.
      */
@@ -206,22 +319,22 @@ public class StreamEventsResourceImpl implements StreamResource {
                             .computeIfAbsent(i.outcomeId, k -> new java.util.ArrayList<>()).add(i));
         }
 
-        // Load project names for outcome and item project IDs
-        java.util.Set<Long> outcomeProjectIds = new java.util.HashSet<>();
+        // Load subject names for outcome and item subject IDs
+        java.util.Set<Long> outcomeSubjectIds = new java.util.HashSet<>();
         for (List<RoutingOutcomeEntity> ocs : outcomesByLedger.values()) {
             for (RoutingOutcomeEntity o : ocs) {
-                if (o.projectId != null) outcomeProjectIds.add(o.projectId);
+                if (o.subjectId != null) outcomeSubjectIds.add(o.subjectId);
             }
         }
         itemsByOutcome.values().stream().flatMap(List::stream)
-                .filter(i -> i.projectId != null)
-                .forEach(i -> outcomeProjectIds.add(i.projectId));
-        Map<Long, String> projectNames = new HashMap<>();
-        if (!outcomeProjectIds.isEmpty()) {
-            List<ProjectEntity> projects = ProjectEntity
-                    .find("id IN ?1", new java.util.ArrayList<>(outcomeProjectIds)).list();
-            for (ProjectEntity p : projects) {
-                projectNames.put(p.id, p.name);
+                .filter(i -> i.subjectId != null)
+                .forEach(i -> outcomeSubjectIds.add(i.subjectId));
+        Map<Long, String> subjectNames = new HashMap<>();
+        if (!outcomeSubjectIds.isEmpty()) {
+            List<SubjectEntity> subjects = SubjectEntity
+                    .find("id IN ?1", new java.util.ArrayList<>(outcomeSubjectIds)).list();
+            for (SubjectEntity p : subjects) {
+                subjectNames.put(p.id, p.name);
             }
         }
 
@@ -291,13 +404,13 @@ public class StreamEventsResourceImpl implements StreamResource {
                 outcome.setAttemptNumber(o.attemptNumber);
                 outcome.setErrorMessage(o.errorMessage);
                 outcome.setSummary(o.summary);
-                outcome.setProjectId(o.projectId);
-                if (o.projectId != null) outcome.setProjectName(projectNames.get(o.projectId));
+                outcome.setSubjectId(o.subjectId);
+                if (o.subjectId != null) outcome.setSubjectName(subjectNames.get(o.subjectId));
                 outcome.setTaskId(o.taskId);
                 if (o.taskId != null) outcome.setTaskStatus(taskStatuses.get(o.taskId));
                 outcome.setTraceId(o.traceId);
                 outcome.setItems(itemsByOutcome.getOrDefault(o.id, List.of()).stream()
-                        .map(i -> toItemBean(i, projectNames, taskStatuses, runTraceIds))
+                        .map(i -> toItemBean(i, subjectNames, taskStatuses, runTraceIds))
                         .toList());
                 return outcome;
             }).toList();
@@ -310,7 +423,7 @@ public class StreamEventsResourceImpl implements StreamResource {
     }
 
     private static EventProcessingOutcomeItem toItemBean(RoutingOutcomeItemEntity i,
-                                                         Map<Long, String> projectNames,
+                                                         Map<Long, String> subjectNames,
                                                          Map<Long, String> taskStatuses,
                                                          Map<Long, UUID> runTraceIds) {
         EventProcessingOutcomeItem item = new EventProcessingOutcomeItem();
@@ -318,8 +431,8 @@ public class StreamEventsResourceImpl implements StreamResource {
         item.setStatus(i.status);
         item.setSummary(i.summary);
         item.setErrorMessage(i.errorMessage);
-        item.setProjectId(i.projectId);
-        if (i.projectId != null) item.setProjectName(projectNames.get(i.projectId));
+        item.setSubjectId(i.subjectId);
+        if (i.subjectId != null) item.setSubjectName(subjectNames.get(i.subjectId));
         item.setTaskId(i.taskId);
         if (i.taskId != null) item.setTaskStatus(taskStatuses.get(i.taskId));
         item.setWorkflowRunId(i.workflowRunId);
@@ -333,7 +446,7 @@ public class StreamEventsResourceImpl implements StreamResource {
         bean.setId(entity.id);
         bean.setSourceEventId(entity.sourceEventId);
         bean.setSource(entity.source);
-        bean.setConnectionId(entity.connectionId);
+        bean.setEventSourceId(entity.eventSourceId);
         bean.setType(entity.type);
         bean.setRef(entity.ref);
         bean.setTimestamp(Date.from(entity.timestamp));

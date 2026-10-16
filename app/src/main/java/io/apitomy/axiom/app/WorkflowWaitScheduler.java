@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
@@ -25,6 +26,9 @@ public class WorkflowWaitScheduler {
     @Inject
     WorkflowExecutionService workflowExecutionService;
 
+    @Inject
+    WorkflowEventDispatcher workflowEventDispatcher;
+
     private volatile boolean shuttingDown = false;
 
     @PreDestroy
@@ -41,6 +45,57 @@ public class WorkflowWaitScheduler {
         for (long waitId : findDueWaitIds()) {
             resumeWait(waitId);
         }
+    }
+
+    /**
+     * Fires due receive-event timeouts and runs look-backs that never ran (crash recovery).
+     */
+    @Scheduled(every = "${axiom.workflow.wait-poll-interval:10s}",
+            concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
+    void checkDueEventTimeouts() {
+        if (shuttingDown) {
+            return;
+        }
+        for (long subscriptionId : findDueEventTimeoutIds()) {
+            try {
+                timeoutSubscription(subscriptionId);
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to time out workflow event subscription %d", subscriptionId);
+            }
+        }
+        for (long subscriptionId : workflowEventDispatcher.findPendingLookbacks()) {
+            try {
+                workflowEventDispatcher.replayLookback(subscriptionId);
+            } catch (Exception e) {
+                LOG.errorf(e, "Event look-back failed for workflow subscription %d", subscriptionId);
+            }
+        }
+    }
+
+    @Transactional
+    List<Long> findDueEventTimeoutIds() {
+        return WorkflowEventSubscriptionEntity
+                .<WorkflowEventSubscriptionEntity>list("timeoutAt <= ?1", Instant.now())
+                .stream().map(s -> s.id).toList();
+    }
+
+    /**
+     * Times out a parked receive-event branch: deletes its subscription and follows the node's
+     * timeout edge, in one transaction. Re-checks the row still exists, since a matching event may
+     * have consumed it first.
+     *
+     * @param subscriptionId the subscription to time out
+     */
+    @Transactional
+    void timeoutSubscription(long subscriptionId) {
+        WorkflowEventSubscriptionEntity sub = WorkflowEventSubscriptionEntity.findById(subscriptionId);
+        if (sub == null || sub.timeoutAt == null || sub.timeoutAt.isAfter(Instant.now())) {
+            return;
+        }
+        long runId = sub.runId;
+        String nodeId = sub.nodeId;
+        sub.delete();
+        workflowExecutionService.onReceiveEventTimeout(runId, nodeId, subscriptionId);
     }
 
     List<Long> findDueWaitIds() {

@@ -41,24 +41,24 @@ class LogContextTest {
 
     @Test
     void nullValuesAreIgnored() {
-        try (LogContext ignored = LogContext.create().traceId(null).projectId(7L)) {
+        try (LogContext ignored = LogContext.create().traceId(null).subjectId(7L)) {
             assertNull(MDC.get(LogContext.TRACE_ID));
-            assertEquals("[projectId=7] ", MDC.get(LogContext.SUMMARY));
+            assertEquals("[subjectId=7] ", MDC.get(LogContext.SUMMARY));
         }
         assertTrue(MDC.getMap().isEmpty());
     }
 
     @Test
     void nestedContextsRestoreOuterValues() {
-        try (LogContext outer = LogContext.create().traceId("t-outer").projectId(1L)) {
+        try (LogContext outer = LogContext.create().traceId("t-outer").subjectId(1L)) {
             try (LogContext inner = LogContext.create().traceId("t-inner").taskId(5L)) {
                 assertEquals("t-inner", MDC.get(LogContext.TRACE_ID));
-                assertEquals("1", MDC.get(LogContext.PROJECT_ID));
+                assertEquals("1", MDC.get(LogContext.SUBJECT_ID));
                 assertEquals("5", MDC.get(LogContext.TASK_ID));
             }
             assertEquals("t-outer", MDC.get(LogContext.TRACE_ID));
             assertNull(MDC.get(LogContext.TASK_ID));
-            assertEquals("[traceId=t-outer projectId=1] ", MDC.get(LogContext.SUMMARY));
+            assertEquals("[traceId=t-outer subjectId=1] ", MDC.get(LogContext.SUMMARY));
         }
         assertTrue(MDC.getMap().isEmpty());
     }
@@ -66,7 +66,7 @@ class LogContextTest {
     @Test
     void clearsOnException() {
         assertThrows(IllegalStateException.class, () -> {
-            try (LogContext ignored = LogContext.create().traceId("t1").reportId(3L)) {
+            try (LogContext ignored = LogContext.create().traceId("t1").workflowRunId(3L)) {
                 throw new IllegalStateException("boom");
             }
         });
@@ -90,14 +90,14 @@ class LogContextTest {
         try (LogContext ignored = LogContext.create().traceId("t1").taskId(9L)) {
             snapshot = LogContext.capture();
         }
-        try (LogContext stale = LogContext.create().traceId("stale").runId(77L)) {
+        try (LogContext stale = LogContext.create().traceId("stale").workflowRunId(77L)) {
             try (LogContext restored = LogContext.restore(snapshot)) {
                 assertEquals("t1", MDC.get(LogContext.TRACE_ID));
                 assertEquals("9", MDC.get(LogContext.TASK_ID));
-                assertNull(MDC.get(LogContext.RUN_ID));
+                assertNull(MDC.get(LogContext.WORKFLOW_RUN_ID));
             }
             assertEquals("stale", MDC.get(LogContext.TRACE_ID));
-            assertEquals("77", MDC.get(LogContext.RUN_ID));
+            assertEquals("77", MDC.get(LogContext.WORKFLOW_RUN_ID));
         }
         assertTrue(MDC.getMap().isEmpty());
     }

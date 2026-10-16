@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * A filtered view over the event stream. Each subscription defines filter
  * criteria and labels for routing matching events to destinations like
- * Manager triage, workflow dispatch, or future targets.
+ * workflow dispatch, workflow creation, or future targets.
  */
 @Entity
 @Table(name = "event_subscription")
@@ -33,7 +33,7 @@ public class EventSubscriptionEntity extends PanacheEntity {
 
     /**
      * Jakarta EL filter expression that evaluates to boolean.
-     * Available variables: event.type, event.source, event.connectionId,
+     * Available variables: event.type, event.source, event.eventSourceId,
      * event.ref, event.timestamp, event.actor.login, event.payload.*
      */
     @Column(columnDefinition = "TEXT")
@@ -42,7 +42,7 @@ public class EventSubscriptionEntity extends PanacheEntity {
     /**
      * Routing rules stored as JSON. Each rule specifies a destination type
      * and optional configuration. Example:
-     * [{"type":"manager"},{"type":"create-workflow","workflowDefinitionId":5}]
+     * [{"type":"workflow-dispatch"},{"type":"create-workflow","workflowDefinitionId":5}]
      */
     @Column(columnDefinition = "TEXT")
     public String routing;
@@ -57,7 +57,7 @@ public class EventSubscriptionEntity extends PanacheEntity {
 
     /**
      * Free-form labels for routing and categorization. Used to match
-     * subscriptions to action types and to scope Manager evaluation.
+     * subscriptions to action types.
      */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(

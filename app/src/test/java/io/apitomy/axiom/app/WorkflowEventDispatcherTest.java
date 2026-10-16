@@ -1,6 +1,6 @@
 package io.apitomy.axiom.app;
 
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
@@ -79,11 +79,11 @@ class WorkflowEventDispatcherTest {
 
     @Test
     void nonMatchingEventTypeResumesNothing() {
-        long[] ids = setup("Dispatcher Type Filter Project", RECEIVE_EVENT_CONTENT);
+        long[] ids = setup("Dispatcher Type Filter Subject", RECEIVE_EVENT_CONTENT);
         WorkflowRunEntity run = trigger(ids);
 
         Map<String, Object> eventMap = buildStreamEventMap("issue-created", "github",
-                projectRef(ids[0]), null);
+                subjectRef(ids[0]), null);
         dispatcher.dispatchStreamEvent("issue-created", eventMap);
 
         assertRunStatus(run.id, "waiting");
@@ -92,11 +92,11 @@ class WorkflowEventDispatcherTest {
 
     @Test
     void matchingEventTypeResumesRun() {
-        long[] ids = setup("Dispatcher Match Project", RECEIVE_EVENT_CONTENT);
+        long[] ids = setup("Dispatcher Match Subject", RECEIVE_EVENT_CONTENT);
         WorkflowRunEntity run = trigger(ids);
 
         Map<String, Object> eventMap = buildStreamEventMap("pr-merged", "github",
-                projectRef(ids[0]), null);
+                subjectRef(ids[0]), null);
         dispatcher.dispatchStreamEvent("pr-merged", eventMap);
 
         assertRunStatus(run.id, "completed");
@@ -105,17 +105,17 @@ class WorkflowEventDispatcherTest {
 
     @Test
     void falseMatchExpressionLeavesRunParked() {
-        long[] ids = setup("Dispatcher Match Expr Project", MATCH_EXPRESSION_CONTENT);
+        long[] ids = setup("Dispatcher Match Expr Subject", MATCH_EXPRESSION_CONTENT);
         WorkflowRunEntity run = trigger(ids);
 
         Map<String, Object> smallPr = buildStreamEventMap("pr-merged", "github",
-                projectRef(ids[0]), Map.of("number", 5));
+                subjectRef(ids[0]), Map.of("number", 5));
         dispatcher.dispatchStreamEvent("pr-merged", smallPr);
         assertRunStatus(run.id, "waiting");
         assertSubscriptionCount(run.id, 1);
 
         Map<String, Object> bigPr = buildStreamEventMap("pr-merged", "github",
-                projectRef(ids[0]), Map.of("number", 500));
+                subjectRef(ids[0]), Map.of("number", 500));
         dispatcher.dispatchStreamEvent("pr-merged", bigPr);
         assertRunStatus(run.id, "completed");
         assertSubscriptionCount(run.id, 0);
@@ -123,7 +123,7 @@ class WorkflowEventDispatcherTest {
 
     @Test
     void matchingEventCompletesReceiveEventTraceNode() {
-        long[] ids = setup("Dispatcher Trace Project", RECEIVE_EVENT_CONTENT);
+        long[] ids = setup("Dispatcher Trace Subject", RECEIVE_EVENT_CONTENT);
         WorkflowRunEntity run = trigger(ids);
 
         // Verify the trace node for the receive-event subscription was created as in-progress
@@ -141,7 +141,7 @@ class WorkflowEventDispatcherTest {
         });
 
         Map<String, Object> eventMap = buildStreamEventMap("pr-merged", "github",
-                projectRef(ids[0]), null);
+                subjectRef(ids[0]), null);
         dispatcher.dispatchStreamEvent("pr-merged", eventMap);
 
         assertRunStatus(run.id, "completed");
@@ -161,12 +161,47 @@ class WorkflowEventDispatcherTest {
         });
     }
 
+    /**
+     * One matching event resumes every run waiting for it on the subject, not just the first one.
+     */
+    @Test
+    void dispatchBroadcastsToAllWaitingRunsOnSubject() {
+        String content = RECEIVE_EVENT_CONTENT.replace("pr-merged", "issue.commented");
+        long[] first = setup("Dispatcher Broadcast Subject", content);
+        long secondDefinitionId = QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = "Dispatcher Broadcast Second WF";
+            def.content = content;
+            def.currentVersion = 1;
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+
+            WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
+            version.definitionId = def.id;
+            version.version = 1;
+            version.content = content;
+            version.createdOn = Instant.now();
+            version.persist();
+            return def.id;
+        });
+        WorkflowRunEntity runA = trigger(first);
+        WorkflowRunEntity runB = trigger(new long[] { first[0], secondDefinitionId });
+
+        Map<String, Object> eventMap = buildStreamEventMap("issue.commented", "github",
+                subjectRef(first[0]), null);
+        dispatcher.dispatchStreamEvent("issue.commented", eventMap);
+
+        assertRunStatus(runA.id, "completed");
+        assertRunStatus(runB.id, "completed");
+    }
+
     @Test
     void dispatchStreamEventNoMatchingSubscriptionsDoesNotThrow() {
         Map<String, Object> eventMap = Map.of(
                 "type", "some.unmatched.type",
                 "source", "github",
-                "connectionId", "test-conn",
+                "eventSourceId", "test-conn",
                 "ref", "https://github.com/owner/repo/issues/1",
                 "timestamp", Instant.now().toString(),
                 "payload", Map.of());
@@ -176,19 +211,18 @@ class WorkflowEventDispatcherTest {
 
     // -- Helpers --
 
-    private long[] setup(String projectName, String content) {
+    private long[] setup(String subjectName, String content) {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = projectName;
-            project.type = "other";
-            project.status = "new";
-            project.ref = "test/" + projectName.toLowerCase().replace(" ", "-");
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = subjectName;
+            subject.type = "other";
+            subject.ref = "test/" + subjectName.toLowerCase().replace(" ", "-");
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
 
             WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
-            def.name = projectName + " WF";
+            def.name = subjectName + " WF";
             def.content = content;
             def.currentVersion = 1;
             def.createdOn = Instant.now();
@@ -202,7 +236,7 @@ class WorkflowEventDispatcherTest {
             version.createdOn = Instant.now();
             version.persist();
 
-            return new long[] { project.id, def.id };
+            return new long[] { subject.id, def.id };
         });
     }
 
@@ -213,9 +247,9 @@ class WorkflowEventDispatcherTest {
         return run;
     }
 
-    private String projectRef(long projectId) {
+    private String subjectRef(long subjectId) {
         return QuarkusTransaction.requiringNew().call(() ->
-                ((ProjectEntity) ProjectEntity.findById(projectId)).ref);
+                ((SubjectEntity) SubjectEntity.findById(subjectId)).ref);
     }
 
     @SuppressWarnings("unchecked")
@@ -224,7 +258,7 @@ class WorkflowEventDispatcherTest {
         return Map.of(
                 "type", eventType,
                 "source", source,
-                "connectionId", "test-conn",
+                "eventSourceId", "test-conn",
                 "ref", ref != null ? ref : "",
                 "timestamp", Instant.now().toString(),
                 "payload", payload != null ? payload : Map.of());

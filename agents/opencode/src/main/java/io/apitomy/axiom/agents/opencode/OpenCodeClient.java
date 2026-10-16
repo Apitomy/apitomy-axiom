@@ -85,7 +85,7 @@ public class OpenCodeClient {
      * <p>Under load (many concurrent tasks hitting a single {@code opencode serve}
      * process), session creation can be briefly delayed well past a few seconds even
      * though the server is healthy and recovers. Callers that already have a
-     * configured request timeout (e.g. the Manager/report timeout-seconds) should
+     * configured request timeout (e.g. a job timeout-seconds) should
      * pass it through here rather than relying on the short default, to avoid
      * spurious timeouts under load.</p>
      *

@@ -1,5 +1,7 @@
 package io.apitomy.axiom.core.services;
 
+import io.apitomy.axiom.core.config.AxiomHome;
+import io.quarkus.runtime.Startup;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.jboss.logging.Logger;
@@ -21,7 +23,11 @@ import java.util.Set;
  * Provides AES-256-GCM encryption and decryption for secrets stored in
  * the database. The encryption key is auto-generated on first startup
  * and stored in {@code ~/.axiom/secret.key}.
+ *
+ * <p>The key is loaded when Axiom starts. If it cannot be read or created, or is not a valid 256-bit key, the
+ * problem is logged and startup fails, so Axiom exits instead of running without usable secrets.</p>
  */
+@Startup
 @ApplicationScoped
 public class EncryptionService {
 
@@ -35,10 +41,17 @@ public class EncryptionService {
 
     @PostConstruct
     void init() {
-        Path keyFile = Path.of(System.getProperty("user.home"), ".axiom", "secret.key");
+        Path keyFile = AxiomHome.resolve("secret.key");
         try {
             if (Files.exists(keyFile)) {
                 byte[] keyBytes = Files.readAllBytes(keyFile);
+                if (keyBytes.length != KEY_LENGTH / 8) {
+                    String message = "The encryption key in " + keyFile + " is not a valid 256-bit key ("
+                            + keyBytes.length + " bytes instead of " + (KEY_LENGTH / 8) + "). Restore the key "
+                            + "from a backup; without it, stored secrets cannot be decrypted.";
+                    LOG.error(message);
+                    throw new IllegalStateException(message);
+                }
                 secretKey = new SecretKeySpec(keyBytes, "AES");
                 LOG.debug("Loaded encryption key from " + keyFile);
             } else {
@@ -55,9 +68,12 @@ public class EncryptionService {
                 }
                 LOG.infof("Generated new encryption key at %s", keyFile);
             }
+        } catch (IllegalStateException e) {
+            throw e;
         } catch (Exception e) {
-            LOG.errorf(e, "Failed to initialize encryption key from %s", keyFile);
-            throw new RuntimeException("Cannot initialize encryption", e);
+            String message = "Cannot load the encryption key from " + keyFile + ": " + e;
+            LOG.error(message, e);
+            throw new IllegalStateException(message, e);
         }
     }
 

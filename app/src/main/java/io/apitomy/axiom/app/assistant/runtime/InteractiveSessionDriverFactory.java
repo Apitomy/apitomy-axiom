@@ -44,10 +44,10 @@ public interface InteractiveSessionDriverFactory {
      * @param workingDirectory assistant runtime working directory
      * @param command legacy engine command line, when required by the selected runtime
      * @param environment resolved runtime environment variables
-     * @param projectId optional project identifier when session is project scoped
-     * @param projectName optional project name when session is project scoped
+     * @param subjectId optional subject identifier when session is subject scoped
+     * @param subjectName optional subject name when session is subject scoped
      * @param mcpServers resolved MCP servers for the session, keyed by name
-     * @param systemPrompt final system prompt for the session (template prompt plus project context);
+     * @param systemPrompt final system prompt for the session (template prompt plus subject context);
      *        applied by the OpenCode driver. The Claude driver receives it through {@code command}.
      * @param allowedTools resolved allowed tools, in Claude Code format; enforced for OpenCode through its
      *        permission config
@@ -58,8 +58,8 @@ public interface InteractiveSessionDriverFactory {
                          Path workingDirectory,
                          List<String> command,
                          Map<String, String> environment,
-                         Long projectId,
-                         String projectName,
+                         Long subjectId,
+                         String subjectName,
                          Consumer<AssistantEventParser.SseEvent> eventSink,
                          Consumer<AssistantEventParser.SseEvent> autoApprovalSink,
                          String model,
@@ -129,7 +129,7 @@ public interface InteractiveSessionDriverFactory {
 
         /**
          * Builds the extra environment for a session's {@code opencode serve} process: the session's
-         * template/project environment, overridden by the Axiom-managed {@code OPENCODE_CONFIG} when Axiom wrote
+         * template/subject environment, overridden by the Axiom-managed {@code OPENCODE_CONFIG} when Axiom wrote
          * a config file. Entries with a null key or value are skipped.
          *
          * @param requestEnvironment resolved session environment; may be null

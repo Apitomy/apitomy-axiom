@@ -1,13 +1,13 @@
 /**
  * Registers a Monaco completion provider that suggests placeholder
- * substitutions (e.g. {{source}}, {{actionTypes}}) when the user
+ * substitutions (e.g. {{inputs.ref}}) when the user
  * types "{{" in the editor.
  *
  * Usage with PatternFly CodeEditor:
  * ```tsx
  * <CodeEditor
  *     onEditorDidMount={(editor, monaco) => {
- *         registerPlaceholderCompletions(monaco, "markdown", MANAGER_PLACEHOLDERS);
+ *         registerPlaceholderCompletions(editor, monaco, "markdown", inputPlaceholderItems(inputs));
  *     }}
  * />
  * ```
@@ -117,54 +117,29 @@ export function registerPlaceholderCompletions(
 }
 
 /**
- * Placeholders available in the Manager prompt template.
+ * Builds `inputs.<name>` completion items for an action type's declared inputs.
+ * Inputs without a name are skipped.
+ *
+ * @param inputs the declared inputs
+ * @returns one placeholder item per named input, in declaration order
  */
-export const MANAGER_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "actionTypes", description: "Formatted list of all configured action types with names and descriptions" },
-    { name: "agents", description: "Formatted list of all configured agents with names, types, and capabilities" },
-    { name: "source", description: "Event source (e.g. 'github', 'jira')" },
-    { name: "eventType", description: "Normalized event type (e.g. 'issue.created', 'pr.merged')" },
-    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
-    { name: "issueRef", description: "Alias for ref (backward compatibility)" },
-    { name: "repository", description: "Alias for ref (backward compatibility)" },
-    { name: "payload", description: "Normalized event payload JSON (typed structure)" },
-    { name: "projectContext", description: "Existing project details and recent task history" },
-];
+export function inputPlaceholderItems(
+    inputs: { name: string; description?: string; type?: string }[]
+): PlaceholderItem[] {
+    return inputs
+        .filter((i) => i.name)
+        .map((i) => ({
+            name: `inputs.${i.name}`,
+            description: i.description || `Input: ${i.name}${i.type ? ` (${i.type})` : ""}`,
+        }));
+}
 
 /**
- * Placeholders available in the Action Type prompt template.
+ * Environment variables available to every script at runtime. These are
+ * documentation entries for the editor help, not `{{…}}` completions.
  */
-export const ACTION_TYPE_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "managerInput", description: "Instructions from the Manager, or a formatted event summary for invoke-action routing" },
-    { name: "event", description: "Full normalized event payload JSON (available for invoke-action routing)" },
-    { name: "actionType", description: "The action type name" },
-    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
-    { name: "repository", description: "Repository identifier" },
-    { name: "projectName", description: "Project name" },
-    { name: "workDir", description: "Absolute path to the project workspace directory" },
-];
-
-/**
- * Placeholders available in the Action Type script template.
- */
-export const SCRIPT_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "projectId", description: "Numeric ID of the Axiom project" },
-    { name: "eventId", description: "ID of the triggering event (if applicable)" },
-    { name: "taskId", description: "ID of the task executing this script" },
-    { name: "ref", description: "Full URL of the event subject (e.g. 'https://github.com/owner/repo/issues/42')" },
-    { name: "repository", description: "Repository identifier" },
-    { name: "projectName", description: "Project name" },
-    { name: "managerInput", description: "Instructions from the Manager or event summary" },
-    { name: "apiBaseUrl", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
-    { name: "workDir", description: "Absolute path to the project workspace directory" },
-];
-
-/**
- * Placeholders available in the Report Definition prompt template.
- */
-export const REPORT_PLACEHOLDERS: PlaceholderItem[] = [
-    { name: "repositories", description: "Comma-separated list of repositories to scan" },
-    { name: "timeRangeStart", description: "Start of the report time window (ISO date)" },
-    { name: "timeRangeEnd", description: "End of the report time window (ISO date)" },
-    { name: "timeWindow", description: "Human-readable time window description" },
+export const SCRIPT_ENV_VARS: PlaceholderItem[] = [
+    { name: "AXIOM_API_URL", description: "Base URL of the Axiom API (e.g. 'http://localhost:8080/api/v1')" },
+    { name: "AXIOM_TASK_ID", description: "ID of the task executing this script" },
+    { name: "AXIOM_WORK_DIR", description: "Absolute path to the task's working directory" },
 ];

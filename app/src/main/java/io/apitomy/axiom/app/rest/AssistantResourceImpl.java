@@ -6,10 +6,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.api.AssistantResource;
+import io.apitomy.axiom.api.beans.AssistantApplyError;
 import io.apitomy.axiom.api.beans.AssistantApplyResult;
 import io.apitomy.axiom.api.beans.AssistantItem;
 import io.apitomy.axiom.api.beans.AssistantPermissionResponse;
 import io.apitomy.axiom.api.beans.AssistantSessionInfo;
+import io.apitomy.axiom.api.beans.AssistantValidateRequest;
+import io.apitomy.axiom.api.beans.AssistantValidateResult;
+import io.apitomy.axiom.api.beans.ConfigProblem;
 import io.apitomy.axiom.api.beans.AutoApprovalRule;
 import io.apitomy.axiom.api.beans.CreateAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.CreateAutoApprovalRequest;
@@ -20,12 +24,14 @@ import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
 import io.apitomy.axiom.api.beans.SessionTemplate;
 import io.apitomy.axiom.api.beans.SetAllowAllRequest;
 import io.apitomy.axiom.api.beans.SetSubagentAllowAllRequest;
+import io.apitomy.axiom.app.assistant.SessionTokenGuard;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.AssistantSession;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.SessionLimitReachedException;
 import io.apitomy.axiom.app.assistant.AssistantSessionManager.ValidationException;
+import io.apitomy.axiom.app.assistant.SessionCapability;
 import io.apitomy.axiom.app.assistant.SessionTemplateService;
 import io.apitomy.axiom.app.assistant.runtime.SessionCompatibilityException;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -62,6 +68,12 @@ import java.util.function.Consumer;
 @RunOnVirtualThread
 public class AssistantResourceImpl implements AssistantResource {
 
+    @Inject
+    SessionTokenGuard tokenGuard;
+
+    @Context
+    HttpHeaders httpHeaders;
+
     private static final Logger LOG = Logger.getLogger(AssistantResourceImpl.class);
 
     @Inject
@@ -95,7 +107,7 @@ public class AssistantResourceImpl implements AssistantResource {
         }
         try {
             AssistantSession session = sessionManager.createSession(
-                    data.getName(), data.getTemplateId(), data.getProjectId());
+                    data.getName(), data.getTemplateId(), data.getSubjectId());
             return toSessionInfo(session);
         } catch (IllegalArgumentException e) {
             throw new WebApplicationException(e.getMessage(), 404);
@@ -336,6 +348,10 @@ public class AssistantResourceImpl implements AssistantResource {
         if (data.getMessage() == null || data.getMessage().isBlank()) {
             throw new WebApplicationException("Missing 'message' field", 400);
         }
+        if (session.hasCapability(SessionCapability.COMPOSITION)) {
+            throw new WebApplicationException(Response.status(409).type(MediaType.APPLICATION_JSON)
+                    .entity(Map.of("message", "Use /compositions/{id}/messages for workbench sessions")).build());
+        }
         try {
             session.sendMessage(data.getMessage());
         } catch (IOException e) {
@@ -414,6 +430,40 @@ public class AssistantResourceImpl implements AssistantResource {
         }
     }
 
+    /**
+     * Validates a draft configuration item in the context of an assistant session.
+     *
+     * @param sessionId the session identifier
+     * @param data the item type and JSON
+     * @return whether the item is valid and the problems found
+     */
+    @Override
+    public AssistantValidateResult validateAssistantItem(String sessionId, AssistantValidateRequest data) {
+        AssistantSession session = requireSession(sessionId);
+        tokenGuard.require(session, httpHeaders.getHeaderString(SessionTokenGuard.HEADER));
+        if (data.getType() == null || data.getItem() == null) {
+            throw new WebApplicationException("'type' and 'item' are required", 400);
+        }
+        JsonNode item = objectMapper.valueToTree(data.getItem().getAdditionalProperties());
+        List<io.apitomy.axiom.app.validation.ConfigProblem> problems;
+        try {
+            problems = sessionManager.validateItem(sessionId, data.getType().value(), item);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException(e.getMessage(), 404);
+        }
+        AssistantValidateResult result = new AssistantValidateResult();
+        result.setValid(problems.stream().noneMatch(io.apitomy.axiom.app.validation.ConfigProblem::isError));
+        result.setProblems(problems.stream().map(p -> {
+            ConfigProblem bean = new ConfigProblem();
+            bean.setSeverity(ConfigProblem.Severity.fromValue(p.severity()));
+            bean.setPath(p.path());
+            bean.setCode(p.code());
+            bean.setMessage(p.message());
+            return bean;
+        }).toList());
+        return result;
+    }
+
     /** {@inheritDoc} */
     @Override
     public AssistantApplyResult applyAssistantSession(String sessionId) {
@@ -425,31 +475,29 @@ public class AssistantResourceImpl implements AssistantResource {
             AssistantApplyResult applyResult = new AssistantApplyResult();
             applyResult.setTools(result.toolsCreated() + result.toolsUpdated());
             applyResult.setActionTypes(result.actionTypesCreated() + result.actionTypesUpdated());
-            applyResult.setReportDefinitions(result.reportDefinitionsCreated() + result.reportDefinitionsUpdated());
             applyResult.setToolsCreated(result.toolsCreated());
             applyResult.setToolsUpdated(result.toolsUpdated());
             applyResult.setActionTypesCreated(result.actionTypesCreated());
             applyResult.setActionTypesUpdated(result.actionTypesUpdated());
-            applyResult.setReportDefinitionsCreated(result.reportDefinitionsCreated());
-            applyResult.setReportDefinitionsUpdated(result.reportDefinitionsUpdated());
             applyResult.setToolsets(result.toolsetsCreated() + result.toolsetsUpdated());
             applyResult.setToolsetsCreated(result.toolsetsCreated());
             applyResult.setToolsetsUpdated(result.toolsetsUpdated());
             applyResult.setSessionTemplates(result.sessionTemplatesCreated() + result.sessionTemplatesUpdated());
             applyResult.setSessionTemplatesCreated(result.sessionTemplatesCreated());
             applyResult.setSessionTemplatesUpdated(result.sessionTemplatesUpdated());
-            applyResult.setScheduledJobs(result.scheduledJobsCreated() + result.scheduledJobsUpdated());
-            applyResult.setScheduledJobsCreated(result.scheduledJobsCreated());
-            applyResult.setScheduledJobsUpdated(result.scheduledJobsUpdated());
-            applyResult.setConnectionsCreated(result.connectionsCreated());
-            applyResult.setConnectionsUpdated(result.connectionsUpdated());
+            applyResult.setEventSourcesCreated(result.eventSourcesCreated());
+            applyResult.setEventSourcesUpdated(result.eventSourcesUpdated());
             applyResult.setSubscriptionsCreated(result.subscriptionsCreated());
             applyResult.setSubscriptionsUpdated(result.subscriptionsUpdated());
             applyResult.setWorkflowDefinitionsCreated(result.workflowDefinitionsCreated());
             applyResult.setWorkflowDefinitionsUpdated(result.workflowDefinitionsUpdated());
             return applyResult;
         } catch (ValidationException e) {
-            throw new WebApplicationException(e.getMessage(), 422);
+            AssistantApplyError error = new AssistantApplyError();
+            error.setMessage(e.getMessage());
+            error.setErrors(e.getErrors() == null ? List.of() : new ArrayList<>(e.getErrors()));
+            throw new WebApplicationException(e.getMessage(), Response.status(422)
+                    .type(MediaType.APPLICATION_JSON).entity(error).build());
         } catch (WebApplicationException e) {
             throw e;
         } catch (Exception e) {
@@ -602,7 +650,7 @@ public class AssistantResourceImpl implements AssistantResource {
     }
 
     private void requireConfigAssistant(AssistantSession session) {
-        if (!"axiom-config-assistant".equals(session.getTemplateId())) {
+        if (!session.hasCapability(SessionCapability.CONFIG_ITEMS)) {
             throw new WebApplicationException(
                     "Items are only available for Configuration Assistant sessions", 400);
         }
@@ -629,9 +677,10 @@ public class AssistantResourceImpl implements AssistantResource {
         info.setTotalInputTokens(session.getTotalInputTokens());
         info.setTotalOutputTokens(session.getTotalOutputTokens());
         info.setTurnCount(session.getTurnCount());
-        info.setProjectId(session.getProjectId());
-        info.setProjectName(session.getProjectName());
+        info.setSubjectId(session.getSubjectId());
+        info.setSubjectName(session.getSubjectName());
         info.setAllowAll(session.isAllowAll());
+        info.setCapabilities(session.getCapabilities().stream().map(SessionCapability::jsonName).sorted().toList());
         return info;
     }
 
@@ -651,6 +700,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setName(template.name());
         bean.setDescription(template.description());
         bean.setBuiltIn(template.builtIn());
+        bean.setCapabilities(template.capabilities().stream().map(SessionCapability::jsonName).sorted().toList());
         bean.setSystemPrompt(template.systemPrompt());
         bean.setWelcomeMessage(template.welcomeMessage());
         bean.setInitialMessage(template.initialMessage());
@@ -692,7 +742,8 @@ public class AssistantResourceImpl implements AssistantResource {
                 environmentToJson(data.getEnvironment()),
                 data.getMcpServers() != null ? data.getMcpServers() : List.of(),
                 data.getAllowedTools() != null ? data.getAllowedTools() : List.of(),
-                false);
+                false,
+                java.util.Set.of());
     }
 
     private String environmentToJson(Environment env) {

@@ -214,8 +214,8 @@ class InteractiveSessionDriverFactoryTest {
 
         InteractiveSessionDriver driver = defaultFactory().createDriver(
                 new InteractiveSessionDriverFactory.DriverRequest(
-                        "opencode", "project-assistant", sessionDir, workDir, List.of(),
-                        Map.of("AXIOM_PROJECT_ID", "42", "TEMPLATE_SECRET", "s3cr3t"),
+                        "opencode", "subject-assistant", sessionDir, workDir, List.of(),
+                        Map.of("AXIOM_SUBJECT_ID", "42", "TEMPLATE_SECRET", "s3cr3t"),
                         42L, "demo", event -> {
                         }, event -> {
                         }, "github-copilot/claude-sonnet-5", "Session", Map.of(), null, List.of()));
@@ -224,7 +224,7 @@ class InteractiveSessionDriverFactoryTest {
         assertEquals(workDir, getField(process, "workingDirectory"));
         @SuppressWarnings("unchecked")
         Map<String, String> environment = (Map<String, String>) getField(process, "environment");
-        assertEquals("42", environment.get("AXIOM_PROJECT_ID"));
+        assertEquals("42", environment.get("AXIOM_SUBJECT_ID"));
         assertEquals("s3cr3t", environment.get("TEMPLATE_SECRET"));
         assertFalse(environment.containsKey("OPENCODE_CONFIG"));
     }

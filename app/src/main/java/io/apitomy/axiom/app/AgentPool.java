@@ -19,8 +19,8 @@ import java.util.Optional;
 
 /**
  * Concurrency governance service for the agent pool. Manages lease-based
- * assignment of configured agent slots to work items (tasks, reports,
- * scheduled jobs). Each agent slot can only execute one work item at a time.
+ * assignment of configured agent slots to work items (tasks).
+ * Each agent slot can only execute one work item at a time.
  *
  * <p>Resolution order when selecting an agent for a work item:</p>
  * <ol>
@@ -54,39 +54,63 @@ public class AgentPool {
      * Attempts to lease an agent for executing a work item.
      *
      * @param capability    the capability to match (e.g. action type name), or null
-     * @param agentEntityId explicit agent entity ID assignment, or null for auto-resolve
-     * @param workloadType  the type of workload (e.g. "task", "report")
+     * @param engine        the agent type the work item requires (e.g. {@code opencode}), or null/blank for any
+     * @param agentEntityId explicit agent entity ID assignment, or null for auto-resolve; ignored when that agent
+     *                      is not of the required engine
+     * @param workloadType  the type of workload (e.g. "task")
      * @param workloadId    the ID of the workload being executed
-     * @return an AgentLease if a slot is available, or empty if all agents are busy
+     * @return an AgentLease if a matching agent is free, or empty if none is available
      */
     @Transactional
-    public Optional<AgentLease> tryLease(String capability, Long agentEntityId,
+    public Optional<AgentLease> tryLease(String capability, String engine, Long agentEntityId,
                                          String workloadType, Long workloadId) {
-        // Tier 1: explicit agent assignment
+        // Tier 1: explicit agent assignment (only if it runs the required engine)
         if (agentEntityId != null) {
             AgentEntity agent = AgentEntity.findById(agentEntityId);
-            if (agent != null && agent.enabled && !isLeased(agent.id)) {
-                return Optional.of(createLease(agent, workloadType, workloadId));
+            if (agent != null && agent.enabled && matchesEngine(agent, engine)) {
+                return isLeased(agent.id) ? Optional.empty() : Optional.of(createLease(agent, workloadType, workloadId));
             }
-            return Optional.empty();
         }
 
-        // Tier 2: capability match via glob patterns
+        // Tier 2: capability match via glob patterns, restricted to the required engine
         List<AgentEntity> agents = AgentEntity.list("enabled = true ORDER BY id ASC");
         for (AgentEntity agent : agents) {
-            if (!isLeased(agent.id)) {
-                List<String> capabilities = AgentCapabilityEntity.findCapabilities(agent.id);
-                if (capability == null || GlobMatcher.anyMatches(capabilities, capability)) {
-                    return Optional.of(createLease(agent, workloadType, workloadId));
-                }
+            if (!matchesEngine(agent, engine) || isLeased(agent.id)) {
+                continue;
+            }
+            List<String> capabilities = AgentCapabilityEntity.findCapabilities(agent.id);
+            if (capability == null || GlobMatcher.anyMatches(capabilities, capability)) {
+                return Optional.of(createLease(agent, workloadType, workloadId));
             }
         }
 
         // No fallback — strict matching
         if (capability != null) {
-            LOG.warnf("No agent with capability matching '%s' is available", capability);
+            LOG.warnf("No %sagent with capability matching '%s' is available",
+                    isBlank(engine) ? "" : engine + " ", capability);
         }
         return Optional.empty();
+    }
+
+    /**
+     * Whether at least one enabled agent of the given engine exists (busy or not).
+     *
+     * @param engine the agent type, or null/blank for any
+     * @return true if such an agent is configured
+     */
+    public boolean hasEnabledAgent(String engine) {
+        if (isBlank(engine)) {
+            return AgentEntity.count("enabled", true) > 0;
+        }
+        return AgentEntity.count("enabled = true and agentType = ?1", engine) > 0;
+    }
+
+    private static boolean matchesEngine(AgentEntity agent, String engine) {
+        return isBlank(engine) || engine.equals(agent.agentType);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**
@@ -121,7 +145,7 @@ public class AgentPool {
      * Creates a lease for an agent to execute a workload.
      *
      * @param agentEntity  the agent entity to lease
-     * @param workloadType the type of workload (e.g. "task", "report")
+     * @param workloadType the type of workload (e.g. "task")
      * @param workloadId   the ID of the workload being executed
      * @return the created AgentLease
      */

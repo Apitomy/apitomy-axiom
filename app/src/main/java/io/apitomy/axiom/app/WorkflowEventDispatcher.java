@@ -2,7 +2,9 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
+import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.flow.engine.WorkflowEngine;
 import io.apitomy.flow.model.Workflow;
@@ -14,19 +16,23 @@ import io.apitomy.flow.spi.NodeResult;
 import io.apitomy.flow.spi.NodeResultStatus;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.TransactionPhase;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Matches allowed pipeline events against parked receive-event workflow
  * branches and resumes the ones that match. Scoping is hybrid: an event that
- * correlates to a project (by {@code issueRef} → {@code project.ref}, else
- * {@code event.projectId}) is offered only to that project's subscriptions;
+ * correlates to a subject (by {@code issueRef} → {@code subject.ref}, else
+ * {@code event.subjectId}) is offered only to that subject's subscriptions;
  * an uncorrelated event is broadcast to all subscriptions of its event type.
  * Matching itself (event type, WAITING status, {@code match} EL expressions)
  * is delegated to the Flow engine's {@code matchesEvent}, so stale
@@ -110,7 +116,7 @@ public class WorkflowEventDispatcher {
                 if (matched[0] != null) {
                     String error = e.getMessage() != null
                             ? e.getMessage() : e.getClass().getSimpleName();
-                    resumed.add(new ResumedRun(matched[0].runId(), matched[0].projectId(),
+                    resumed.add(new ResumedRun(matched[0].runId(), matched[0].subjectId(),
                             matched[0].nodeId(), null, null, error));
                 }
             }
@@ -120,7 +126,7 @@ public class WorkflowEventDispatcher {
 
     /**
      * Read phase for stream events: prefilters subscriptions by event type.
-     * Stream events don't have project scoping the way old events do — the
+     * Stream events don't have subject scoping the way old events do — the
      * subscription's filter rules handle scoping instead.
      */
     private List<Long> planStreamDispatch(String eventType, Map<String, Object> eventMap) {
@@ -141,8 +147,10 @@ public class WorkflowEventDispatcher {
      */
     private ResumedRun offerToSubscription(long subscriptionId, Map<String, Object> eventMap,
                                            EventOrigin origin, MatchedSubscription[] matched) {
+        // Locked: live delivery and look-back may offer events to the same subscription at once;
+        // the second waits, then finds the row consumed.
         WorkflowEventSubscriptionEntity sub =
-                WorkflowEventSubscriptionEntity.findById(subscriptionId);
+                WorkflowEventSubscriptionEntity.findById(subscriptionId, LockModeType.PESSIMISTIC_WRITE);
         if (sub == null) {
             return null;
         }
@@ -158,13 +166,18 @@ public class WorkflowEventDispatcher {
             return null;
         }
 
+        // Cheap correlation-key check first (Flow's matchesEvent re-checks it).
+        if (sub.correlationKey != null && !sub.correlationKey.equals(
+                evaluateEventKey(workflow, sub.nodeId, eventMap))) {
+            return null;
+        }
         if (!workflowEngine.matchesEvent(workflow, instance, sub.nodeId, eventMap)) {
             return null;
         }
 
         long runId = sub.runId;
         String nodeId = sub.nodeId;
-        matched[0] = new MatchedSubscription(runId, run.projectId, nodeId);
+        matched[0] = new MatchedSubscription(runId, run.subjectId, nodeId);
         sub.delete();
         ResumedRun resumed = workflowExecutionService.onEventReceived(runId, nodeId, eventMap,
                 origin, subscriptionId);
@@ -173,8 +186,123 @@ public class WorkflowEventDispatcher {
         return resumed;
     }
 
+    private String evaluateEventKey(Workflow workflow, String nodeId, Map<String, Object> eventMap) {
+        try {
+            return workflowEngine.evaluateEventKey(workflow, nodeId, eventMap);
+        } catch (RuntimeException e) {
+            LOG.debugf(e, "Failed to evaluate the event key of node %s", nodeId);
+            return null;
+        }
+    }
+
+    /**
+     * Runs a new subscription's look-back once the parking transaction has committed.
+     *
+     * @param request the subscription to run the look-back for
+     */
+    void onLookbackRequested(@Observes(during = TransactionPhase.AFTER_SUCCESS)
+                             EventLookbackRequested request) {
+        try {
+            replayLookback(request.subscriptionId());
+        } catch (Exception e) {
+            LOG.errorf(e, "Event look-back failed for workflow subscription %d",
+                    request.subscriptionId());
+        }
+    }
+
+    /**
+     * Offers stored events that arrived before a branch parked to its subscription, oldest first,
+     * until one resumes the run. Eligible events have the subscription's event type, a timestamp at
+     * or after its {@code lookbackFrom}, matched the filter of an event subscription with a
+     * {@code workflow-dispatch} rule (so filters apply, as for live delivery), and have not already
+     * resumed this run. Clears {@code lookbackFrom} afterwards so the look-back runs once.
+     *
+     * <p>Eligibility uses the event's ledger entry, not its routing outcome: the orchestrator
+     * commits a {@code pending} entry <em>before</em> routing looks for waiting runs. So for an
+     * event routed while the branch parks, either this query sees its entry, or the entry (and
+     * therefore live dispatch planning) came after the branch parked and live delivery finds the
+     * subscription. No event falls between the two. If both deliver at once, the subscription
+     * row lock in {@link #offerToSubscription} lets only one of them consume it.
+     *
+     * @param subscriptionId the subscription
+     * @return the resumed run, or null if no stored event matched
+     */
+    public ResumedRun replayLookback(long subscriptionId) {
+        List<Object[]> candidates = QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowEventSubscriptionEntity sub =
+                    WorkflowEventSubscriptionEntity.findById(subscriptionId);
+            if (sub == null || sub.lookbackFrom == null) {
+                return List.<Object[]>of();
+            }
+            return StreamEventEntity.getEntityManager().createQuery(
+                    "select e.id, min(l.id) from StreamEventEntity e, EventProcessingLedgerEntity l,"
+                            + " EventSubscriptionEntity s"
+                            + " where l.eventId = e.id and s.id = l.subscriptionId"
+                            + " and e.type = :type and e.timestamp >= :from"
+                            // skipped = the subscription's filter did not match
+                            + " and l.status <> 'skipped' and s.routing like :routing"
+                            + " and not exists (select r.id from WorkflowRunResumeEntity r"
+                            + "   where r.runId = :runId and r.eventId = e.id)"
+                            + " group by e.id, e.timestamp, e.createdOn"
+                            + " order by e.timestamp, e.createdOn", Object[].class)
+                    .setParameter("type", sub.eventType)
+                    .setParameter("from", sub.lookbackFrom)
+                    .setParameter("routing", "%\"" + RoutingRule.TYPE_WORKFLOW_DISPATCH + "\"%")
+                    .setParameter("runId", sub.runId)
+                    .getResultList();
+        });
+
+        ResumedRun resumed = null;
+        for (Object[] row : candidates) {
+            UUID eventId = (UUID) row[0];
+            EventOrigin origin = new EventOrigin(eventId, (Long) row[1]);
+            MatchedSubscription[] matched = new MatchedSubscription[1];
+            try {
+                resumed = QuarkusTransaction.requiringNew().call(() -> {
+                    StreamEventEntity event = StreamEventEntity.findById(eventId);
+                    if (event == null) {
+                        return null;
+                    }
+                    Map<String, Object> eventMap = WorkflowEventMapper.toEventMap(event, objectMapper);
+                    eventMap.put("id", eventId.toString());
+                    return offerToSubscription(subscriptionId, eventMap, origin, matched);
+                });
+            } catch (Exception e) {
+                // Matched but failed to resume: the run stays parked for live events.
+                LOG.errorf(e, "Look-back failed to deliver stored event %s to workflow subscription %d",
+                        eventId, subscriptionId);
+                break;
+            }
+            if (resumed != null || matched[0] != null) {
+                LOG.infof("Look-back delivered stored event %s to workflow subscription %d",
+                        eventId, subscriptionId);
+                break;
+            }
+        }
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowEventSubscriptionEntity sub =
+                    WorkflowEventSubscriptionEntity.findById(subscriptionId);
+            if (sub != null) {
+                sub.lookbackFrom = null;
+            }
+        });
+        return resumed;
+    }
+
+    /**
+     * Ids of subscriptions whose look-back has not run (e.g. the server stopped before the
+     * parking transaction's after-commit callback ran).
+     *
+     * @return the subscription ids
+     */
+    public List<Long> findPendingLookbacks() {
+        return QuarkusTransaction.requiringNew().call(() -> WorkflowEventSubscriptionEntity
+                .<WorkflowEventSubscriptionEntity>list("lookbackFrom is not null")
+                .stream().map(s -> s.id).toList());
+    }
+
     /** The run and node of a subscription that matched the event. */
-    private record MatchedSubscription(long runId, Long projectId, String nodeId) {
+    private record MatchedSubscription(long runId, Long subjectId, String nodeId) {
     }
 
     private Workflow loadWorkflowContent(long definitionId, int definitionVersion) {

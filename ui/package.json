@@ -1,17 +1,18 @@
 {
     "name": "@apitomy/axiom-ui",
     "private": true,
-    "version": "3",
+    "version": "3.0.0-SNAPSHOT",
     "type": "module",
     "scripts": {
         "dev": "vite",
         "build": "tsc -b && vite build",
         "clean": "rimraf dist node_modules/.vite tsconfig.tsbuildinfo",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "test": "vitest run"
     },
     "dependencies": {
         "@apitomy/common-ui-components": "4.1.2",
-        "@apitomy/flow-ui": "^2.5.0",
+        "@apitomy/flow-ui": "^3.0.2",
         "@patternfly/react-charts": "8.6.1",
         "@patternfly/react-code-editor": "6.6.1",
         "@patternfly/react-core": "6.6.1",
@@ -49,11 +50,16 @@
         "victory-zoom-container": "37.3.6"
     },
     "devDependencies": {
+        "@testing-library/jest-dom": "7.0.1",
+        "@testing-library/react": "16.3.3",
+        "@testing-library/user-event": "14.6.7",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
         "@vitejs/plugin-react": "6.1.1",
+        "jsdom": "29.1.1",
         "rimraf": "6.1.3",
         "typescript": "7.0.2",
-        "vite": "8.3.2"
+        "vite": "8.3.2",
+        "vitest": "5.0.3"
     }
 }

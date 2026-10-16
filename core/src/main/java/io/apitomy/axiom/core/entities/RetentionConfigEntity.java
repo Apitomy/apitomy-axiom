@@ -9,7 +9,7 @@ import jakarta.persistence.Table;
  * Single-row configuration for data retention periods. Each field
  * specifies the number of days to retain data before automatic cleanup.
  *
- * <p>For the history settings added in V72 (job runs, reports, workflow runs, activity log and
+ * <p>For the history settings added in V72 (job runs, workflow runs, activity log and
  * AI usage), {@code 0} means "keep forever"; it is the default so that upgrading never deletes
  * data the user did not ask to delete.
  */
@@ -17,22 +17,14 @@ import jakarta.persistence.Table;
 @Table(name = "retention_config")
 public class RetentionConfigEntity extends PanacheEntity {
 
-    @Column(name = "closed_project_retention_days", nullable = false)
-    public int closedProjectRetentionDays;
+    @Column(name = "inactive_subject_retention_days", nullable = false)
+    public int inactiveSubjectRetentionDays;
 
     @Column(name = "trace_retention_days", nullable = false)
     public int traceRetentionDays;
 
     @Column(name = "event_retention_days", nullable = false)
     public int eventRetentionDays;
-
-    /** Days to keep finished scheduled job runs; {@code 0} keeps them forever. */
-    @Column(name = "scheduled_job_run_retention_days", nullable = false)
-    public int scheduledJobRunRetentionDays;
-
-    /** Days to keep finished reports; {@code 0} keeps them forever. */
-    @Column(name = "report_retention_days", nullable = false)
-    public int reportRetentionDays;
 
     /** Days to keep finished workflow runs; {@code 0} keeps them forever. */
     @Column(name = "workflow_run_retention_days", nullable = false)

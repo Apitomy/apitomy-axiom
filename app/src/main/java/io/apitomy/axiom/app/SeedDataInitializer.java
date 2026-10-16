@@ -1,16 +1,13 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.SdkFunctionRegistry;
-import io.apitomy.axiom.core.entities.ActionTypeEntity;
 
 import java.util.List;
 import io.apitomy.axiom.core.entities.AgentCapabilityEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
-import io.apitomy.axiom.core.entities.ManagerConfigEntity;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
-import io.apitomy.axiom.manager.ManagerPromptBuilder;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -20,7 +17,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 /**
- * Seeds built-in action types on application startup if they don't already exist.
+ * Seeds built-in configuration (toolsets, agents, system and retention config) on application startup
+ * if it doesn't already exist.
  */
 @ApplicationScoped
 public class SeedDataInitializer {
@@ -31,35 +29,15 @@ public class SeedDataInitializer {
     String defaultAgentType;
 
     /**
-     * Called on application startup to seed built-in action types.
+     * Called on application startup to seed built-in configuration.
      *
      * @param event the Quarkus startup event
      */
     @Transactional
     void onStart(@Observes StartupEvent event) {
-        if (ActionTypeEntity.count() > 0) {
-            LOG.info("Action types already exist, skipping seed data");
-            return;
-        }
-
-        LOG.info("Seeding built-in action types");
-
-        seedActionType("close-project",
-                "Mark the project as completed. Use this script action when an "
-                        + "issue-closed event is received, indicating the issue has "
-                        + "been resolved and the project should be marked as done.",
-                "script", true, false, null, null,
-                """
-                #!/bin/bash
-                curl -s -X POST "{{apiBaseUrl}}/projects/{{projectId}}/close"
-                """, true);
-
-        LOG.infof("Seeded %d built-in action types", ActionTypeEntity.count());
-
         seedToolsets();
         ensureAxiomSdkToolset();
         seedAgents();
-        seedManagerConfig();
         seedSystemConfig();
         seedRetentionConfig();
     }
@@ -119,37 +97,21 @@ public class SeedDataInitializer {
             return;
         }
 
-        AgentEntity agent = new AgentEntity();
-        agent.name = "Blinky";
-        agent.description = "AI agent powered by Claude Code CLI";
-        agent.agentType = "claude-code";
-        agent.enabled = true;
-        agent.persist();
-        AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));
-        LOG.infof("Seeded agent: %s (%s)", agent.name, agent.agentType);
-
-        agent = new AgentEntity();
-        agent.name = "Clyde";
-        agent.description = "AI agent powered by Claude Code CLI";
-        agent.agentType = "claude-code";
-        agent.enabled = true;
-        agent.persist();
-        AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));
-        LOG.infof("Seeded agent: %s (%s)", agent.name, agent.agentType);
+        seedAgent("Blinky", "AI agent powered by Claude Code CLI", "claude-code");
+        seedAgent("Clyde", "AI agent powered by Claude Code CLI", "claude-code");
+        seedAgent("Pinky", "AI agent powered by OpenCode", "opencode");
+        seedAgent("Inky", "AI agent powered by OpenCode", "opencode");
     }
 
-    private void seedManagerConfig() {
-        if (ManagerConfigEntity.count() > 0) {
-            LOG.info("Manager config already exists, skipping seed");
-            return;
-        }
-
-        ManagerConfigEntity config = new ManagerConfigEntity();
-        config.systemPrompt = ManagerPromptBuilder.DEFAULT_SYSTEM_PROMPT;
-        config.promptTemplate = ManagerPromptBuilder.DEFAULT_PROMPT_TEMPLATE;
-        config.persist();
-
-        LOG.info("Seeded default manager configuration");
+    private void seedAgent(String name, String description, String agentType) {
+        AgentEntity agent = new AgentEntity();
+        agent.name = name;
+        agent.description = description;
+        agent.agentType = agentType;
+        agent.enabled = true;
+        agent.persist();
+        AgentCapabilityEntity.setCapabilities(agent.id, List.of("*"));
+        LOG.infof("Seeded agent: %s (%s)", agent.name, agent.agentType);
     }
 
     private void seedRetentionConfig() {
@@ -159,12 +121,10 @@ public class SeedDataInitializer {
         }
 
         RetentionConfigEntity config = new RetentionConfigEntity();
-        config.closedProjectRetentionDays = 90;
+        config.inactiveSubjectRetentionDays = 90;
         config.traceRetentionDays = 30;
         config.eventRetentionDays = 90;
         // History settings: 0 keeps the rows forever.
-        config.scheduledJobRunRetentionDays = 0;
-        config.reportRetentionDays = 0;
         config.workflowRunRetentionDays = 0;
         config.activityLogRetentionDays = 0;
         config.aiUsageRetentionDays = 0;
@@ -184,29 +144,5 @@ public class SeedDataInitializer {
         config.persist();
 
         LOG.infof("Seeded system config with default engine: %s", defaultAgentType);
-    }
-
-    private void seedActionType(String name, String description, String executionMode,
-                                boolean userTriggerable, boolean emitsEvent, String allowedTools,
-                                String promptTemplate) {
-        seedActionType(name, description, executionMode, userTriggerable, emitsEvent,
-                allowedTools, promptTemplate, null, false);
-    }
-
-    private void seedActionType(String name, String description, String executionMode,
-                                boolean userTriggerable, boolean emitsEvent, String allowedTools,
-                                String promptTemplate, String scriptTemplate, boolean workflowEnabled) {
-        ActionTypeEntity entity = new ActionTypeEntity();
-        entity.name = name;
-        entity.description = description;
-        entity.executionMode = executionMode;
-        entity.userTriggerable = userTriggerable;
-        entity.managerTriggerable = true;
-        entity.emitsEvent = emitsEvent;
-        entity.allowedTools = allowedTools;
-        entity.promptTemplate = promptTemplate;
-        entity.scriptTemplate = scriptTemplate;
-        entity.workflowEnabled = workflowEnabled;
-        entity.persist();
     }
 }

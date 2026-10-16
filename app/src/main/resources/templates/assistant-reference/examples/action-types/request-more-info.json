@@ -1,0 +1,28 @@
+{
+  "name": "request-more-info",
+  "description": "Asks the issue reporter for more information.",
+  "executionMode": "script",
+  "inputs": [
+    {
+      "name": "ref",
+      "type": "string",
+      "description": "Issue URL",
+      "required": true
+    },
+    {
+      "name": "repository",
+      "type": "string",
+      "description": "owner/repo",
+      "required": true
+    }
+  ],
+  "scriptTemplate": "#!/bin/bash\nset -euo pipefail\necho \"Commenting on {{inputs.ref}}\" >&2\nCOMMENT_URL=$(gh issue comment \"{{inputs.ref}}\" --repo \"{{inputs.repository}}\" --body \"Thanks for the report! Could you add reproduction steps?\")\njq -n --arg commentUrl \"$COMMENT_URL\" '{commentUrl: $commentUrl}'",
+  "outputs": [
+    {
+      "name": "commentUrl",
+      "type": "string",
+      "description": "URL of the posted comment",
+      "required": true
+    }
+  ]
+}

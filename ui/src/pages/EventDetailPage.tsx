@@ -26,7 +26,8 @@ import {
     Tabs,
     Title,
 } from "@patternfly/react-core";
-import { CheckCircleIcon, TimesCircleIcon } from "@patternfly/react-icons";
+import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
+import { BanIcon, CheckCircleIcon, TimesCircleIcon } from "@patternfly/react-icons";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
@@ -34,14 +35,16 @@ import {
     type EventProcessingEntry,
     type EventProcessingOutcome,
     type EventProcessingOutcomeItem,
-    type Trace,
     fetchStreamEvent,
     fetchEventProcessing,
-    fetchTraces,
     retryEventProcessing,
+    type WorkflowInstanceInfo,
+    type WorkflowRunSummary,
+    fetchWorkflowRuns,
 } from "../config/api";
-import { statusColor as traceStatusColor } from "../components/TraceGraphNode";
+import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { LineagePanel } from "../components/LineagePanel";
+import { RunWorkflowFromEventModal } from "../components/RunWorkflowFromEventModal";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     github: "blue",
@@ -64,10 +67,17 @@ export function EventDetailPage() {
     const [processing, setProcessing] = useState<EventProcessingEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [processingLoading, setProcessingLoading] = useState(false);
-    const [dryRuns, setDryRuns] = useState<Trace[]>([]);
-    const [dryRunTotal, setDryRunTotal] = useState(0);
-    const [dryRunError, setDryRunError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState(0);
+    const [isRunOpen, setIsRunOpen] = useState(false);
+    const [startedRun, setStartedRun] = useState<WorkflowInstanceInfo | null>(null);
+    const [runsRefresh, setRunsRefresh] = useState(0);
+
+    const onRunStarted = (run: WorkflowInstanceInfo) => {
+        setIsRunOpen(false);
+        setStartedRun(run);
+        setActiveTab(2);
+        setRunsRefresh((n) => n + 1);
+    };
 
     const loadEvent = useCallback(() => {
         if (!eventId) return;
@@ -85,16 +95,6 @@ export function EventDetailPage() {
             .then((result) => setProcessing(result.items))
             .catch(console.error)
             .finally(() => setProcessingLoading(false));
-        setDryRunError(null);
-        fetchTraces(1, 50, "manager-dry-run", undefined, eventId)
-            .then((result) => {
-                setDryRuns(result.items);
-                setDryRunTotal(result.totalCount);
-            })
-            .catch((err: unknown) => {
-                console.error(err);
-                setDryRunError(err instanceof Error ? err.message : String(err));
-            });
     }, [eventId]);
 
     useEffect(() => { loadEvent(); }, [loadEvent]);
@@ -129,9 +129,23 @@ export function EventDetailPage() {
                 <BreadcrumbItem isActive>{event.type}</BreadcrumbItem>
             </Breadcrumb>
 
-            <Title headingLevel="h1" size="lg" style={{ marginBottom: "16px" }}>
-                {event.type}
-            </Title>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: "16px" }}>
+                <Title headingLevel="h1" size="lg">
+                    {event.type}
+                </Title>
+                <Button variant="primary" onClick={() => setIsRunOpen(true)}>Run workflow…</Button>
+            </div>
+
+            {startedRun && (
+                <Alert variant="success" isInline title="Workflow run started" style={{ marginBottom: "16px" }}
+                    actionClose={<Button variant="plain" aria-label="Close alert"
+                        onClick={() => setStartedRun(null)}>×</Button>}>
+                    <Link to={`/runs/${startedRun.runId ?? startedRun.id}`}>
+                        {startedRun.title || `Workflow Run #${startedRun.runId ?? startedRun.id}`}
+                    </Link>
+                </Alert>
+            )}
 
             <DescriptionList isHorizontal isCompact style={{ marginBottom: "24px" }}>
                 <DescriptionListGroup>
@@ -143,9 +157,9 @@ export function EventDetailPage() {
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <DescriptionListGroup>
-                    <DescriptionListTerm>Connection</DescriptionListTerm>
+                    <DescriptionListTerm>Event Source</DescriptionListTerm>
                     <DescriptionListDescription>
-                        <Link to={`/events/connections/${event.connectionId}`}>{event.connectionId}</Link>
+                        <Link to={`/events/sources/${event.eventSourceId}`}>{event.eventSourceId}</Link>
                     </DescriptionListDescription>
                 </DescriptionListGroup>
                 <DescriptionListGroup>
@@ -197,26 +211,105 @@ export function EventDetailPage() {
                             loading={processingLoading}
                             onRetried={loadProcessing}
                         />
-                        <DryRunEvaluations traces={dryRuns} totalCount={dryRunTotal} error={dryRunError} />
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={2} title={<TabTitleText>Runs</TabTitleText>}>
+                    <TabContent id="runs-tab" eventKey={2} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        {activeTab === 2 && <EventRunsTab eventId={event.id} refreshKey={runsRefresh} />}
+                    </TabContent>
+                </Tab>
+                <Tab eventKey={3} title={<TabTitleText>Lineage</TabTitleText>}>
+                    <TabContent id="lineage-tab" eventKey={3} activeKey={activeTab}
+                        style={{ marginTop: "24px" }}>
+                        {activeTab === 3 && <LineagePanel entityType="event" id={event.id} expandable={false} />}
                     </TabContent>
                 </Tab>
             </Tabs>
 
-            <LineagePanel entityType="event" id={event.id} />
+            <RunWorkflowFromEventModal eventId={event.id} isOpen={isRunOpen}
+                onClose={() => setIsRunOpen(false)} onStarted={onRunStarted} />
         </PageSection>
     );
 }
 
+const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
+    running: "blue",
+    waiting: "orange",
+    completed: "green",
+    failed: "red",
+    cancelled: "grey",
+};
+
+/** Lists the workflow runs started from an event; refreshes on workflow-updated SSE events. */
+function EventRunsTab({ eventId, refreshKey }: { eventId: string; refreshKey: number }) {
+    const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    const load = useCallback(() => {
+        fetchWorkflowRuns(1, 100, { triggerEventId: eventId })
+            .then((r) => setRuns(r.items))
+            .catch(console.error)
+            .finally(() => setLoading(false));
+    }, [eventId]);
+
+    useEffect(() => { load(); }, [load, refreshKey]);
+
+    useEffect(() => {
+        let timeout: ReturnType<typeof setTimeout>;
+        const unsubscribe = sseClient.subscribe((e: AxiomSseEvent) => {
+            if (e.type === "workflow-updated") {
+                clearTimeout(timeout);
+                timeout = setTimeout(load, 300);
+            }
+        });
+        return () => { clearTimeout(timeout); unsubscribe(); };
+    }, [load]);
+
+    if (loading) {
+        return <EmptyState><EmptyStateBody>Loading runs...</EmptyStateBody></EmptyState>;
+    }
+    if (runs.length === 0) {
+        return <EmptyState><EmptyStateBody>No runs were started from this event.</EmptyStateBody></EmptyState>;
+    }
+    return (
+        <Table aria-label="Runs started from this event" variant="compact">
+            <Thead>
+                <Tr>
+                    <Th>Status</Th>
+                    <Th>Title</Th>
+                    <Th>Workflow</Th>
+                    <Th>Started</Th>
+                </Tr>
+            </Thead>
+            <Tbody>
+                {runs.map((r) => (
+                    <Tr key={r.runId}>
+                        <Td dataLabel="Status">
+                            <Label isCompact color={RUN_STATUS_COLORS[r.status] || "grey"}>{r.status}</Label>
+                        </Td>
+                        <Td dataLabel="Title">
+                            <Link to={`/runs/${r.runId}`}>{r.title || `Workflow Run #${r.runId}`}</Link>
+                            {r.labels?.trigger === "manual" && (
+                                <Label isCompact color="purple" style={{ marginLeft: "8px" }}>manual</Label>
+                            )}
+                        </Td>
+                        <Td dataLabel="Workflow">{r.definitionName ?? `#${r.definitionId}`}</Td>
+                        <Td dataLabel="Started">{new Date(r.startedOn).toLocaleString()}</Td>
+                    </Tr>
+                ))}
+            </Tbody>
+        </Table>
+    );
+}
+
 const ROUTING_LABELS: Record<string, string> = {
-    manager: "Send to Manager",
     "workflow-dispatch": "Dispatch to Workflows",
     "create-workflow": "Create Workflow",
-    "invoke-action": "Invoke Action",
     processing: "Event Processing",
 };
 
 const ITEM_LABELS: Record<string, string> = {
-    task: "Task",
     "workflow-run": "Workflow Run",
     "workflow-resumed": "Resumed Workflow Run",
     "no-match": "No Match",
@@ -247,6 +340,8 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                 }}>
                     {item.status === "failed" ? (
                         <TimesCircleIcon color="var(--pf-v6-global--danger-color--100)" />
+                    ) : item.status === "skipped" ? (
+                        <BanIcon color="var(--pf-v6-global--Color--200)" />
                     ) : (
                         <CheckCircleIcon color="var(--pf-v6-global--success-color--100)" />
                     )}
@@ -260,7 +355,7 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                         </Label>
                     )}
                     {item.workflowRunId && (
-                        <Link to={`/logs/workflow-runs/${item.workflowRunId}`}>
+                        <Link to={`/runs/${item.workflowRunId}`}>
                             {item.type === "workflow-resumed" ? "Resumed" : "Started"}{" "}
                             Workflow Run #{item.workflowRunId}
                         </Link>
@@ -268,9 +363,9 @@ function OutcomeItems({ items }: { items: EventProcessingOutcomeItem[] }) {
                     {item.workflowRunId && item.traceId && (
                         <Link to={`/logs/traces/${item.traceId}`}>View Trace</Link>
                     )}
-                    {item.projectId && (
-                        <Link to={`/projects/${item.projectId}`}>
-                            {item.projectName || `Project #${item.projectId}`}
+                    {item.subjectId && (
+                        <Link to={`/subjects/${item.subjectId}`}>
+                            {item.subjectName || `Subject #${item.subjectId}`}
                         </Link>
                     )}
                     {item.summary && <span>{item.summary}</span>}
@@ -480,9 +575,9 @@ function ProcessingTab({ eventId, entries, loading, onRetried }: {
                                                         marginTop: "4px",
                                                         flexWrap: "wrap",
                                                     }}>
-                                                        {!hasItems(o) && o.projectId && (
-                                                            <Link to={`/projects/${o.projectId}`}>
-                                                                {o.projectName || `Project #${o.projectId}`}
+                                                        {!hasItems(o) && o.subjectId && (
+                                                            <Link to={`/subjects/${o.subjectId}`}>
+                                                                {o.subjectName || `Subject #${o.subjectId}`}
                                                             </Link>
                                                         )}
                                                         {!hasItems(o) && o.taskId && (
@@ -513,55 +608,5 @@ function ProcessingTab({ eventId, entries, loading, onRetried }: {
             })}
         </DataList>
         </>
-    );
-}
-
-/** Lists the manual (dry-run) Manager evaluations of the event, linking to their traces. */
-function DryRunEvaluations({ traces, totalCount, error }: {
-    traces: Trace[];
-    totalCount: number;
-    error: string | null;
-}) {
-    if (error) {
-        return (
-            <div style={{ marginTop: "24px" }} data-testid="event-dry-run-evaluations-error">
-                Could not load dry-run evaluations: {error}
-            </div>
-        );
-    }
-    if (traces.length === 0) return null;
-    return (
-        <div style={{ marginTop: "24px" }} data-testid="event-dry-run-evaluations">
-            <Title headingLevel="h2" size="md" style={{ marginBottom: "8px" }}>
-                Dry-run evaluations
-            </Title>
-            <DataList aria-label="Dry-run evaluations" isCompact>
-                {traces.map((t) => (
-                    <DataListItem key={t.traceId}>
-                        <DataListItemRow>
-                            <DataListItemCells dataListCells={[
-                                <DataListCell key="status" isFilled={false}>
-                                    <Label isCompact color={traceStatusColor(t.status)}>
-                                        {t.status}
-                                    </Label>
-                                </DataListCell>,
-                                <DataListCell key="summary">{t.summary}</DataListCell>,
-                                <DataListCell key="started" isFilled={false}>
-                                    {new Date(t.startedOn).toLocaleString()}
-                                </DataListCell>,
-                                <DataListCell key="link" isFilled={false}>
-                                    <Link to={`/logs/traces/${t.traceId}`}>View Trace</Link>
-                                </DataListCell>,
-                            ]} />
-                        </DataListItemRow>
-                    </DataListItem>
-                ))}
-            </DataList>
-            {totalCount > traces.length && (
-                <div style={{ marginTop: "8px" }} data-testid="event-dry-run-evaluations-count">
-                    Showing {traces.length} of {totalCount}
-                </div>
-            )}
-        </div>
     );
 }

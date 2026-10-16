@@ -1,7 +1,7 @@
 package io.apitomy.axiom.core.events.model;
 
 /**
- * All normalized event types produced by event source connections.
+ * All normalized event types produced by event sources.
  */
 public enum EventType {
     // Issue events

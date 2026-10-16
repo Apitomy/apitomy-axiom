@@ -2,6 +2,7 @@ package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.config.AxiomHome;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.quarkus.test.junit.QuarkusTest;
@@ -173,10 +174,11 @@ class McpConfigGeneratorTest {
     // ── MCP server installation ──────────────────────────────────────
 
     @Test
-    void testMcpServerProjectInstalled() throws Exception {
+    void testMcpServerSubjectInstalled() throws Exception {
         generator.generateMcpConfig(9007L, Map.of(), null);
 
-        Path serverDir = Path.of(System.getProperty("user.home"), ".axiom", "mcp-server");
+        // The server is installed under the configured Axiom home (target/axiom-test-home in test runs).
+        Path serverDir = AxiomHome.resolve("mcp-server");
         assertTrue(Files.exists(serverDir), "MCP server directory should exist");
         assertTrue(Files.exists(serverDir.resolve("package.json")), "package.json should exist");
         assertTrue(Files.exists(serverDir.resolve("sdk-server.js")), "sdk-server.js should exist");
@@ -224,7 +226,7 @@ class McpConfigGeneratorTest {
     @Test
     void testOnlySdkToolsNoToolsServer() throws Exception {
         Path configFile = generator.generateMcpConfig(9017L, Map.of(),
-                List.of("mcp__axiom-sdk__axiom_list_projects"));
+                List.of("mcp__axiom-sdk__axiom_list_subjects"));
         assertNotNull(configFile);
 
         JsonNode config = objectMapper.readTree(Files.readString(configFile));

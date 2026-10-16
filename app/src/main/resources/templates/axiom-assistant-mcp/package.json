@@ -1,6 +1,6 @@
 {
     "name": "axiom-assistant-mcp",
-    "version": "1.0.0",
+    "version": "3.0.0-SNAPSHOT",
     "description": "Axiom Assistant MCP server providing read-only query tools for AI assistant sessions",
     "private": true,
     "type": "commonjs",

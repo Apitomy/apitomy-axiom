@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class JiraEventNormalizerV2Test {
 
-    private static final String CONNECTION_ID = "test-jira-connection";
+    private static final String EVENT_SOURCE_ID = "test-jira-event-source";
     private static final String BASE_URL = "https://myorg.atlassian.net";
     private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -48,14 +48,14 @@ class JiraEventNormalizerV2Test {
         ObjectNode issue = buildIssue("PROJ-101", "New bug", "open", "To Do",
                 "2026-09-18T10:00:00.000+0000", "2026-09-18T10:00:00.000+0000");
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         assertEquals(1, events.size());
         NormalizedEvent event = events.get(0);
         assertEquals(EventType.ISSUE_CREATED, event.type());
         assertEquals("PROJ-101-created", event.sourceEventId());
         assertEquals("jira", event.source());
-        assertEquals(CONNECTION_ID, event.connectionId());
+        assertEquals(EVENT_SOURCE_ID, event.eventSourceId());
         assertEquals("https://myorg.atlassian.net/browse/PROJ-101", event.ref());
         assertNotNull(event.id());
         assertNotNull(event.actor());
@@ -79,7 +79,7 @@ class JiraEventNormalizerV2Test {
                 buildHistory("5001", "2026-09-18T10:00:00.000+0000", "user1", "User One",
                         buildItem("status", "In Progress", "Done")));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         // Should NOT have ISSUE_CREATED (created before since), but should have ISSUE_CLOSED
         List<NormalizedEvent> closedEvents = events.stream()
@@ -101,7 +101,7 @@ class JiraEventNormalizerV2Test {
                 buildHistory("5002", "2026-09-18T10:00:00.000+0000", "user2", "User Two",
                         buildItem("status", "Done", "To Do")));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         List<NormalizedEvent> reopenedEvents = events.stream()
                 .filter(e -> e.type() == EventType.ISSUE_REOPENED)
@@ -122,7 +122,7 @@ class JiraEventNormalizerV2Test {
                 buildHistory("5003", "2026-09-18T10:00:00.000+0000", "user1", "User One",
                         buildItem("summary", "Old title", "Updated title")));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         List<NormalizedEvent> updatedEvents = events.stream()
                 .filter(e -> e.type() == EventType.ISSUE_UPDATED)
@@ -147,7 +147,7 @@ class JiraEventNormalizerV2Test {
                 buildHistory("5004", "2026-09-18T10:00:00.000+0000", "user1", "User One",
                         buildItem("assignee", null, "John Doe")));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         List<NormalizedEvent> assignedEvents = events.stream()
                 .filter(e -> e.type() == EventType.ISSUE_ASSIGNED)
@@ -169,7 +169,7 @@ class JiraEventNormalizerV2Test {
                 buildHistory("5005", "2026-09-18T10:00:00.000+0000", "user1", "User One",
                         buildItem("assignee", "John Doe", null)));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         List<NormalizedEvent> unassignedEvents = events.stream()
                 .filter(e -> e.type() == EventType.ISSUE_UNASSIGNED)
@@ -189,7 +189,7 @@ class JiraEventNormalizerV2Test {
                 buildHistory("5006", "2026-09-18T10:00:00.000+0000", "user1", "User One",
                         buildItem("labels", "existing-label", "existing-label new-label")));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         List<NormalizedEvent> labeledEvents = events.stream()
                 .filter(e -> e.type() == EventType.ISSUE_LABELED)
@@ -213,7 +213,7 @@ class JiraEventNormalizerV2Test {
                         "2026-09-18T09:00:00.000+0000",
                         "2026-09-18T09:00:00.000+0000"));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         List<NormalizedEvent> commentEvents = events.stream()
                 .filter(e -> e.type() == EventType.ISSUE_COMMENT_CREATED)
@@ -251,7 +251,7 @@ class JiraEventNormalizerV2Test {
 
         addChangelog(issue, history);
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         // Should produce ISSUE_UPDATED (summary) + ISSUE_ASSIGNED (assignee)
         List<NormalizedEvent> updatedEvents = events.stream()
@@ -285,7 +285,7 @@ class JiraEventNormalizerV2Test {
                         "2026-09-17T07:00:00.000+0000",
                         "2026-09-17T07:00:00.000+0000"));
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         // Issue created is also before "since", so no events at all
         assertTrue(events.isEmpty(), "Expected no events for old changes");
@@ -307,7 +307,7 @@ class JiraEventNormalizerV2Test {
         issueType.put("name", "Bug");
         fields.set("issuetype", issueType);
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         assertFalse(events.isEmpty());
         NormalizedEvent event = events.get(0);
@@ -342,7 +342,7 @@ class JiraEventNormalizerV2Test {
         adf.set("content", content);
         fields.set("description", adf);
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         assertFalse(events.isEmpty());
         IssueCreatedPayload payload = (IssueCreatedPayload) events.get(0).payload();
@@ -356,7 +356,7 @@ class JiraEventNormalizerV2Test {
         ObjectNode issue = buildIssue("PROJ-200", "Ref test", "open", "To Do",
                 "2026-09-18T10:00:00.000+0000", "2026-09-18T10:00:00.000+0000");
 
-        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, CONNECTION_ID, BASE_URL);
+        List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
         assertEquals(1, events.size());
         assertEquals("https://myorg.atlassian.net/browse/PROJ-200", events.get(0).ref());

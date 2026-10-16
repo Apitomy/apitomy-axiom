@@ -150,13 +150,6 @@ public class OpenCodeAgent implements Agent {
 
     /** {@inheritDoc} */
     @Override
-    public CompletableFuture<AgentResult> executeWithSchema(AgentRequest request,
-                                                             String jsonSchema) {
-        return executeInternal(request, jsonSchema);
-    }
-
-    /** {@inheritDoc} */
-    @Override
     public void cancel(String executionId) {
         String sessionId = runningSessions.remove(executionId);
         if (sessionId != null) {

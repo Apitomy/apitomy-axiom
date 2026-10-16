@@ -36,6 +36,14 @@ class WorkflowHumanTaskMapperTest {
     }
 
     @Test
+    void toHumanContextUsesTheComputedTaskTitle() {
+        HumanTaskInfo hti = new HumanTaskInfo("ht1", "Checks failed", null, Map.of(), List.of(),
+                "Renovate PR checks failed: https://github.com/o/r/pull/1");
+        assertEquals("Renovate PR checks failed: https://github.com/o/r/pull/1",
+                WorkflowHumanTaskMapper.toHumanContext(hti).getTitle());
+    }
+
+    @Test
     void toHumanContextFallsBackToDefaultTitle() {
         HumanTaskInfo hti = new HumanTaskInfo("ht1", "  ", null, Map.of(), List.of());
         HumanContext ctx = WorkflowHumanTaskMapper.toHumanContext(hti);

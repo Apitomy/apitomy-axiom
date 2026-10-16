@@ -1,0 +1,16 @@
+{
+  "name": "triage-issue",
+  "description": "Reads a new issue, assesses its severity and decides whether more information is needed.",
+  "executionMode": "agent",
+  "inputs": [
+    {"name": "ref", "type": "string", "description": "Issue URL", "required": true},
+    {"name": "repository", "type": "string", "description": "owner/repo", "required": true},
+    {"name": "priorityHint", "type": "string", "description": "Optional priority hint for the triage agent", "required": false}
+  ],
+  "outputs": [
+    {"name": "severity", "type": "string", "description": "One of low, medium, high, critical", "required": true},
+    {"name": "needsInfo", "type": "boolean", "description": "True when the reporter must provide more details", "required": true}
+  ],
+  "allowedTools": ["@triage-tools"],
+  "promptTemplate": "Triage issue {{inputs.ref}} in repository {{inputs.repository}}.\nPriority hint: {{inputs.priorityHint}}\n\nRead the issue, decide its severity and whether the reporter must provide more information."
+}

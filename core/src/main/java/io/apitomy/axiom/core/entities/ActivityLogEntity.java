@@ -15,8 +15,8 @@ import java.util.UUID;
 @Table(name = "activity_log")
 public class ActivityLogEntity extends PanacheEntity {
 
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     @Column(name = "task_id")
     public Long taskId;
@@ -26,18 +26,6 @@ public class ActivityLogEntity extends PanacheEntity {
 
     @Column(name = "trace_id")
     public UUID traceId;
-
-    /** Scheduled job run that wrote this entry, if any. */
-    @Column(name = "scheduled_job_run_id")
-    public Long scheduledJobRunId;
-
-    /** Report that wrote this entry, if any. */
-    @Column(name = "report_id")
-    public Long reportId;
-
-    /** Definition of the report that wrote this entry, if any. */
-    @Column(name = "report_definition_id")
-    public Long reportDefinitionId;
 
     @Column(name = "entry_type", nullable = false)
     public String entryType;

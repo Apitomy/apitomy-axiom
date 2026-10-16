@@ -5,11 +5,6 @@ import {
     EmptyStateBody,
     Spinner,
     Tooltip,
-    Modal,
-    ModalBody,
-    ModalHeader,
-    CodeBlock,
-    CodeBlockCode,
 } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
@@ -20,10 +15,11 @@ import {
 } from "../../config/api";
 import { ToolDetailModal } from "./ToolDetailModal";
 import { ActionTypeDetailModal } from "./ActionTypeDetailModal";
-import { ReportDefinitionDetailModal } from "./ReportDefinitionDetailModal";
 import { ToolsetDetailModal } from "./ToolsetDetailModal";
 import { SessionTemplateDetailModal } from "./SessionTemplateDetailModal";
 import { EventSourceDetailModal } from "./EventSourceDetailModal";
+import { WorkflowDetailModal } from "./WorkflowDetailModal";
+import { SubscriptionDetailModal } from "./SubscriptionDetailModal";
 
 interface AssistantGeneratedItemsProps {
     sessionId: string;
@@ -31,14 +27,16 @@ interface AssistantGeneratedItemsProps {
     onItemCountChanged?: (count: number) => void;
 }
 
-const TYPE_LABELS: Record<string, { label: string; color: "blue" | "green" | "purple" | "teal" | "orange" | "grey" }> = {
+type LabelColor = "blue" | "green" | "purple" | "teal" | "orange" | "orangered" | "yellow" | "grey";
+
+const TYPE_LABELS: Record<string, { label: string; color: LabelColor }> = {
     "tools": { label: "Tool", color: "blue" },
     "action-types": { label: "Action Type", color: "green" },
-    "report-definitions": { label: "Report", color: "purple" },
     "toolsets": { label: "Toolset", color: "teal" },
     "session-templates": { label: "Template", color: "orange" },
     "event-sources": { label: "Event Source", color: "grey" },
-    "scheduled-jobs": { label: "Scheduled Job", color: "purple" },
+    "workflows": { label: "Workflow", color: "purple" },
+    "subscriptions": { label: "Subscription", color: "yellow" },
 };
 
 export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCountChanged }: AssistantGeneratedItemsProps) {
@@ -103,8 +101,8 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                 <EmptyState variant="sm">
                     <EmptyStateBody>
                         No items generated yet. Ask the assistant to create tools,
-                        action types, report definitions, toolsets, session
-                        templates, event sources, or scheduled jobs.
+                        action types, toolsets, session templates, workflows, event
+                        sources, or subscriptions.
                     </EmptyStateBody>
                 </EmptyState>
             )}
@@ -161,15 +159,6 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                     errors={selectedItem.validationErrors}
                 />
             )}
-            {selectedItem?.type === "report-definitions" && itemContent && (
-                <ReportDefinitionDetailModal
-                    isOpen
-                    onClose={closeModal}
-                    name={selectedItem.name}
-                    content={itemContent}
-                    errors={selectedItem.validationErrors}
-                />
-            )}
             {selectedItem?.type === "toolsets" && itemContent && (
                 <ToolsetDetailModal
                     isOpen
@@ -197,20 +186,23 @@ export function AssistantGeneratedItems({ sessionId, refreshTrigger, onItemCount
                     errors={selectedItem.validationErrors}
                 />
             )}
-            {selectedItem?.type === "scheduled-jobs" && itemContent && (
-                <Modal
+            {selectedItem?.type === "workflows" && itemContent && (
+                <WorkflowDetailModal
                     isOpen
                     onClose={closeModal}
-                    variant="large"
-                    aria-label={`Scheduled Job: ${selectedItem.name}`}
-                >
-                    <ModalHeader title={`Scheduled Job: ${selectedItem.name}`} />
-                    <ModalBody>
-                        <CodeBlock>
-                            <CodeBlockCode>{JSON.stringify(itemContent, null, 2)}</CodeBlockCode>
-                        </CodeBlock>
-                    </ModalBody>
-                </Modal>
+                    name={selectedItem.name}
+                    content={itemContent}
+                    errors={selectedItem.validationErrors}
+                />
+            )}
+            {selectedItem?.type === "subscriptions" && itemContent && (
+                <SubscriptionDetailModal
+                    isOpen
+                    onClose={closeModal}
+                    name={selectedItem.name}
+                    content={itemContent}
+                    errors={selectedItem.validationErrors}
+                />
             )}
         </div>
     );

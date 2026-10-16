@@ -98,7 +98,7 @@ class StreamEventCleanupTest {
         event.id = id;
         event.sourceEventId = "cleanup-test-" + id;
         event.source = "test";
-        event.connectionId = "test";
+        event.eventSourceId = "test";
         event.type = "test.event";
         event.ref = "ref";
         event.timestamp = old;
@@ -117,7 +117,8 @@ class StreamEventCleanupTest {
 
     private static WorkflowRunEntity persistRun(String status, UUID triggerEventId) {
         WorkflowRunEntity run = new WorkflowRunEntity();
-        run.projectId = -1L;
+        run.title = "Test run";
+        run.subjectId = -1L;
         run.definitionId = -1L;
         run.definitionVersion = 1;
         run.instanceState = "{}";

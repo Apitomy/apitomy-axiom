@@ -1,6 +1,6 @@
 # Lineage
 
-The lineage API (#430) answers "where did this come from, and what did it lead to?" for any unit of work. It
+The lineage API answers "where did this come from, and what did it lead to?" for any unit of work. It
 follows the links described in [Correlation](correlation.md), [Tracing](tracing.md) and the
 [event sourcing design](event-sourcing-design.md) in both directions, so a user does not have to hop between
 the event, ledger, trace, workflow run, task and usage pages.
@@ -16,7 +16,7 @@ GET /api/v1/lineage/{entityType}/{id}?direction=both&depth=5&maxNodes=200
 
 | Parameter    | Values                                                                          | Default |
 |--------------|---------------------------------------------------------------------------------|---------|
-| `entityType` | `event`, `trace`, `workflow-run`, `task`, `scheduled-job-run`, `report`         | —       |
+| `entityType` | `event`, `trace`, `workflow-run`, `task`                                        | —       |
 | `id`         | UUID for `event` and `trace`, a number otherwise                                | —       |
 | `direction`  | `upstream` (origin), `downstream` (results) or `both`                           | `both`  |
 | `depth`      | Hops walked in each direction, 1–10                                             | 5       |
@@ -28,7 +28,7 @@ does not exist returns `404`. Both carry the JSON `Error` body (`message`, `erro
 `LineageResourceImpl` declares a `@ServerExceptionMapper` for `NotFoundException` that turns it into `400`.
 The mapper is declared on the resource class, so it applies to this resource only.
 
-Projects are not a root type: a project holds too much unrelated work to give a useful graph.
+Subjects are not a root type: a subject holds too much unrelated work to give a useful graph.
 
 The response is a `LineageGraph`:
 
@@ -45,20 +45,19 @@ Each `LineageNode` has a `key` (`type:id`, used by edges), `type`, `id`, `label`
 type, action type, trigger or outcome item type), `linkPath` (UI route), `costUsd`, `direction` (`root`,
 `upstream` or `downstream`), `depth` (hops from the root), `available` and `createdOn`.
 
-Node types are the six root types plus `outcome`: a routing outcome item that is not a task or a workflow run
-(`ignored`, `escalated`, `decision`, `no-match`).
+Node types are the four root types plus `outcome`: a routing outcome item that is not a task or a workflow
+run (for example `no-match`).
 
 Each `LineageEdge` has `from`, `to` and `relation`. Edges always point **downstream**, from the cause to the
 result, whichever direction was walked:
 
 | Relation             | From → to                                                                     |
 |----------------------|-------------------------------------------------------------------------------|
-| `triggered`          | event → Manager (or other) trace, event → workflow run                         |
-| `created`            | trace / workflow run / job run / report / task → task                          |
+| `triggered`          | event → trace, event → workflow run                                           |
+| `created`            | trace / workflow run / task → task                                            |
 | `resumed`            | event → workflow run it resumed                                               |
-| `produced`           | trace or event → outcome item (ignored, escalated, ...)                       |
-| `part-of`            | owning run or report → its trace (only when a trace is the root)              |
-| `triggered-by-agent` | caller (trace or its owner) → job run or report started through the REST API  |
+| `produced`           | trace or event → outcome item (e.g. `no-match`)                               |
+| `part-of`            | owning workflow run → its trace (only when a trace is the root)               |
 
 ### Link paths
 
@@ -66,21 +65,17 @@ result, whichever direction was walked:
 |---------------------|------------------------------------|
 | `event`             | `/events/stream/{id}`              |
 | `trace`             | `/logs/traces/{id}`                |
-| `workflow-run`      | `/logs/workflow-runs/{id}`         |
+| `workflow-run`      | `/runs/{id}`                       |
 | `task`              | `/logs/tasks?taskId={id}`          |
-| `scheduled-job-run` | `/logs/job-runs?runId={id}`        |
-| `report`            | `/reports/{id}`                    |
 | `outcome`           | none                               |
 
-Tasks and job runs have no detail page; the Tasks and Job Runs pages open a lineage modal for `?taskId=` and
-`?runId=`.
+Tasks have no detail page; the Tasks page opens a lineage modal for `?taskId=`.
 
 ## Traces and Their Owners
 
-Workflow runs, scheduled job runs and reports each own a trace (`workflow`, `scheduled-job-execution` and
-`report-generation` trace types). Such a trace is shown as its owner, not as a separate node, so a job run and
-its trace never appear twice. Traces without an owner entity (`manager`, `manager-dry-run`, `user-action` and
-any other type) are `trace` nodes. If an owned trace's owner was deleted, the trace itself is shown.
+Workflow runs own their trace (`workflow` trace type). Such a trace is shown as its owner, not as a separate
+node, so a run and its trace never appear twice. Traces of any other type are `trace` nodes. If an owned
+trace's owner was deleted, the trace itself is shown.
 
 When an owned trace is the root (`GET /lineage/trace/{id}`), the trace stays the root and its owner is
 linked upstream with `part-of`.
@@ -93,15 +88,15 @@ Each node has at most one origin, except workflow runs, which can also have resu
 
 | Node                | Origin                                                                                     |
 |---------------------|--------------------------------------------------------------------------------------------|
-| task                | First that applies: `workflowRunId` → workflow run; the parent of the task's `task` trace node is another task's node → that task (a task created by an agent task, #427); `traceId` → trace or its owner; `eventId` → event |
+| task                | First that applies: `workflowRunId` → workflow run; the parent of the task's `task` trace node is another task's node → that task; `traceId` → trace or its owner; `eventId` → event |
 | trace               | Owned: its owner (`part-of`). Otherwise `eventId` → event                                    |
 | workflow run        | `trigger_event_id` → event (`triggered`); each `workflow_run_resume.event_id` → event (`resumed`) |
-| scheduled job run, report | `triggered_by_trace_id` → trace or its owner (`triggered-by-agent`)                  |
 | event               | none                                                                                        |
 
-The caller of `triggered_by_trace_id` is recorded as a trace, not as a task: several tasks can share a trace,
-and the parent node of the request is not stored. The graph therefore links the job run or report to the
-trace (or to the run, job run or report that owns it).
+`trigger_event_id` is set for every run started from an event: by a `create-workflow` routing rule, manually
+from the event detail page, or as a re-run of a run that was started from an event. Manual runs from an event
+have no ledger entry or routing outcome, so they are linked only through `trigger_event_id`. A re-run is not
+linked to the run it repeats; that link exists only as the run's `rerunOf:<runId>` label.
 
 ### Downstream (results)
 
@@ -110,12 +105,10 @@ trace (or to the run, job run or report that owns it).
 | event               | traces with `eventId` (owned ones as their owner); workflow runs with `trigger_event_id`; runs resumed by the event; `routing_outcome_item` rows reached through `event_processing_ledger` → `routing_outcome`: `workflow-run` and `workflow-resumed` items link the run; items of outcomes **without** a trace link a task or an `outcome` node |
 | trace               | the work in the trace (below); items of `routing_outcome` rows with this `trace_id` (tasks and `outcome` nodes) |
 | workflow run        | tasks with `workflow_run_id`; the work in its trace                                         |
-| scheduled job run, report | the work in its trace                                                                 |
 | task                | tasks whose `task` trace node is a child of this task's node (created by its agent)          |
 
-"The work in a trace" is every task with that `trace_id` (including tasks that joined the trace through
-`POST /projects/{id}/tasks`, #427) and every job run or report whose `triggered_by_trace_id` is that trace. A
-task whose trace node is a child of another task's node is linked to that task instead of to the trace owner.
+"The work in a trace" is every task with that `trace_id`. A task whose trace node is a child of another task's
+node is linked to that task instead of to the trace owner.
 
 Nodes reached from more than one place are included once, with every edge. With `direction=both` the upstream
 walk runs first, so a node found by both walks keeps `upstream`.
@@ -125,7 +118,7 @@ walk runs first, so a node found by both walks keeps `upstream`.
 The walk is breadth-first. `depth` limits the hops in each direction.
 
 - `maxNodes` also bounds the rows read: every expansion query (tasks of a trace or run, traces of an event,
-  job runs and reports triggered from a trace, outcome items, resumes, child tasks) uses `setMaxResults` with
+  outcome items, resumes, child tasks) uses `setMaxResults` with
   the room left in the graph plus one. When a query returns that many rows, `truncated` is set. This is
   conservative: `truncated` can be `true` when the extra row was a node that was already in the graph.
 - Every `IN` list is split into chunks of at most 500 IDs (`LineageService.IN_CHUNK`).
@@ -142,9 +135,7 @@ The walk is breadth-first. `depth` limits the hops in each direction.
 | Node                         | Sum of `ai_usage.cost_usd` where                                        |
 |------------------------------|-------------------------------------------------------------------------|
 | task                         | `task_id` = the task                                                    |
-| scheduled job run            | `scheduled_job_run_id` = the run                                        |
-| report                       | `report_id` = the report                                                |
-| trace, workflow run          | `trace_id` = the (run's) trace and `task_id`, `scheduled_job_run_id` and `report_id` are null (e.g. the Manager evaluation) |
+| trace, workflow run          | `trace_id` = the (run's) trace and `task_id` is null                    |
 | event, outcome               | no cost                                                                 |
 
 ## Query Batching (No N+1)
@@ -152,25 +143,25 @@ The walk is breadth-first. `depth` limits the hops in each direction.
 Every level of the walk does a fixed number of queries per node type, using `IN (...)` lists:
 
 1. Load the frontier: one query per type (`stream_event`, `trace`, `workflow_run`, `task`,
-   `scheduled_job_run`, `report`, `routing_outcome_item`), plus one for the scheduled job names. Events,
-   tasks, workflow runs, job runs and reports are read as projections of the label and link columns only, so
-   event payloads, task input, output and logs, report content and workflow instance state are never loaded.
+   `routing_outcome_item`). Events, tasks and workflow runs are read as projections of the label and link
+   columns only, so event payloads, task input, output and logs, and workflow instance state are never
+   loaded.
 2. Resolve trace owners: one query per owned trace type present.
 3. Expand: for example, for events one query each for traces, workflow runs, resumes, ledger rows, outcomes
-   and items; for traces and owners one query each for tasks, the tasks' trace nodes and their parent nodes,
-   job runs and reports triggered from the traces.
+   and items; for traces and owners one query each for tasks, the tasks' trace nodes and their parent
+   nodes.
 
 Entities found while expanding are cached, so they are not loaded again in the next level. Costs are computed
-once at the end with one grouped query per cost key (task, job run, report, trace). The number of queries
+once at the end with one grouped query per cost key (task, trace). The number of queries
 therefore depends on the depth and the node types, not on the number of nodes. `LineageTest` checks this with
 Hibernate statistics (`%test.quarkus.hibernate-orm.statistics=true`): a graph with 2 tasks and one with 12
 tasks must use the same number of statements. It also checks that no `StreamEventEntity`, `TaskEntity`,
-`WorkflowRunEntity`, `ScheduledJobRunEntity` or `ReportEntity` is loaded as an entity (entity load count 0),
+or `WorkflowRunEntity` is loaded as an entity (entity load count 0),
 and that a trace with 30 tasks and `maxNodes=5` reads at most 6 task rows (query execution row count).
 
 ## Dangling References
 
-All the links are soft references, and retention deletes events, traces, runs and reports independently (see
+All the links are soft references, and retention deletes events, traces and runs independently (see
 [Data Retention](data-retention.md)). A reference to a missing row becomes a node with `available: false`,
 `status: "unavailable"`, a label such as `Event 3f2a... (deleted or unavailable)` and no `linkPath`. The walk
 does not continue from such a node. Only a missing root returns `404`.
@@ -186,6 +177,4 @@ twice is expanded only the first time.
 |-----------------------------------|---------------------------------------------------|
 | Event detail                      | Expandable **Lineage** section below the tabs     |
 | Workflow run detail               | **Lineage** tab                                   |
-| Report detail                     | Expandable **Lineage** section below the summary  |
-| Logs > Tasks, project Tasks tab   | **Lineage** button, opens `LineageModal`          |
-| Logs > Job Runs                   | **Lineage** button, opens `LineageModal`          |
+| Logs > Tasks, subject Tasks tab   | **Lineage** button, opens `LineageModal`          |

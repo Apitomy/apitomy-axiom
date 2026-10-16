@@ -2,7 +2,7 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentResult;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -108,10 +108,10 @@ class LogCorrelationTest {
 
     @Test
     void taskLogLinesCarryTraceIdAndMdcIsClearedAfterwards() throws Exception {
-        Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("invoke-action", "log correlation", null,
-                projectId, null, "invoke-action", "root", null, null);
-        Long taskId = createTask(projectId, ctx.traceId());
+        Long subjectId = createSubject();
+        TraceContext ctx = traceService.createTrace("create-workflow", "log correlation", null,
+                subjectId, "create-workflow", "root", null, null);
+        Long taskId = createTask(subjectId, ctx.traceId());
         traceService.addNode(ctx, "task", "in-progress", "Task", "task", taskId);
 
         AtomicReference<String> traceIdSeenByAgent = new AtomicReference<>();
@@ -121,7 +121,7 @@ class LogCorrelationTest {
             traceIdSeenByAgent.set((String) MDC.get(LogContext.TRACE_ID));
             return agentFuture;
         });
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(Optional.of(new AgentLease(null, "fake-agent", agent)));
 
@@ -146,7 +146,7 @@ class LogCorrelationTest {
         assertEquals("fake-agent-thread", completion.thread());
         assertEquals(expectedTrace, completion.mdc().get(LogContext.TRACE_ID));
         assertEquals(String.valueOf(taskId), completion.mdc().get(LogContext.TASK_ID));
-        assertEquals(String.valueOf(projectId), completion.mdc().get(LogContext.PROJECT_ID));
+        assertEquals(String.valueOf(subjectId), completion.mdc().get(LogContext.SUBJECT_ID));
         assertTrue(completion.mdc().get(LogContext.SUMMARY).contains("traceId=" + expectedTrace));
 
         // Every line logged by the task services for this task carries the trace ID.
@@ -169,11 +169,11 @@ class LogCorrelationTest {
 
     @Test
     void taskContextNestsInsideCallerContext() {
-        Long projectId = createProject();
-        TraceContext ctx = traceService.createTrace("invoke-action", "log correlation fail", null,
-                projectId, null, "invoke-action", "root", null, null);
-        Long taskId = createTask(projectId, ctx.traceId());
-        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(),
+        Long subjectId = createSubject();
+        TraceContext ctx = traceService.createTrace("create-workflow", "log correlation fail", null,
+                subjectId, "create-workflow", "root", null, null);
+        Long taskId = createTask(subjectId, ctx.traceId());
+        Mockito.when(agentPool.tryLease(ArgumentMatchers.any(), ArgumentMatchers.any(), ArgumentMatchers.any(),
                 ArgumentMatchers.any(), ArgumentMatchers.any())).thenReturn(Optional.empty());
 
         try (LogContext outer = LogContext.create().traceId("outer-trace")) {
@@ -187,24 +187,23 @@ class LogCorrelationTest {
         assertTrue(MDC.getMap().isEmpty(), "MDC leaked: " + MDC.getMap());
     }
 
-    private Long createProject() {
+    private Long createSubject() {
         return QuarkusTransaction.requiringNew().call(() -> {
-            ProjectEntity project = new ProjectEntity();
-            project.name = "log-correlation-" + UUID.randomUUID();
-            project.type = "test-log";
-            project.status = "Idle";
-            project.ref = "https://example.com/" + UUID.randomUUID();
-            project.createdOn = Instant.now();
-            project.updatedOn = Instant.now();
-            project.persist();
-            return project.id;
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "log-correlation-" + UUID.randomUUID();
+            subject.type = "test-log";
+            subject.ref = "https://example.com/" + UUID.randomUUID();
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            return subject.id;
         });
     }
 
-    private Long createTask(Long projectId, UUID traceId) {
+    private Long createTask(Long subjectId, UUID traceId) {
         return QuarkusTransaction.requiringNew().call(() -> {
             TaskEntity task = new TaskEntity();
-            task.projectId = projectId;
+            task.subjectId = subjectId;
             task.actionType = "log-correlation-action";
             task.createdBy = "test";
             task.status = "Pending";

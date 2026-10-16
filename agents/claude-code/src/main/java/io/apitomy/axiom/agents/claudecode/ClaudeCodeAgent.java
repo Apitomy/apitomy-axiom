@@ -91,13 +91,6 @@ public class ClaudeCodeAgent implements Agent {
 
     /** {@inheritDoc} */
     @Override
-    public CompletableFuture<AgentResult> executeWithSchema(AgentRequest request,
-                                                             String jsonSchema) {
-        return executeInternal(request, jsonSchema);
-    }
-
-    /** {@inheritDoc} */
-    @Override
     public void cancel(String executionId) {
         ClaudeCodeSubprocess subprocess = runningProcesses.remove(executionId);
         if (subprocess != null) {

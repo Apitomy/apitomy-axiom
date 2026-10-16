@@ -11,10 +11,10 @@ class SubscriptionFilterEvaluatorTest {
 
     private final SubscriptionFilterEvaluator evaluator = new SubscriptionFilterEvaluator();
 
-    private Map<String, Object> makeEventMap(String type, String connectionId) {
+    private Map<String, Object> makeEventMap(String type, String eventSourceId) {
         Map<String, Object> map = new HashMap<>();
         map.put("type", type);
-        map.put("connectionId", connectionId);
+        map.put("eventSourceId", eventSourceId);
         map.put("source", "github");
         map.put("ref", "https://github.com/org/repo/issues/1");
         map.put("timestamp", "2026-09-21T10:00:00Z");
@@ -60,12 +60,12 @@ class SubscriptionFilterEvaluatorTest {
                 makeEventMap("issue.created", "github-com")));
     }
 
-    // --- Connection match ---
+    // --- Event source match ---
 
     @Test
-    void connectionMatch() {
+    void eventSourceMatch() {
         assertTrue(evaluator.matches(
-                "event.connectionId == 'github-com'",
+                "event.eventSourceId == 'github-com'",
                 makeEventMap("issue.created", "github-com")));
     }
 
@@ -74,14 +74,14 @@ class SubscriptionFilterEvaluatorTest {
     @Test
     void andLogicBothMatch() {
         assertTrue(evaluator.matches(
-                "event.type == 'issue.created' && event.connectionId == 'github-com'",
+                "event.type == 'issue.created' && event.eventSourceId == 'github-com'",
                 makeEventMap("issue.created", "github-com")));
     }
 
     @Test
     void andLogicOneFails() {
         assertFalse(evaluator.matches(
-                "event.type == 'issue.created' && event.connectionId == 'jira-prod'",
+                "event.type == 'issue.created' && event.eventSourceId == 'jira-prod'",
                 makeEventMap("issue.created", "github-com")));
     }
 
@@ -102,10 +102,10 @@ class SubscriptionFilterEvaluatorTest {
     @Test
     void notLogicExcludes() {
         assertTrue(evaluator.matches(
-                "event.connectionId != 'jira-staging'",
+                "event.eventSourceId != 'jira-staging'",
                 makeEventMap("issue.created", "github-com")));
         assertFalse(evaluator.matches(
-                "event.connectionId != 'github-com'",
+                "event.eventSourceId != 'github-com'",
                 makeEventMap("issue.created", "github-com")));
     }
 

@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.StreamEventEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
@@ -103,6 +104,43 @@ class SubscriptionsResourceTest {
                 .get(SUBSCRIPTIONS_PATH + "/" + id)
             .then()
                 .statusCode(404);
+    }
+
+    /**
+     * The AI Manager was removed; a subscription using the {@code manager} routing type must be rejected.
+     */
+    @Test
+    void managerRoutingTypeIsRejected() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "mgr-sub",
+                    "enabled": true,
+                    "routing": [{"type": "manager"}]
+                }
+                """)
+            .when()
+                .post(SUBSCRIPTIONS_PATH)
+            .then()
+                .statusCode(400);
+    }
+
+    @Test
+    void invokeActionRoutingTypeIsRejected() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "name": "invoke-action-sub",
+                    "enabled": true,
+                    "routing": [{"type": "invoke-action", "actionTypeId": 1}]
+                }
+                """)
+            .when()
+                .post(SUBSCRIPTIONS_PATH)
+            .then()
+                .statusCode(400);
     }
 
     @Test
@@ -220,7 +258,7 @@ class SubscriptionsResourceTest {
         event.id = UUID.randomUUID();
         event.sourceEventId = sourceEventId;
         event.source = source;
-        event.connectionId = "test-connection";
+        event.eventSourceId = "test-event-source";
         event.type = type;
         event.ref = "https://github.com/test/repo/issues/1";
         event.timestamp = timestamp;
@@ -245,5 +283,62 @@ class SubscriptionsResourceTest {
             .then()
                 .statusCode(200)
                 .extract().path("id");
+    }
+
+    /**
+     * A create-workflow rule may reference a workflow definition by name; the server stores the id.
+     */
+    @Test
+    void createWorkflowRuleResolvesDefinitionName() {
+        long defId = createWorkflowDefinition("route-by-name-wf");
+        given().contentType(ContentType.JSON).body("""
+            {"name": "by-name-sub", "routing": [{"type": "create-workflow",
+              "workflowDefinitionName": "route-by-name-wf"}]}
+            """)
+        .when().post(SUBSCRIPTIONS_PATH)
+        .then().statusCode(200)
+            .body("routing[0].workflowDefinitionId", equalTo((int) defId))
+            .body("routing[0].workflowDefinitionName", nullValue());
+    }
+
+    /**
+     * An unknown workflow definition name is rejected.
+     */
+    @Test
+    void createWorkflowRuleWithUnknownNameIsRejected() {
+        given().contentType(ContentType.JSON).body("""
+            {"name": "bad-name-sub", "routing": [{"type": "create-workflow",
+              "workflowDefinitionName": "does-not-exist"}]}
+            """)
+        .when().post(SUBSCRIPTIONS_PATH)
+        .then().statusCode(400);
+    }
+
+    private long createWorkflowDefinition(String name) {
+        return QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = name;
+            def.content = "{}";
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+            return def.id;
+        });
+    }
+
+    @Test
+    void previewReportsEvaluationErrors() {
+        QuarkusTransaction.requiringNew().run(() ->
+                createStreamEvent("preview-err-" + UUID.randomUUID(), "github", "issue.created", Instant.now()));
+        given().contentType(ContentType.JSON)
+                .body("{\"filterExpression\": \"event.type.noSuchMethod()\", \"limit\": 200}")
+                .when().post("/api/v1/subscriptions/preview")
+                .then().statusCode(200)
+                .body("errorCount", greaterThan(0))
+                .body("firstError", notNullValue());
+        given().contentType(ContentType.JSON)
+                .body("{\"filterExpression\": \"event.type != ''\", \"limit\": 200}")
+                .when().post("/api/v1/subscriptions/preview")
+                .then().statusCode(200).body("errorCount", equalTo(0));
     }
 }

@@ -4,32 +4,32 @@ import { fetchDiskUsage, formatBytes } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
-interface ProjectDisk {
+interface SubjectDisk {
     name: string;
     bytes: number;
 }
 
 function DiskUsageWidget({ config }: WidgetProps) {
-    const [data, setData] = useState<ProjectDisk[]>([]);
+    const [data, setData] = useState<SubjectDisk[]>([]);
     const [totalBytes, setTotalBytes] = useState(0);
     const [error, setError] = useState(false);
 
-    const maxProjects = Number(config.maxProjects) || 10;
+    const maxSubjects = Number(config.maxSubjects) || 10;
 
     useEffect(() => {
         let cancelled = false;
-        fetchDiskUsage(1, maxProjects, undefined, "diskUsageBytes", "desc")
+        fetchDiskUsage(1, maxSubjects, undefined, "diskUsageBytes", "desc")
             .then(result => {
                 if (cancelled) return;
                 const items = result.items
-                    .map(p => ({ name: p.projectName, bytes: p.diskUsageBytes }))
+                    .map(p => ({ name: p.subjectName, bytes: p.diskUsageBytes }))
                     .filter(p => p.bytes > 0);
                 setData(items);
                 setTotalBytes(result.totalDiskUsageBytes);
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [maxProjects]);
+    }, [maxSubjects]);
 
     if (error) return <WidgetError />;
 
@@ -72,12 +72,12 @@ function DiskUsageWidget({ config }: WidgetProps) {
 registerWidget({
     type: "disk-usage",
     name: "Disk Usage Breakdown",
-    description: "Storage consumption broken down by project, shown as a bar chart.",
+    description: "Storage consumption broken down by subject, shown as a bar chart.",
     category: "System",
     defaultSize: { w: 4, h: 3 },
     minSize: { w: 3, h: 3 },
     configSchema: [
-        { key: "maxProjects", label: "Max Projects", type: "number", default: 10, min: 1, max: 20 },
+        { key: "maxSubjects", label: "Max Subjects", type: "number", default: 10, min: 1, max: 20 },
     ],
     component: DiskUsageWidget,
 });

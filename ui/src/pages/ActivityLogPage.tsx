@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { RunSourceLink } from "../components/RunSourceLink";
 import {
     Button,
     EmptyState,
@@ -30,20 +29,9 @@ const ENTRY_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
     "task-started": "green",
     "task-completed": "green",
     "task-failed": "red",
-    "project-created": "blue",
-    "project-closed": "grey",
-    "project-reopened": "orange",
-    "event-ignored": "grey",
-    "manager-evaluated": "blue",
-    "manager-escalation": "orange",
-    "manager-no-decision": "grey",
-    "manager-skipped": "grey",
-    "manager-error": "red",
+    "subject-created": "blue",
     "pipeline-error": "red",
     "task-awaiting-input": "orange",
-    "report-generating": "blue",
-    "report-completed": "green",
-    "report-failed": "red",
 };
 
 const FILTER_TYPES: ChipFilterType[] = [
@@ -51,12 +39,10 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "traceId", label: "Trace ID", testId: "activity-filter-traceId" },
     { value: "entryType", label: "Entry Type", testId: "activity-filter-entryType" },
     { value: "summary", label: "Summary", testId: "activity-filter-summary" },
-    { value: "projectId", label: "Project ID", testId: "activity-filter-projectId" },
-    { value: "scheduledJobRunId", label: "Job Run ID", testId: "activity-filter-scheduledJobRunId" },
-    { value: "reportId", label: "Report ID", testId: "activity-filter-reportId" },
+    { value: "subjectId", label: "Subject ID", testId: "activity-filter-subjectId" },
 ];
 
-const DEEP_LINK_FILTERS = ["traceId", "scheduledJobRunId", "reportId"];
+const DEEP_LINK_FILTERS = ["traceId"];
 
 export function ActivityLogPage() {
     const navigate = useNavigate();
@@ -68,7 +54,7 @@ export function ActivityLogPage() {
 
     const [searchParams] = useSearchParams();
     const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
-        // Deep links: ?traceId=, ?scheduledJobRunId= and ?reportId= preset the matching filter
+        // Deep link: ?traceId= presets the matching filter
         return DEEP_LINK_FILTERS.flatMap((key) => {
             const value = searchParams.get(key);
             return value
@@ -79,30 +65,21 @@ export function ActivityLogPage() {
 
     // Execution log modal state
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-    const [logProjectId, setLogProjectId] = useState<number | null>(null);
+    const [logSubjectId, setLogSubjectId] = useState<number | null>(null);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
     const [logActivityId, setLogActivityId] = useState<number | null>(null);
 
-    const handleViewTaskLog = (projectId: number, taskId: number) => {
-        setLogProjectId(projectId);
+    const handleViewTaskLog = (subjectId: number, taskId: number) => {
+        setLogSubjectId(subjectId);
         setLogTaskId(taskId);
         setLogActivityId(null);
         setIsLogModalOpen(true);
     };
 
-    const handleViewActivityLog = (activityId: number) => {
-        setLogProjectId(null);
-        setLogTaskId(null);
-        setLogActivityId(activityId);
-        setIsLogModalOpen(true);
-    };
-
     const filterEventId = filters.find((f) => f.filterBy.value === "eventId")?.filterValue;
     const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
-    const filterRunId = filters.find((f) => f.filterBy.value === "scheduledJobRunId")?.filterValue;
-    const filterReportId = filters.find((f) => f.filterBy.value === "reportId")?.filterValue;
     const filterSummary = filters.find((f) => f.filterBy.value === "summary")?.filterValue;
-    const filterProjectId = filters.find((f) => f.filterBy.value === "projectId")?.filterValue;
+    const filterSubjectId = filters.find((f) => f.filterBy.value === "subjectId")?.filterValue;
     const filterEntryTypes = filters
         .filter((f) => f.filterBy.value === "entryType")
         .map((f) => f.filterValue)
@@ -115,12 +92,10 @@ export function ActivityLogPage() {
             page, perPage,
             filterEventId?.trim() || undefined,
             filterSummary || undefined,
-            filterProjectId ? Number(filterProjectId) : undefined,
+            filterSubjectId ? Number(filterSubjectId) : undefined,
             filterEntryTypes || undefined,
             undefined,
-            filterTraceId?.trim() || undefined,
-            filterRunId?.trim() || undefined,
-            filterReportId?.trim() || undefined
+            filterTraceId?.trim() || undefined
         )
             .then((results) => {
                 setEntries(results.items);
@@ -128,8 +103,7 @@ export function ActivityLogPage() {
             })
             .catch(console.error)
             .finally(() => setLoading(false));
-    }, [page, perPage, filterEventId, filterSummary, filterProjectId, filterEntryTypes, filterTraceId,
-        filterRunId, filterReportId]);
+    }, [page, perPage, filterEventId, filterSummary, filterSubjectId, filterEntryTypes, filterTraceId]);
 
     useEffect(() => {
         loadData();
@@ -141,9 +115,7 @@ export function ActivityLogPage() {
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue));
         if (criteria.filterBy.value === "eventId" || criteria.filterBy.value === "traceId"
                 || criteria.filterBy.value === "summary"
-                || criteria.filterBy.value === "projectId"
-                || criteria.filterBy.value === "scheduledJobRunId"
-                || criteria.filterBy.value === "reportId") {
+                || criteria.filterBy.value === "subjectId") {
             const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
             withoutSame.push(criteria);
             setFilters(withoutSame);
@@ -226,10 +198,9 @@ export function ActivityLogPage() {
                                 <Th>Time</Th>
                                 <Th>Event</Th>
                                 <Th>Trace</Th>
-                                <Th>Source</Th>
                                 <Th>Type</Th>
                                 <Th>Summary</Th>
-                                <Th>Project</Th>
+                                <Th>Subject</Th>
                             </Tr>
                         </Thead>
                         <Tbody>
@@ -259,10 +230,6 @@ export function ActivityLogPage() {
                                         ) : "—"}
                                     </Td>
                                     <Td>
-                                        <RunSourceLink reportId={entry.reportId}
-                                            scheduledJobRunId={entry.scheduledJobRunId} />
-                                    </Td>
-                                    <Td>
                                         <Label
                                             isCompact
                                             color={ENTRY_TYPE_COLORS[entry.entryType] || "grey"}
@@ -282,35 +249,26 @@ export function ActivityLogPage() {
                                     <Td>
                                         {entry.summary}
                                         {(entry.entryType === "task-completed" || entry.entryType === "task-failed")
-                                                && entry.projectId && entry.taskId && (
+                                                && entry.subjectId && entry.taskId && (
                                             <>
                                                 {" — "}
                                                 <Button variant="link" isInline
-                                                    onClick={() => handleViewTaskLog(entry.projectId!, entry.taskId!)}>
-                                                    View Log
-                                                </Button>
-                                            </>
-                                        )}
-                                        {(entry.entryType === "manager-evaluated" || entry.entryType === "manager-error") && (
-                                            <>
-                                                {" — "}
-                                                <Button variant="link" isInline
-                                                    onClick={() => handleViewActivityLog(entry.id)}>
+                                                    onClick={() => handleViewTaskLog(entry.subjectId!, entry.taskId!)}>
                                                     View Log
                                                 </Button>
                                             </>
                                         )}
                                     </Td>
                                     <Td>
-                                        {entry.projectId ? (
+                                        {entry.subjectId ? (
                                             <Button
                                                 variant="link"
                                                 isInline
                                                 onClick={() =>
-                                                    navigate(`/projects/${entry.projectId}`)
+                                                    navigate(`/subjects/${entry.subjectId}`)
                                                 }
                                             >
-                                                Project #{entry.projectId}
+                                                Subject #{entry.subjectId}
                                             </Button>
                                         ) : (
                                             "—"
@@ -325,7 +283,7 @@ export function ActivityLogPage() {
 
             <ExecutionLogModal
                 isOpen={isLogModalOpen}
-                projectId={logProjectId}
+                subjectId={logSubjectId}
                 taskId={logTaskId}
                 activityId={logActivityId}
                 onClose={() => setIsLogModalOpen(false)}

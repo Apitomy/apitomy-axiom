@@ -4,6 +4,8 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.Test;
 
+import java.util.UUID;
+
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
@@ -12,6 +14,19 @@ import static org.hamcrest.Matchers.*;
  */
 @QuarkusTest
 class SystemResourceTest {
+
+    /**
+     * Reports were removed; the endpoint must no longer exist.
+     */
+    @Test
+    void reportsEndpointIsGone() {
+        given().when().get("/api/v1/reports").then().statusCode(404);
+    }
+
+    @Test
+    void scheduledJobsEndpointIsGone() {
+        given().when().get("/api/v1/scheduled-jobs").then().statusCode(404);
+    }
 
     @Test
     void testGetSystemHealth() {
@@ -69,7 +84,7 @@ class SystemResourceTest {
             .then()
                 .statusCode(200)
                 .body("defaultEngine", equalTo("opencode"))
-                .body("engine", equalTo("opencode"));
+                .body("$", not(hasKey("engine")));
 
         given()
                 .contentType(ContentType.JSON)
@@ -130,12 +145,12 @@ class SystemResourceTest {
             .then()
                 .statusCode(200)
                 .body("traceRetentionDays", notNullValue())
-                .body("scheduledJobRunRetentionDays", equalTo(0))
-                .body("reportRetentionDays", equalTo(0))
                 .body("workflowRunRetentionDays", equalTo(0))
                 .body("activityLogRetentionDays", equalTo(0))
                 .body("aiUsageRetentionDays", equalTo(0))
-                .body("$", not(hasKey("eventSourceLogRetentionDays")));
+                .body("$", not(hasKey("eventSourceLogRetentionDays")))
+                .body("$", not(hasKey("reportRetentionDays")))
+                .body("$", not(hasKey("scheduledJobRunRetentionDays")));
     }
 
     @Test
@@ -146,9 +161,8 @@ class SystemResourceTest {
             given()
                     .contentType(ContentType.JSON)
                     .body("""
-                            {"closedProjectRetentionDays":90,"traceRetentionDays":30,
-                             "eventRetentionDays":90,"scheduledJobRunRetentionDays":11,
-                             "reportRetentionDays":12,"workflowRunRetentionDays":13,
+                            {"inactiveSubjectRetentionDays":90,"traceRetentionDays":30,
+                             "eventRetentionDays":90,"workflowRunRetentionDays":13,
                              "activityLogRetentionDays":14,"aiUsageRetentionDays":15}
                             """)
                 .when()
@@ -161,14 +175,14 @@ class SystemResourceTest {
             given()
                     .contentType(ContentType.JSON)
                     .body("""
-                            {"closedProjectRetentionDays":90,"traceRetentionDays":30,
+                            {"inactiveSubjectRetentionDays":90,"traceRetentionDays":30,
                              "eventRetentionDays":90}
                             """)
                 .when()
                     .put("/api/v1/system/retention")
                 .then()
                     .statusCode(200)
-                    .body("scheduledJobRunRetentionDays", equalTo(11))
+                    .body("workflowRunRetentionDays", equalTo(13))
                     .body("aiUsageRetentionDays", equalTo(15));
 
             given()
@@ -176,7 +190,7 @@ class SystemResourceTest {
                     .get("/api/v1/system/retention")
                 .then()
                     .statusCode(200)
-                    .body("reportRetentionDays", equalTo(12))
+                    .body("workflowRunRetentionDays", equalTo(13))
                     .body("activityLogRetentionDays", equalTo(14));
         } finally {
             given().contentType(ContentType.JSON).body(original)
@@ -190,8 +204,8 @@ class SystemResourceTest {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
-                        {"closedProjectRetentionDays":90,"traceRetentionDays":30,
-                         "eventRetentionDays":90,"reportRetentionDays":-1}
+                        {"inactiveSubjectRetentionDays":90,"traceRetentionDays":30,
+                         "eventRetentionDays":90,"workflowRunRetentionDays":-1}
                         """)
             .when()
                 .put("/api/v1/system/retention")
@@ -201,7 +215,7 @@ class SystemResourceTest {
 
     @Test
     void testUpdateRetentionConfigRejectsCoreSettingsBelowOne() {
-        for (String field : new String[] {"closedProjectRetentionDays", "traceRetentionDays",
+        for (String field : new String[] {"inactiveSubjectRetentionDays", "traceRetentionDays",
                 "eventRetentionDays"}) {
             for (int value : new int[] {0, -5}) {
                 given()
@@ -223,7 +237,7 @@ class SystemResourceTest {
             given()
                     .contentType(ContentType.JSON)
                     .body("""
-                            {"closedProjectRetentionDays":77,"traceRetentionDays":22,
+                            {"inactiveSubjectRetentionDays":77,"traceRetentionDays":22,
                              "eventRetentionDays":66}
                             """)
                 .when()
@@ -233,19 +247,35 @@ class SystemResourceTest {
 
             given()
                     .contentType(ContentType.JSON)
-                    .body("{\"reportRetentionDays\":3}")
+                    .body("{\"workflowRunRetentionDays\":3}")
                 .when()
                     .put("/api/v1/system/retention")
                 .then()
                     .statusCode(200)
-                    .body("closedProjectRetentionDays", equalTo(77))
+                    .body("inactiveSubjectRetentionDays", equalTo(77))
                     .body("traceRetentionDays", equalTo(22))
                     .body("eventRetentionDays", equalTo(66))
-                    .body("reportRetentionDays", equalTo(3));
+                    .body("workflowRunRetentionDays", equalTo(3));
         } finally {
             given().contentType(ContentType.JSON).body(original)
                     .when().put("/api/v1/system/retention")
                     .then().statusCode(200);
         }
+    }
+
+    /** Importing a pack with an invalid item returns 400 with the problems keyed by item. */
+    @Test
+    void importInvalidPackReturnsProblems() {
+        String name = "bad-wf-" + UUID.randomUUID().toString().substring(0, 8);
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitions\": [{\"name\": \"" + name + "\"}]}")
+            .when()
+                .post("/api/v1/system/packs/import")
+            .then()
+                .statusCode(400)
+                .body("message", equalTo("Configuration pack has invalid items"))
+                .body("problems.'workflow/" + name + "'", not(empty()))
+                .body("problems.'workflow/" + name + "'[0].path", equalTo("content"));
     }
 }

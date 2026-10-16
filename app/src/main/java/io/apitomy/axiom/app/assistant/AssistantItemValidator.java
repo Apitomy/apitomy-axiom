@@ -2,52 +2,44 @@ package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.apitomy.axiom.api.beans.NewActionType;
-import io.apitomy.axiom.api.beans.NewReportDefinition;
-import io.apitomy.axiom.api.beans.NewScheduledJob;
-import io.apitomy.axiom.api.beans.NewToolDefinition;
-import io.apitomy.axiom.core.entities.SecretEntity;
-import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
-import io.apitomy.axiom.core.entities.ToolsetEntity;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.ValidationContext;
+import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
-import io.apitomy.axiom.core.services.ActionTypeValidator;
-import io.apitomy.axiom.core.services.ReportDefinitionValidator;
-import io.apitomy.axiom.core.services.ScheduledJobValidator;
-import io.apitomy.axiom.core.services.ToolValidator;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 /**
- * Validates generated JSON configuration files by delegating to the real
- * validators ({@link ToolValidator}, {@link ActionTypeValidator},
- * {@link ReportDefinitionValidator}).
- *
- * <p>This replaces the earlier thin JSON-level validation with the full
- * semantic validation including placeholder consistency, cross-references,
- * environment variable checks, and more.</p>
+ * Validates configuration item files written by the configuration assistant by delegating to the shared
+ * {@link ConfigItemValidationService}, so the assistant sees exactly the rules applied on apply.
  */
 @ApplicationScoped
 public class AssistantItemValidator {
 
-    private static final Logger LOG = Logger.getLogger(AssistantItemValidator.class);
-
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    ConfigItemValidationService validationService;
+
+    @Inject
+    ValidationContextFactory contextFactory;
+
     /**
-     * Validates a JSON file and returns errors and warnings as separate lists.
+     * Validates a JSON file without session context (referenced names are not checked).
      *
      * @param file the path to the JSON file
-     * @param itemType the item type: "tools", "action-types", or "report-definitions"
+     * @param itemType the item type (JSON name or directory name)
      * @return the validation result with separate error and warning lists
      */
     public ValidationResult validate(Path file, String itemType) {
@@ -55,11 +47,11 @@ public class AssistantItemValidator {
     }
 
     /**
-     * Validates a JSON file, including tools from the session's working directory
-     * in the known names to avoid false positives for co-created items.
+     * Validates a JSON file. Items in the session working directory count as existing when checking
+     * references.
      *
      * @param file the path to the JSON file
-     * @param itemType the item type
+     * @param itemType the item type (JSON name or directory name)
      * @param workingDirectory the session's working directory, or null
      * @return the validation result
      */
@@ -72,28 +64,72 @@ public class AssistantItemValidator {
             return new ValidationResult(errors, warnings);
         }
 
-        String content;
+        ConfigItemType type;
         try {
-            content = Files.readString(file);
-        } catch (IOException e) {
-            errors.add("Cannot read file: " + e.getMessage());
+            type = ConfigItemType.fromName(itemType);
+        } catch (IllegalArgumentException e) {
+            errors.add("Unknown item type: " + itemType);
             return new ValidationResult(errors, warnings);
         }
 
-        switch (itemType) {
-            case "tools" -> validateTool(content, errors, warnings);
-            case "action-types" -> validateActionType(content, workingDirectory, errors, warnings);
-            case "report-definitions" -> validateReportDefinition(content, workingDirectory, errors, warnings);
-            case "toolsets" -> validateToolset(content, errors, warnings);
-            case "session-templates" -> validateSessionTemplate(content, errors, warnings);
-            case "connections" -> validateConnection(content, errors, warnings);
-            case "subscriptions" -> validateSubscription(content, errors, warnings);
-            case "workflows" -> validateWorkflowDefinition(content, errors, warnings);
-            case "scheduled-jobs" -> validateScheduledJob(content, workingDirectory, errors, warnings);
-            default -> errors.add("Unknown item type: " + itemType);
+        JsonNode item;
+        try {
+            item = objectMapper.readTree(Files.readString(file));
+        } catch (IOException e) {
+            errors.add("Invalid JSON: " + e.getMessage());
+            return new ValidationResult(errors, warnings);
+        }
+        if (item == null || !item.isObject()) {
+            errors.add("Invalid JSON: the file must contain a JSON object.");
+            return new ValidationResult(errors, warnings);
         }
 
+        for (ConfigProblem problem : validateItem(type, item, workingDirectory)) {
+            String text = problem.path() == null || problem.path().isEmpty()
+                    ? problem.message() : problem.path() + ": " + problem.message();
+            (problem.isError() ? errors : warnings).add(text);
+        }
         return new ValidationResult(errors, warnings);
+    }
+
+    /**
+     * Validates an item JSON object. Workflow {@code content} given as a JSON string is parsed first.
+     *
+     * @param type the item type
+     * @param item the item JSON
+     * @param workingDirectory the session's working directory (its items count as existing), or null
+     * @return the problems found
+     */
+    public List<ConfigProblem> validateItem(ConfigItemType type, JsonNode item, Path workingDirectory) {
+        JsonNode normalized = normalizeWorkflowContent(type, item);
+        ManagedContext requestContext = Arc.container() != null ? Arc.container().requestContext() : null;
+        boolean activated = requestContext != null && !requestContext.isActive();
+        if (activated) {
+            requestContext.activate();
+        }
+        try {
+            ValidationContext context = contextFactory == null ? ValidationContext.unchecked()
+                    : workingDirectory != null ? contextFactory.forDirectory(workingDirectory)
+                    : contextFactory.databaseOnly();
+            return validationService.validate(type, normalized, context);
+        } finally {
+            if (activated) {
+                requestContext.deactivate();
+            }
+        }
+    }
+
+    private JsonNode normalizeWorkflowContent(ConfigItemType type, JsonNode item) {
+        if (type != ConfigItemType.WORKFLOW || !item.path("content").isTextual()) {
+            return item;
+        }
+        ObjectNode copy = ((ObjectNode) item).deepCopy();
+        try {
+            copy.set("content", objectMapper.readTree(item.path("content").asText()));
+        } catch (IOException e) {
+            // leave as-is; the service reports the non-object content
+        }
+        return copy;
     }
 
     /**
@@ -109,404 +145,13 @@ public class AssistantItemValidator {
         return switch (first) {
             case "tools" -> "tools";
             case "action-types" -> "action-types";
-            case "report-definitions" -> "report-definitions";
             case "toolsets" -> "toolsets";
             case "session-templates" -> "session-templates";
-            case "connections" -> "connections";
+            case "event-sources" -> "event-sources";
             case "subscriptions" -> "subscriptions";
             case "workflows" -> "workflows";
-            case "scheduled-jobs" -> "scheduled-jobs";
             default -> null;
         };
-    }
-
-    private void validateTool(String json, List<String> errors, List<String> warnings) {
-        NewToolDefinition tool;
-        try {
-            tool = objectMapper.readValue(json, NewToolDefinition.class);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        ToolValidator.ValidationResult result = ToolValidator.validate(tool);
-        collectMessages(result.errors(), result.warnings(), errors, warnings);
-    }
-
-    private void validateActionType(String json, Path workingDirectory,
-                                     List<String> errors, List<String> warnings) {
-        NewActionType actionType;
-        try {
-            actionType = objectMapper.readValue(json, NewActionType.class);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        ActionTypeValidator.KnownNames known = buildActionTypeKnownNames(workingDirectory);
-        ActionTypeValidator.ValidationResult result =
-                ActionTypeValidator.validate(actionType, known);
-        collectMessages(result.errors(), result.warnings(), errors, warnings);
-    }
-
-    private void validateReportDefinition(String json, Path workingDirectory,
-                                           List<String> errors, List<String> warnings) {
-        NewReportDefinition reportDef;
-        try {
-            reportDef = objectMapper.readValue(json, NewReportDefinition.class);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        ReportDefinitionValidator.KnownNames known = buildReportDefKnownNames(workingDirectory);
-        ReportDefinitionValidator.ValidationResult result =
-                ReportDefinitionValidator.validate(reportDef, known);
-        collectMessages(result.errors(), result.warnings(), errors, warnings);
-    }
-
-    private void validateToolset(String json, List<String> errors, List<String> warnings) {
-        JsonNode node;
-        try {
-            node = objectMapper.readTree(json);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        String name = node.path("name").asText(null);
-        if (name == null || name.isBlank()) {
-            errors.add("'name' is required and must not be blank.");
-        }
-
-        JsonNode toolsNode = node.path("tools");
-        if (toolsNode.isMissingNode() || (toolsNode.isArray() && toolsNode.isEmpty())
-                || (toolsNode.isTextual() && toolsNode.asText().isBlank())) {
-            errors.add("'tools' is required and must contain at least one tool pattern.");
-        }
-
-        if (!node.has("description") || node.path("description").asText("").isBlank()) {
-            warnings.add("'description' is recommended for toolsets.");
-        }
-    }
-
-    private void validateSessionTemplate(String json, List<String> errors, List<String> warnings) {
-        JsonNode node;
-        try {
-            node = objectMapper.readTree(json);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        String name = node.path("name").asText(null);
-        if (name == null || name.isBlank()) {
-            errors.add("'name' is required and must not be blank.");
-        }
-
-        String description = node.path("description").asText(null);
-        if (description == null || description.isBlank()) {
-            errors.add("'description' is required and must not be blank.");
-        }
-
-        String systemPrompt = node.path("systemPrompt").asText(null);
-        if (systemPrompt == null || systemPrompt.isBlank()) {
-            errors.add("'systemPrompt' is required and must not be blank.");
-        }
-
-        if (!node.has("templateId") || node.path("templateId").asText("").isBlank()) {
-            warnings.add("'templateId' is missing — a UUID will be auto-generated on apply.");
-        }
-
-        JsonNode allowedTools = node.path("allowedTools");
-        if (allowedTools.isMissingNode() || (allowedTools.isArray() && allowedTools.isEmpty())) {
-            warnings.add("'allowedTools' is empty — the session will have no tool access.");
-        }
-    }
-
-    private void validateScheduledJob(String json, Path workingDirectory,
-                                       List<String> errors, List<String> warnings) {
-        NewScheduledJob scheduledJob;
-        try {
-            scheduledJob = objectMapper.readValue(json, NewScheduledJob.class);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        ScheduledJobValidator.KnownNames known = buildScheduledJobKnownNames(workingDirectory);
-        ScheduledJobValidator.ValidationResult result =
-                ScheduledJobValidator.validate(scheduledJob, known);
-        collectMessages(result.errors(), result.warnings(), errors, warnings);
-    }
-
-    private void validateConnection(String json, List<String> errors, List<String> warnings) {
-        JsonNode node;
-        try {
-            node = objectMapper.readTree(json);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        String id = node.path("id").asText(null);
-        if (id == null || id.isBlank()) {
-            errors.add("'id' is required and must not be blank.");
-        } else if (!id.matches("[a-z0-9-]+")) {
-            errors.add("'id' must match [a-z0-9-]+ pattern, got: " + id);
-        }
-
-        String name = node.path("name").asText(null);
-        if (name == null || name.isBlank()) {
-            errors.add("'name' is required and must not be blank.");
-        }
-
-        String sourceType = node.path("sourceType").asText(null);
-        if (sourceType == null || sourceType.isBlank()) {
-            errors.add("'sourceType' is required and must be 'github' or 'jira'.");
-        } else if (!"github".equals(sourceType) && !"jira".equals(sourceType)) {
-            errors.add("'sourceType' must be 'github' or 'jira', got: " + sourceType);
-        }
-
-        String baseUrl = node.path("baseUrl").asText(null);
-        if (baseUrl == null || baseUrl.isBlank()) {
-            errors.add("'baseUrl' is required and must not be blank.");
-        }
-
-        JsonNode configNode = node.path("configuration");
-        if (configNode.isMissingNode() || configNode.isNull() || !configNode.isObject()) {
-            errors.add("'configuration' is required and must be an object.");
-        }
-    }
-
-    private void validateSubscription(String json, List<String> errors, List<String> warnings) {
-        JsonNode node;
-        try {
-            node = objectMapper.readTree(json);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        String name = node.path("name").asText(null);
-        if (name == null || name.isBlank()) {
-            errors.add("'name' is required and must not be blank.");
-        }
-
-        JsonNode filterExpr = node.path("filterExpression");
-        if (!filterExpr.isMissingNode() && !filterExpr.isNull() && !filterExpr.isTextual()) {
-            errors.add("'filterExpression' must be a string if provided.");
-        }
-
-        JsonNode routing = node.path("routing");
-        if (!routing.isMissingNode() && !routing.isNull() && !routing.isArray()) {
-            errors.add("'routing' must be an array if provided.");
-        }
-
-        JsonNode labels = node.path("labels");
-        if (!labels.isMissingNode() && !labels.isNull() && !labels.isArray()) {
-            errors.add("'labels' must be an array of strings if provided.");
-        }
-
-        JsonNode enabled = node.path("enabled");
-        if (!enabled.isMissingNode() && !enabled.isNull() && !enabled.isBoolean()) {
-            errors.add("'enabled' must be a boolean if provided.");
-        }
-
-        if (!node.has("description") || node.path("description").asText("").isBlank()) {
-            warnings.add("'description' is recommended for subscriptions.");
-        }
-    }
-
-    private void validateWorkflowDefinition(String json, List<String> errors,
-                                              List<String> warnings) {
-        JsonNode node;
-        try {
-            node = objectMapper.readTree(json);
-        } catch (Exception e) {
-            errors.add("Invalid JSON: " + e.getMessage());
-            return;
-        }
-
-        String name = node.path("name").asText(null);
-        if (name == null || name.isBlank()) {
-            errors.add("'name' is required and must not be blank.");
-        }
-
-        JsonNode contentNode = node.path("content");
-        if (contentNode.isMissingNode() || contentNode.isNull() || !contentNode.isObject()) {
-            errors.add("'content' is required and must be an object.");
-            return;
-        }
-
-        JsonNode nodesNode = contentNode.path("nodes");
-        if (nodesNode.isMissingNode() || !nodesNode.isArray()) {
-            errors.add("'content.nodes' is required and must be an array.");
-        } else {
-            boolean hasStart = false;
-            boolean hasEnd = false;
-            for (JsonNode n : nodesNode) {
-                String nodeId = n.path("id").asText(null);
-                String nodeType = n.path("type").asText(null);
-                String nodeName = n.path("name").asText(null);
-
-                if (nodeId == null || nodeId.isBlank()) {
-                    errors.add("Each node must have an 'id'.");
-                }
-                if (nodeType == null || nodeType.isBlank()) {
-                    errors.add("Each node must have a 'type'.");
-                } else {
-                    if ("START".equals(nodeType)) {
-                        hasStart = true;
-                    }
-                    if ("END".equals(nodeType)) {
-                        hasEnd = true;
-                    }
-                }
-                if (nodeName == null || nodeName.isBlank()) {
-                    errors.add("Each node must have a 'name'.");
-                }
-            }
-            if (!hasStart) {
-                errors.add("Workflow content must have at least one START node.");
-            }
-            if (!hasEnd) {
-                errors.add("Workflow content must have at least one END node.");
-            }
-        }
-
-        JsonNode edgesNode = contentNode.path("edges");
-        if (edgesNode.isMissingNode() || !edgesNode.isArray()) {
-            errors.add("'content.edges' is required and must be an array.");
-        }
-
-        if (!node.has("description") || node.path("description").asText("").isBlank()) {
-            warnings.add("'description' is recommended for workflow definitions.");
-        }
-    }
-
-    private <M> void collectMessages(
-            List<? extends Record> validationErrors,
-            List<? extends Record> validationWarnings,
-            List<String> errors, List<String> warnings) {
-        for (Record msg : validationErrors) {
-            errors.add(formatMessage(msg));
-        }
-        for (Record msg : validationWarnings) {
-            warnings.add(formatMessage(msg));
-        }
-    }
-
-    private String formatMessage(Record msg) {
-        // All three validator message records have field() and message() methods
-        // but they're different record types. Use reflection-free approach via toString.
-        if (msg instanceof ToolValidator.ValidationMessage m) {
-            return m.field() + ": " + m.message();
-        } else if (msg instanceof ActionTypeValidator.ValidationMessage m) {
-            return m.field() + ": " + m.message();
-        } else if (msg instanceof ReportDefinitionValidator.ValidationMessage m) {
-            return m.field() + ": " + m.message();
-        } else if (msg instanceof ScheduledJobValidator.ValidationMessage m) {
-            return m.field() + ": " + m.message();
-        }
-        return msg.toString();
-    }
-
-    private ActionTypeValidator.KnownNames buildActionTypeKnownNames(Path workingDirectory) {
-        ManagedContext requestContext = Arc.container() != null
-                ? Arc.container().requestContext() : null;
-        boolean activated = requestContext != null && !requestContext.isActive();
-        if (activated) requestContext.activate();
-        try {
-            Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
-                    .map(s -> s.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            Set<String> tools = new java.util.HashSet<>(
-                    ToolDefinitionEntity.<ToolDefinitionEntity>listAll().stream()
-                            .map(t -> t.name).toList());
-            tools.addAll(getSessionToolNames(workingDirectory));
-            Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
-                    .map(t -> t.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            return new ActionTypeValidator.KnownNames(secrets, tools, toolsets, null);
-        } catch (Exception e) {
-            LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
-            return null;
-        } finally {
-            if (activated) requestContext.deactivate();
-        }
-    }
-
-    private ReportDefinitionValidator.KnownNames buildReportDefKnownNames(Path workingDirectory) {
-        ManagedContext requestContext = Arc.container() != null
-                ? Arc.container().requestContext() : null;
-        boolean activated = requestContext != null && !requestContext.isActive();
-        if (activated) requestContext.activate();
-        try {
-            Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
-                    .map(s -> s.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            Set<String> tools = new java.util.HashSet<>(
-                    ToolDefinitionEntity.<ToolDefinitionEntity>listAll().stream()
-                            .map(t -> t.name).toList());
-            tools.addAll(getSessionToolNames(workingDirectory));
-            Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
-                    .map(t -> t.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            return new ReportDefinitionValidator.KnownNames(secrets, tools, toolsets, null);
-        } catch (Exception e) {
-            LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
-            return null;
-        } finally {
-            if (activated) requestContext.deactivate();
-        }
-    }
-
-    private ScheduledJobValidator.KnownNames buildScheduledJobKnownNames(Path workingDirectory) {
-        ManagedContext requestContext = Arc.container() != null
-                ? Arc.container().requestContext() : null;
-        boolean activated = requestContext != null && !requestContext.isActive();
-        if (activated) requestContext.activate();
-        try {
-            Set<String> secrets = SecretEntity.<SecretEntity>listAll().stream()
-                    .map(s -> s.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            Set<String> tools = new java.util.HashSet<>(
-                    ToolDefinitionEntity.<ToolDefinitionEntity>listAll().stream()
-                            .map(t -> t.name).toList());
-            tools.addAll(getSessionToolNames(workingDirectory));
-            Set<String> toolsets = ToolsetEntity.<ToolsetEntity>listAll().stream()
-                    .map(t -> t.name)
-                    .collect(java.util.stream.Collectors.toSet());
-            return new ScheduledJobValidator.KnownNames(secrets, tools, toolsets, null);
-        } catch (Exception e) {
-            LOG.warnf("Failed to build KnownNames for validation: %s", e.getMessage());
-            return null;
-        } finally {
-            if (activated) requestContext.deactivate();
-        }
-    }
-
-    /**
-     * Scans the session's tools/ directory for JSON files and returns their
-     * names (without .json extension). These represent tools being created
-     * in the same session that haven't been imported yet.
-     */
-    private Set<String> getSessionToolNames(Path workingDirectory) {
-        if (workingDirectory == null) {
-            return Set.of();
-        }
-        Path toolsDir = workingDirectory.resolve("tools");
-        if (!Files.isDirectory(toolsDir)) {
-            return Set.of();
-        }
-        try (java.util.stream.Stream<Path> files = Files.list(toolsDir)) {
-            return files.filter(f -> f.toString().endsWith(".json"))
-                    .map(f -> f.getFileName().toString().replaceFirst("\\.json$", ""))
-                    .collect(java.util.stream.Collectors.toSet());
-        } catch (IOException e) {
-            return Set.of();
-        }
     }
 
     /**

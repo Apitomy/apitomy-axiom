@@ -9,14 +9,14 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Represents a discrete unit of work within a Project.
+ * Represents a discrete unit of work within a Subject.
  */
 @Entity
 @Table(name = "task")
 public class TaskEntity extends PanacheEntity {
 
-    @Column(name = "project_id", nullable = false)
-    public Long projectId;
+    @Column(name = "subject_id", nullable = false)
+    public Long subjectId;
 
     @Column(name = "action_type", nullable = false)
     public String actionType;

@@ -16,7 +16,7 @@ underscores and uppercase everything. For example:
 |----------|---------------------|---------------------|
 | `axiom.agent.default-type` | `AXIOM_AGENT_DEFAULT_TYPE` | `-Daxiom.agent.default-type=...` |
 | `axiom.agent.claude-code.max-steps` | `AXIOM_AGENT_CLAUDE_CODE_MAX_STEPS` | `-Daxiom.agent.claude-code.max-steps=...` |
-| `axiom.manager.confidence-threshold` | `AXIOM_MANAGER_CONFIDENCE_THRESHOLD` | `-Daxiom.manager.confidence-threshold=...` |
+| `axiom.workflow.schedule-poll-interval` | `AXIOM_WORKFLOW_SCHEDULE_POLL_INTERVAL` | `-Daxiom.workflow.schedule-poll-interval=...` |
 
 For example, to run Axiom with OpenCode as the default agent and a custom timeout:
 
@@ -39,14 +39,22 @@ The active default agent can also be changed at runtime from **Settings > AI Eng
 the UI, without restarting the server. The UI setting takes precedence over
 `axiom.agent.default-type` once it has been set.
 
-### AI Agents
-
-Axiom supports multiple pluggable AI agents (Claude Code, OpenCode, and GitHub Copilot
-CLI). Set the default agent used for tasks, reports, and agent-mode scheduled jobs
-(unless overridden per-item) with:
+### Server
 
 | Property | Default | Description |
 |----------|---------|--------------|
+| `quarkus.http.port` | `9090` (`9191` in the `prod` profile) | HTTP port of the UI and REST API (`/api/v1`) |
+| `quarkus.http.host` | `127.0.0.1` in the `prod` profile | Address to listen on. Axiom has no authentication, so it accepts local connections only by default; set `0.0.0.0` to listen on all interfaces and protect access yourself |
+
+### AI Agents
+
+Axiom supports multiple pluggable AI agents (Claude Code, OpenCode, and GitHub Copilot
+CLI). Set the default agent used for tasks
+(unless overridden per action type) with:
+
+| Property | Default | Description |
+|----------|---------|--------------|
+| `axiom.home` | `~/.axiom` | Home for assistant sessions, task files, MCP servers, workspaces and the encryption key |
 | `axiom.agent.default-type` | `claude-code` | Default agent type (`claude-code`, `opencode`, or `copilot`) |
 
 #### Claude Code Settings
@@ -55,10 +63,10 @@ CLI). Set the default agent used for tasks, reports, and agent-mode scheduled jo
 |----------|---------|--------------|
 | `axiom.agent.claude-code.executable` | `claude` | Path to the Claude CLI binary |
 | `axiom.agent.claude-code.model` | *(agent default)* | AI model override |
-| `axiom.agent.claude-code.max-steps` | `50` | Maximum agentic steps per task |
+| `axiom.agent.claude-code.max-steps` | `50` | Maximum agentic turns per task (passed as `--max-turns`) |
 | `axiom.agent.claude-code.max-budget-usd` | `5.0` | Maximum cost per task in USD |
 | `axiom.agent.claude-code.timeout-seconds` | `600` | Subprocess timeout |
-| `axiom.agent.claude-code.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
+| `axiom.agent.claude-code.available-models` | *(see `application.properties`)* | Comma-separated model list for the UI model picker |
 
 #### OpenCode Settings
 
@@ -67,10 +75,10 @@ CLI). Set the default agent used for tasks, reports, and agent-mode scheduled jo
 | `axiom.agent.opencode.executable` | `opencode` | Path to the OpenCode CLI binary |
 | `axiom.agent.opencode.server.hostname` | `127.0.0.1` | OpenCode server hostname |
 | `axiom.agent.opencode.server.port` | `4096` | OpenCode server port |
-| `axiom.agent.opencode.model` | *(agent default)* | Model in `provider/model` format |
+| `axiom.agent.opencode.model` | *(see `application.properties`)* | Model in `provider/model` format |
 | `axiom.agent.opencode.max-steps` | `50` | Maximum agent steps per task |
 | `axiom.agent.opencode.timeout-seconds` | `600` | HTTP request timeout |
-| `axiom.agent.opencode.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
+| `axiom.agent.opencode.available-models` | *(see `application.properties`)* | Comma-separated model list for the UI model picker |
 | `axiom.agent.opencode.model-discovery.enabled` | `true` | Enable dynamic model discovery from the OpenCode server |
 | `axiom.agent.opencode.model-discovery.timeout-seconds` | `8` | Timeout for a model discovery request |
 | `axiom.agent.opencode.model-discovery.cache-seconds` | `86400` | How long discovered models are cached |
@@ -82,47 +90,32 @@ CLI). Set the default agent used for tasks, reports, and agent-mode scheduled jo
 | `axiom.agent.copilot.executable` | `copilot` | Path to the Copilot CLI binary |
 | `axiom.agent.copilot.model` | *(agent default)* | AI model override |
 | `axiom.agent.copilot.timeout-seconds` | `600` | Subprocess timeout |
-| `axiom.agent.copilot.available-models` | *(empty)* | Comma-separated model list for the UI model picker |
-
-### Manager
-
-The AI Manager triages incoming stream events and decides what actions to take.
-
-| Property | Default | Description |
-|----------|---------|--------------|
-| `axiom.manager.confidence-threshold` | `0.7` | Minimum confidence for auto-execution (0.0–1.0) |
-| `axiom.manager.timeout-seconds` | `120` | Manager subprocess timeout |
-| `axiom.manager.max-turns` | `5` | Maximum agentic turns for the Manager |
-| `axiom.manager.engine` | *(global default)* | Agent type override for the Manager |
-| `axiom.manager.model` | *(agent default)* | Model override for the Manager |
-
-Decisions below the confidence threshold are escalated to the Inbox for human review
-rather than executed automatically.
+| `axiom.agent.copilot.available-models` | *(see `application.properties`)* | Comma-separated model list for the UI model picker |
 
 ### Event Stream Pipeline
 
 | Property | Default | Description |
 |----------|---------|--------------|
 | `axiom.stream-pipeline.poll-interval` | `5s` | How often the event stream orchestrator evaluates unprocessed (event, subscription) pairs |
-| `axiom.stream-pipeline.max-attempts` | `3` | Maximum routing attempts (first try plus retries) for an (event, subscription) pair; when the last allowed attempt fails the ledger entry becomes `exhausted` and is no longer retried automatically (it can be retried manually, which allows one more attempt). Each Manager retry is a full AI call, so a higher value multiplies the cost of a failing Manager |
+| `axiom.stream-pipeline.max-attempts` | `3` | Maximum routing attempts (first try plus retries) for an (event, subscription) pair; when the last allowed attempt fails the ledger entry becomes `exhausted` and is no longer retried automatically (it can be retried manually, which allows one more attempt). |
 | `axiom.stream-pipeline.retry-initial-delay` | `30s` | Delay before the first retry of a failed entry; each later retry doubles it (exponential backoff). Quarkus duration format (`30s`, `5m`, `PT30S`) |
 | `axiom.stream-pipeline.retry-max-delay` | `1h` | Upper bound of the delay between two attempts |
 
 Startup fails with an error naming the property if `max-attempts` is less than 1, `retry-initial-delay` is
 not greater than zero, or `retry-max-delay` is less than `retry-initial-delay` (values are not clamped).
 
-**Upgrading:** the V69 migration cannot read the configuration, so it assumes the old default cap of 3:
-ledger entries that had already failed 3 or more times become `exhausted`, even if `max-attempts` is
-higher. They can be retried manually from the event detail page (one more attempt each) or with
-`POST /api/v1/stream/events/{eventId}/processing/{ledgerId}/retry`.
-
-### Scheduled Jobs
-
-Scheduled Jobs run on a configurable CRON-style schedule.
+### Workflows
 
 | Property | Default | Description |
 |----------|---------|--------------|
-| `axiom.scheduled-jobs.poll-interval` | `60s` | How often to check for due scheduled jobs |
+| `axiom.workflow.schedule-poll-interval` | `30s` | How often to check for due workflow schedule triggers. Schedule triggers fire on a single node only; running several Axiom nodes against one database is not supported for schedule triggers. |
+| `axiom.workflow.wait-poll-interval` | `10s` | How often to resume workflow runs whose `wait` node has elapsed |
+
+### Scripts
+
+| Property | Default | Description |
+|----------|---------|--------------|
+| `axiom.script.timeout-seconds` | `60` | Maximum run time, in seconds, of a Script or Node.js action type; output gets a `[Script timed out after Ns]` note (Script) or a `[Node action timed out after Ns]` note (Node.js) when it is exceeded. Tools are not affected: they time out after a fixed 30 seconds. |
 
 ### AI Assistant
 
@@ -131,9 +124,16 @@ conversation.
 
 | Property | Default | Description |
 |----------|---------|--------------|
-| `axiom.assistant.max-sessions` | `3` | Maximum concurrent assistant sessions |
+| `axiom.assistant.max-sessions` | `12` | Maximum concurrent assistant sessions |
 | `axiom.assistant.opencode.executable` | `opencode` | OpenCode CLI executable used for interactive sessions |
 | `axiom.assistant.opencode.startup-timeout-seconds` | `30` | Per-session server startup timeout |
+| `axiom.assistant.opencode.server.port` | *(unset)* | Port for each interactive OpenCode server; when unset, port `0` is used |
+
+### Workflow Workbench
+
+| Property | Default | Description |
+|----------|---------|--------------|
+| `axiom.workbench.interrupt-timeout-seconds` | `30` | When the user stops an AI turn in the workbench and the session has not ended it after this many seconds, the turn is finished as failed |
 
 Session availability also depends on which registered agents support interactive
 sessions — see [AI Assistant](../user-guide/ai-assistant.md).
@@ -142,7 +142,7 @@ sessions — see [AI Assistant](../user-guide/ai-assistant.md).
 
 | Property | Default | Description |
 |----------|---------|--------------|
-| `axiom.workspace.root` | `~/.axiom/workspaces` | Root directory for project git clones |
+| `axiom.workspace.root` | `~/.axiom/workspaces` | Root directory for subject workspaces (one `subject-<id>` directory per subject) |
 
 ## Data Retention
 
@@ -151,20 +151,18 @@ Retention periods are stored in the database (not as static properties) and can 
 
 | Setting | Default | What it controls |
 |---------|---------|-------------------|
-| Closed projects | 90 days | How long a `Completed` project (and its tasks, thread, workflow runs, activity and AI usage) is kept before automatic deletion. Traces and event routing outcomes of the project are kept. |
+| Inactive subjects | 90 days | How long an inactive subject (no running or waiting run) is kept after its most recent run finished, before it is deleted with its workspace, tasks, thread, workflow runs, activity and AI usage. Subjects that have never had a run are not deleted automatically. Traces and event routing outcomes of the subject are kept. |
 | Traces | 30 days | How long execution traces (and their nodes and tool execution records) are kept |
 | Events | 90 days | How long stream events, their subscription processing ledger entries and routing outcomes are kept. Events that a running or waiting workflow run depends on are kept until the run finishes. |
-| Scheduled job runs | 0 (forever) | How long finished (`Completed` or `Failed`) scheduled job runs are kept |
-| Reports | 0 (forever) | How long finished (`Completed` or `Failed`) reports are kept |
 | Workflow runs | 0 (forever) | How long finished workflow runs are kept, measured from when they finished. Running and waiting runs are never deleted. |
 | Activity log | 0 (forever) | How long activity log entries are kept |
 | AI usage | 0 (forever) | How long AI usage (cost) records are kept |
 
-Closed projects, traces and events must be kept for at least 1 day. For the history settings, `0` means
+Inactive subjects, traces and events must be kept for at least 1 day. For the history settings, `0` means
 "keep forever". They default to `0` so that upgrading Axiom never deletes
 data you did not ask it to delete.
 
-Cleanup runs hourly in the background. Connection poll logs are always retained for a
+Cleanup runs hourly in the background. Event source poll logs are always retained for a
 fixed 3 days and are not configurable.
 
 ## Database Profiles
@@ -194,3 +192,8 @@ generates automatically on first startup and stores at `~/.axiom/secret.key`. Th
 is separate from the database — see
 [Upgrading and Backups](../developer-guide/upgrading-and-backups.md) for what to back up
 and restore together.
+
+Axiom loads the key when it starts. If the key file cannot be read or created, or is not a valid
+256-bit key (for example, truncated), Axiom logs the problem and exits instead of starting. Restore the
+key from a backup; deleting it makes Axiom generate a new key, and secrets encrypted with the old key can
+no longer be decrypted.

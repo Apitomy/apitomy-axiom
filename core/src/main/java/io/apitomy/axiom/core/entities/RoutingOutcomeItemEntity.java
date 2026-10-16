@@ -8,28 +8,20 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 
 /**
- * One result of a routing outcome, e.g. a task created by a Manager decision or a workflow
- * run started by a create-workflow rule. An outcome can have any number of items. Items are
- * deleted with their outcome (ON DELETE CASCADE).
+ * One result of a routing outcome, e.g. a workflow run started by a create-workflow rule.
+ * An outcome can have any number of items. Items are deleted with their outcome
+ * (ON DELETE CASCADE).
  */
 @Entity
 @Table(name = "routing_outcome_item")
 public class RoutingOutcomeItemEntity extends PanacheEntity {
 
-    /** A task was created (Manager create_task/script_action decision, or invoke-action). */
-    public static final String TYPE_TASK = "task";
     /** A workflow run was started (create-workflow). */
     public static final String TYPE_WORKFLOW_RUN = "workflow-run";
     /** A workflow run parked at a receive-event node was resumed (workflow-dispatch). */
     public static final String TYPE_WORKFLOW_RESUMED = "workflow-resumed";
     /** A workflow-dispatch found no waiting workflow run that matched the event. */
     public static final String TYPE_NO_MATCH = "no-match";
-    /** The Manager decided to ignore the event. */
-    public static final String TYPE_IGNORED = "ignored";
-    /** The Manager escalated the event (explicitly, or because of low confidence). */
-    public static final String TYPE_ESCALATED = "escalated";
-    /** A Manager decision of an unknown type (always failed). */
-    public static final String TYPE_DECISION = "decision";
 
     @Column(name = "outcome_id", nullable = false)
     public Long outcomeId;
@@ -46,8 +38,8 @@ public class RoutingOutcomeItemEntity extends PanacheEntity {
     @Column(name = "error_message", columnDefinition = "TEXT")
     public String errorMessage;
 
-    @Column(name = "project_id")
-    public Long projectId;
+    @Column(name = "subject_id")
+    public Long subjectId;
 
     @Column(name = "task_id")
     public Long taskId;

@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class GitHubEventNormalizerV2Test {
 
-    private static final String CONNECTION_ID = "test-connection";
+    private static final String EVENT_SOURCE_ID = "test-event-source";
     private static final String BASE_URL = "https://github.com";
     private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -46,13 +46,13 @@ class GitHubEventNormalizerV2Test {
         payload.put("action", "opened");
         payload.set("issue", buildIssue(42, "Bug report", "open"));
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertNotNull(result.id()); // UUID generated
         assertEquals("12345", result.sourceEventId());
         assertEquals("github", result.source());
-        assertEquals(CONNECTION_ID, result.connectionId());
+        assertEquals(EVENT_SOURCE_ID, result.eventSourceId());
         assertEquals(EventType.ISSUE_CREATED, result.type());
         assertEquals("https://github.com/owner/repo/issues/42", result.ref());
         assertEquals("2026-09-18T10:00:00Z", result.timestamp());
@@ -81,7 +81,7 @@ class GitHubEventNormalizerV2Test {
         label.put("description", "Something isn't working");
         payload.set("label", label);
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertEquals(EventType.ISSUE_LABELED, result.type());
@@ -103,7 +103,7 @@ class GitHubEventNormalizerV2Test {
         payload.set("issue", buildIssue(10, "Feature request", "open"));
         payload.set("comment", buildComment(99001, "Looks good to me!"));
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertEquals(EventType.ISSUE_COMMENT_CREATED, result.type());
@@ -132,7 +132,7 @@ class GitHubEventNormalizerV2Test {
         payload.set("issue", issue);
         payload.set("comment", buildComment(99002, "Please fix the tests"));
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertEquals(EventType.PR_COMMENT_CREATED, result.type());
@@ -159,7 +159,7 @@ class GitHubEventNormalizerV2Test {
         fullPr.put("deletions", 10);
         fullPr.put("changed_files", 3);
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, fullPr);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, fullPr);
 
         assertNotNull(result);
         assertEquals(EventType.PR_MERGED, result.type());
@@ -185,7 +185,7 @@ class GitHubEventNormalizerV2Test {
 
         ObjectNode fullPr = buildPullRequest(78, "WIP PR", "closed", false);
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, fullPr);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, fullPr);
 
         assertNotNull(result);
         assertEquals(EventType.PR_CLOSED, result.type());
@@ -217,7 +217,7 @@ class GitHubEventNormalizerV2Test {
         commits.add(commit1);
         payload.set("commits", commits);
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertEquals(EventType.PUSH, result.type());
@@ -247,7 +247,7 @@ class GitHubEventNormalizerV2Test {
         payload.put("ref", "feature/new-thing");
         payload.put("master_branch", "main");
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertEquals(EventType.BRANCH_CREATED, result.type());
@@ -283,7 +283,7 @@ class GitHubEventNormalizerV2Test {
 
         payload.set("release", release);
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertEquals(EventType.RELEASE_PUBLISHED, result.type());
@@ -305,7 +305,7 @@ class GitHubEventNormalizerV2Test {
     void unknownEventType_returnsNull() {
         ObjectNode event = buildEvent("WatchEvent", "12354", "owner/repo");
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNull(result);
     }
@@ -322,7 +322,7 @@ class GitHubEventNormalizerV2Test {
         issue.put("state_reason", "completed");
         payload.set("issue", issue);
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertEquals(EventType.ISSUE_CLOSED, result.type());
@@ -343,7 +343,7 @@ class GitHubEventNormalizerV2Test {
         payload.put("action", "opened");
         payload.set("issue", buildIssue(1, "Test", "open"));
 
-        NormalizedEvent result = normalizer.normalize(event, CONNECTION_ID, BASE_URL, null);
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
 
         assertNotNull(result);
         assertNotNull(result.sourceData());

@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -23,7 +24,7 @@ class WorkflowEventMapperTest {
         StreamEventEntity event = new StreamEventEntity();
         event.type = "pr-merged";
         event.source = "github";
-        event.connectionId = "conn-1";
+        event.eventSourceId = "conn-1";
         event.ref = "acme/widget#42";
         event.timestamp = Instant.parse("2026-09-16T12:00:00Z");
         event.payload = "{\"number\": 42, \"action\": \"closed\"}";
@@ -32,7 +33,8 @@ class WorkflowEventMapperTest {
 
         assertEquals("pr-merged", map.get("type"));
         assertEquals("github", map.get("source"));
-        assertEquals("conn-1", map.get("connectionId"));
+        assertEquals("conn-1", map.get("eventSourceId"));
+        assertFalse(map.containsKey("connectionId"));
         assertEquals("acme/widget#42", map.get("ref"));
         assertEquals("2026-09-16T12:00:00Z", map.get("timestamp"));
         @SuppressWarnings("unchecked")
@@ -46,7 +48,7 @@ class WorkflowEventMapperTest {
         StreamEventEntity event = new StreamEventEntity();
         event.type = "issue-created";
         event.source = "github";
-        event.connectionId = "conn-1";
+        event.eventSourceId = "conn-1";
         event.ref = "test";
         event.timestamp = Instant.now();
         event.payload = null;
@@ -61,7 +63,7 @@ class WorkflowEventMapperTest {
         StreamEventEntity event = new StreamEventEntity();
         event.type = "issue-created";
         event.source = "github";
-        event.connectionId = "conn-1";
+        event.eventSourceId = "conn-1";
         event.ref = "test";
         event.timestamp = Instant.now();
         event.payload = "not json at all {{{";
@@ -76,7 +78,7 @@ class WorkflowEventMapperTest {
         StreamEventEntity event = new StreamEventEntity();
         event.type = "internal-note";
         event.source = "internal";
-        event.connectionId = "conn-1";
+        event.eventSourceId = "conn-1";
         event.ref = "ref-1";
         event.timestamp = Instant.now();
 
@@ -84,7 +86,7 @@ class WorkflowEventMapperTest {
 
         assertEquals("internal-note", map.get("type"));
         assertEquals("internal", map.get("source"));
-        assertTrue(map.containsKey("connectionId"));
+        assertTrue(map.containsKey("eventSourceId"));
         assertTrue(map.containsKey("ref"));
         assertTrue(map.containsKey("timestamp"));
         assertTrue(map.containsKey("payload"));

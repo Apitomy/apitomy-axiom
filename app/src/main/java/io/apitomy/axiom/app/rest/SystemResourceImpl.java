@@ -15,6 +15,7 @@ import io.apitomy.axiom.api.SystemResource;
 import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.StartupCheckService;
+import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.core.entities.RetentionConfigEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
@@ -30,7 +31,9 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Implementation of the System API endpoints.
@@ -75,7 +78,6 @@ public class SystemResourceImpl implements SystemResource {
         config.setVersion(applicationVersion);
 
         String defaultType = resolveDefaultEngineType();
-        config.setEngine(defaultType);
         config.setDefaultEngine(defaultType);
         config.setFeatures(new Features());
 
@@ -129,7 +131,7 @@ public class SystemResourceImpl implements SystemResource {
     public SystemConfig updateSystemConfig(UpdateSystemConfigRequest data) {
         if (data == null || data.getDefaultEngine() == null
                 || data.getDefaultEngine().isBlank()) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Missing required 'defaultEngine' field", 400);
         }
 
@@ -139,7 +141,7 @@ public class SystemResourceImpl implements SystemResource {
                 .findFirst()
                 .orElse(null);
         if (resolvedAgent == null) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Unknown engine type: " + defaultEngine, 400);
         }
 
@@ -190,7 +192,7 @@ public class SystemResourceImpl implements SystemResource {
     @Override
     public Response exportPack(PackExportRequest data) {
         if (data == null || data.getName() == null || data.getName().isBlank()) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Missing required 'name' field", 400);
         }
         JsonNode pack = importExportService.exportPack(data);
@@ -208,10 +210,16 @@ public class SystemResourceImpl implements SystemResource {
         try {
             JsonNode pack = packObjectMapper.readTree(data);
             return importExportService.importPack(pack);
-        } catch (jakarta.ws.rs.WebApplicationException e) {
+        } catch (ConfigValidationException e) {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("message", "Configuration pack has invalid items");
+            body.put("problems", e.problemsByItem());
+            throw new WebApplicationException(
+                    Response.status(400).entity(body).build());
+        } catch (WebApplicationException e) {
             throw e;
         } catch (Exception e) {
-            throw new jakarta.ws.rs.WebApplicationException(
+            throw new WebApplicationException(
                     "Failed to parse pack JSON: " + e.getMessage(), 400);
         }
     }
@@ -226,7 +234,7 @@ public class SystemResourceImpl implements SystemResource {
 
         if (entity == null) {
             entity = new RetentionConfigEntity();
-            entity.closedProjectRetentionDays = 90;
+            entity.inactiveSubjectRetentionDays = 90;
             entity.traceRetentionDays = 30;
             entity.eventRetentionDays = 90;
         }
@@ -243,26 +251,20 @@ public class SystemResourceImpl implements SystemResource {
                 .firstResult();
         if (entity == null) {
             entity = new RetentionConfigEntity();
-            entity.closedProjectRetentionDays = 90;
+            entity.inactiveSubjectRetentionDays = 90;
             entity.traceRetentionDays = 30;
             entity.eventRetentionDays = 90;
         }
         validateRetentionDays(data);
         // Every setting is optional: a null field keeps its current value.
-        if (data.getClosedProjectRetentionDays() != null) {
-            entity.closedProjectRetentionDays = data.getClosedProjectRetentionDays();
+        if (data.getInactiveSubjectRetentionDays() != null) {
+            entity.inactiveSubjectRetentionDays = data.getInactiveSubjectRetentionDays();
         }
         if (data.getTraceRetentionDays() != null) {
             entity.traceRetentionDays = data.getTraceRetentionDays();
         }
         if (data.getEventRetentionDays() != null) {
             entity.eventRetentionDays = data.getEventRetentionDays();
-        }
-        if (data.getScheduledJobRunRetentionDays() != null) {
-            entity.scheduledJobRunRetentionDays = data.getScheduledJobRunRetentionDays();
-        }
-        if (data.getReportRetentionDays() != null) {
-            entity.reportRetentionDays = data.getReportRetentionDays();
         }
         if (data.getWorkflowRunRetentionDays() != null) {
             entity.workflowRunRetentionDays = data.getWorkflowRunRetentionDays();
@@ -280,11 +282,9 @@ public class SystemResourceImpl implements SystemResource {
 
     private static RetentionConfig toRetentionBean(RetentionConfigEntity entity) {
         RetentionConfig config = new RetentionConfig();
-        config.setClosedProjectRetentionDays(entity.closedProjectRetentionDays);
+        config.setInactiveSubjectRetentionDays(entity.inactiveSubjectRetentionDays);
         config.setTraceRetentionDays(entity.traceRetentionDays);
         config.setEventRetentionDays(entity.eventRetentionDays);
-        config.setScheduledJobRunRetentionDays(entity.scheduledJobRunRetentionDays);
-        config.setReportRetentionDays(entity.reportRetentionDays);
         config.setWorkflowRunRetentionDays(entity.workflowRunRetentionDays);
         config.setActivityLogRetentionDays(entity.activityLogRetentionDays);
         config.setAiUsageRetentionDays(entity.aiUsageRetentionDays);
@@ -293,16 +293,15 @@ public class SystemResourceImpl implements SystemResource {
 
     private static void validateRetentionDays(RetentionConfig data) {
         // 0 would delete everything for these settings, so at least 1 day is required.
-        Integer[] coreValues = {data.getClosedProjectRetentionDays(), data.getTraceRetentionDays(),
+        Integer[] coreValues = {data.getInactiveSubjectRetentionDays(), data.getTraceRetentionDays(),
             data.getEventRetentionDays()};
         for (Integer value : coreValues) {
             if (value != null && value < 1) {
                 throw new WebApplicationException(
-                        "Closed project, trace and event retention must be at least 1 day", 400);
+                        "Inactive subject, trace and event retention must be at least 1 day", 400);
             }
         }
-        Integer[] values = {data.getScheduledJobRunRetentionDays(), data.getReportRetentionDays(),
-            data.getWorkflowRunRetentionDays(), data.getActivityLogRetentionDays(),
+        Integer[] values = {data.getWorkflowRunRetentionDays(), data.getActivityLogRetentionDays(),
             data.getAiUsageRetentionDays()};
         for (Integer value : values) {
             if (value != null && value < 0) {

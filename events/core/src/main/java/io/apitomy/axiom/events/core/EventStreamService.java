@@ -50,7 +50,7 @@ public class EventStreamService {
         entity.id = UUID.fromString(event.id());
         entity.sourceEventId = event.sourceEventId();
         entity.source = event.source();
-        entity.connectionId = event.connectionId();
+        entity.eventSourceId = event.eventSourceId();
         entity.type = event.type().value();
         entity.ref = event.ref();
         entity.timestamp = Instant.parse(event.timestamp());
@@ -73,7 +73,7 @@ public class EventStreamService {
 
         // Notify SSE clients that a new event arrived in the stream
         sseEvents.fire(SseEvent.streamEventReceived(
-                entity.id.toString(), event.type().value(), event.connectionId()));
+                entity.id.toString(), event.type().value(), event.eventSourceId()));
 
         return true;
     }

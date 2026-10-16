@@ -4,18 +4,18 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.ToolsResource;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
-import io.apitomy.axiom.api.beans.ToolAiEditRequest;
-import io.apitomy.axiom.api.beans.ToolAiEditResponse;
 import io.apitomy.axiom.api.beans.ToolDefinition;
 import io.apitomy.axiom.api.beans.ToolParameter;
 import io.apitomy.axiom.api.beans.ToolSearchResults;
 import io.apitomy.axiom.api.beans.ToolTestRequest;
 import io.apitomy.axiom.api.beans.ToolTestResponse;
-import io.apitomy.axiom.app.ToolAiService;
+import io.apitomy.axiom.app.validation.ConfigItemType;
+import io.apitomy.axiom.app.validation.ConfigItemValidationService;
+import io.apitomy.axiom.app.validation.ConfigProblem;
+import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
-import io.apitomy.axiom.core.services.ToolValidator;
-import io.apitomy.axiom.core.services.ToolValidator.ValidationResult;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -50,10 +50,13 @@ public class ToolsResourceImpl implements ToolsResource {
     ObjectMapper objectMapper;
 
     @Inject
-    ToolAiService toolAiService;
+    EnvironmentResolver environmentResolver;
 
     @Inject
-    EnvironmentResolver environmentResolver;
+    ConfigItemValidationService validationService;
+
+    @Inject
+    ValidationContextFactory contextFactory;
 
     /**
      * {@inheritDoc}
@@ -127,16 +130,6 @@ public class ToolsResourceImpl implements ToolsResource {
         entity.delete();
     }
 
-    // ── AI-Assisted Editing ────────────────────────────────────────
-
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public ToolAiEditResponse aiEditTool(ToolAiEditRequest data) {
-        return toolAiService.editTool(data);
-    }
-
     // ── Tool Validation ───────────────────────────────────────────────
 
     /**
@@ -144,21 +137,7 @@ public class ToolsResourceImpl implements ToolsResource {
      */
     @Override
     public io.apitomy.axiom.api.beans.ToolValidationResult validateTool(NewToolDefinition data) {
-        ValidationResult result = ToolValidator.validate(data);
-        io.apitomy.axiom.api.beans.ToolValidationResult response =
-                new io.apitomy.axiom.api.beans.ToolValidationResult();
-        response.setValid(!result.hasErrors());
-        response.setMessages(result.messages().stream().map(m -> {
-            io.apitomy.axiom.api.beans.ToolValidationMessage msg =
-                    new io.apitomy.axiom.api.beans.ToolValidationMessage();
-            msg.setSeverity(m.severity() == ToolValidator.Severity.ERROR
-                    ? io.apitomy.axiom.api.beans.ToolValidationMessage.Severity.ERROR
-                    : io.apitomy.axiom.api.beans.ToolValidationMessage.Severity.WARNING);
-            msg.setField(m.field());
-            msg.setMessage(m.message());
-            return msg;
-        }).toList());
-        return response;
+        return RestValidationMapper.toResult(validate(data));
     }
 
     // ── Tool Testing ──────────────────────────────────────────────────
@@ -267,6 +246,8 @@ public class ToolsResourceImpl implements ToolsResource {
         try {
             String envJson = objectMapper.writeValueAsString(env);
             return environmentResolver.resolve(envJson);
+        } catch (MissingSecretException e) {
+            throw e;   // reported as the test's execution error
         } catch (Exception e) {
             LOG.warnf(e, "Failed to resolve test environment variables");
             return Map.of();
@@ -276,22 +257,12 @@ public class ToolsResourceImpl implements ToolsResource {
     // ── Helpers ──────────────────────────────────────────────────────
 
     private void validateOrThrow(NewToolDefinition data) {
-        ValidationResult result = ToolValidator.validate(data);
-        if (result.hasErrors()) {
-            var errors = result.errors().stream()
-                    .map(e -> Map.of("field", e.field(), "message", e.message()))
-                    .toList();
-            var warnings = result.warnings().stream()
-                    .map(w -> Map.of("field", w.field(), "message", w.message()))
-                    .toList();
-            var body = Map.of(
-                    "message", "Tool definition has validation errors.",
-                    "errors", errors,
-                    "warnings", warnings
-            );
-            throw new WebApplicationException(
-                    Response.status(422).entity(body).build());
-        }
+        RestValidationMapper.throwIfErrors(validate(data), "Tool definition has validation errors.");
+    }
+
+    private List<ConfigProblem> validate(NewToolDefinition data) {
+        return validationService.validate(ConfigItemType.TOOL, objectMapper.valueToTree(data),
+                contextFactory.databaseOnly());
     }
 
     private ToolDefinitionEntity findOrThrow(long id) {

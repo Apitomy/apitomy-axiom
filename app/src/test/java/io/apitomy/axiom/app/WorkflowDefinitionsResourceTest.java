@@ -287,8 +287,8 @@ class WorkflowDefinitionsResourceTest {
     }
 
     @Test
-    void testPublishRejectsNonCanonicalStartInput() {
-        int id = createDefinition("Non-Canonical Input WF");
+    void testPublishRejectsNonStandardStartInput() {
+        int id = createDefinition("Custom Input WF");
 
         given()
                 .contentType(ContentType.JSON)
@@ -299,7 +299,46 @@ class WorkflowDefinitionsResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {"inputs": [
-                                 {"name": "issueNumber", "type": "string",
+                                 {"name": "environment", "type": "string",
+                                  "required": true}
+                             ]},
+                             "position": {"x": 100, "y": 100}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(400);
+    }
+
+
+    @Test
+    void testPublishRejectsInvalidStartInputName() {
+        int id = createDefinition("Invalid Input Name WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-nc",
+                        "name": "Non-Canonical",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {"inputs": [
+                                 {"name": "not a name!", "type": "string",
                                   "required": true}
                              ]},
                              "position": {"x": 100, "y": 100}},
@@ -325,8 +364,8 @@ class WorkflowDefinitionsResourceTest {
     }
 
     @Test
-    void testPublishRejectsRequiredOptionalInput() {
-        int id = createDefinition("Required Optional Input WF");
+    void testPublishRejectsStartInputDefaultValue() {
+        int id = createDefinition("Default Value Input WF");
 
         given()
                 .contentType(ContentType.JSON)
@@ -337,8 +376,8 @@ class WorkflowDefinitionsResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {"inputs": [
-                                 {"name": "repository", "type": "string",
-                                  "required": true}
+                                 {"name": "event", "type": "object",
+                                  "defaultValue": {}}
                              ]},
                              "position": {"x": 100, "y": 100}},
                             {"id": "e1", "type": "end", "name": "End",
@@ -375,10 +414,10 @@ class WorkflowDefinitionsResourceTest {
                         "nodes": [
                             {"id": "s1", "type": "start", "name": "Start",
                              "config": {"inputs": [
-                                 {"name": "projectId", "type": "number",
+                                 {"name": "subject", "type": "object",
                                   "required": true},
-                                 {"name": "repository", "type": "string",
-                                  "required": false}
+                                 {"name": "event", "type": "object",
+                                  "required": true}
                              ]},
                              "position": {"x": 100, "y": 100}},
                             {"id": "e1", "type": "end", "name": "End",
@@ -401,6 +440,58 @@ class WorkflowDefinitionsResourceTest {
                 .then()
                     .statusCode(200)
                     .body("version", equalTo(1));
+    }
+
+    @Test
+    void testPublishRejectsUnmappedRequiredInput() {
+        String actionType = "map-test-" + java.util.UUID.randomUUID();
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {"name": "%s", "executionMode": "agent", "promptTemplate": "Do {{inputs.ref}}",
+                     "inputs": [{"name": "ref", "type": "string", "required": true}]}
+                    """.formatted(actionType))
+                .when()
+                    .post("/api/v1/action-types")
+                .then()
+                    .statusCode(200);
+
+        int id = createDefinition("Unmapped Input WF " + actionType);
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-unmapped",
+                        "name": "Unmapped",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {}, "position": {"x": 100, "y": 100}},
+                            {"id": "a1", "type": "action", "name": "Act",
+                             "config": {"actionType": "%s", "inputs": {}},
+                             "position": {"x": 100, "y": 200}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "a1",
+                             "priority": 0, "isDefault": true},
+                            {"id": "edge2", "source": "a1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """.formatted(actionType))
+                .when()
+                    .put(BASE_PATH + "/" + id + "/content")
+                .then()
+                    .statusCode(204);
+
+        given()
+                .when()
+                    .post(BASE_PATH + "/" + id + "/publish")
+                .then()
+                    .statusCode(400)
+                    .body("message", containsString("is not mapped"))
+                    .body("problems", hasSize(1));
     }
 
     @Test
@@ -457,9 +548,10 @@ class WorkflowDefinitionsResourceTest {
                 .then()
                     .statusCode(200)
                     .body("content.nodes[0].type", equalTo("start"))
-                    .body("content.nodes[0].config.inputs.size()", equalTo(3))
+                    .body("content.nodes[0].config.inputs.size()", equalTo(2))
                     .body("content.nodes[0].config.inputs.name",
-                            hasItems("projectId", "ref", "event"));
+                            hasItems("subject", "event"))
+                    .body("content.nodes[0].config.inputs.required", everyItem(equalTo(true)));
     }
 
     // -- Helpers --

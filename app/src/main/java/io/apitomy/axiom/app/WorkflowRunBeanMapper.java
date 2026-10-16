@@ -6,7 +6,7 @@ import io.apitomy.axiom.api.beans.WorkflowContent;
 import io.apitomy.axiom.api.beans.WorkflowRunSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowRunResume;
 import io.apitomy.axiom.api.beans.WorkflowRunSummary;
-import io.apitomy.axiom.core.entities.ProjectEntity;
+import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 
 /**
  * Maps {@link WorkflowRunEntity} rows to the generated REST beans, shared by the
- * project workflow endpoint and the workflow-runs endpoints.
+ * subject workflow endpoint and the workflow-runs endpoints.
  */
 @ApplicationScoped
 public class WorkflowRunBeanMapper {
@@ -58,9 +58,12 @@ public class WorkflowRunBeanMapper {
         if (entity.triggerLedgerId != null) {
             bean.setTriggerLedgerId(entity.triggerLedgerId);
         }
-        bean.setProjectId(entity.projectId);
+        bean.setSubjectId(entity.subjectId);
         bean.setDefinitionId(entity.definitionId);
         bean.setDefinitionVersion(entity.definitionVersion);
+        bean.setTitle(entity.title);
+        bean.setLabels(readJson(entity.labels, io.apitomy.axiom.api.beans.Labels.class));
+        bean.setInputs(readJson(entity.inputs, io.apitomy.axiom.api.beans.Inputs.class));
         bean.setStatus(entity.status);
         bean.setCurrentNodeId(entity.currentNodeId);
         bean.setFailureReason(entity.failureReason);
@@ -73,6 +76,10 @@ public class WorkflowRunBeanMapper {
                 WorkflowDefinitionEntity.findById(entity.definitionId);
         if (definition != null) {
             bean.setDefinitionName(definition.name);
+        }
+        SubjectEntity subject = SubjectEntity.findById(entity.subjectId);
+        if (subject != null) {
+            bean.setSubjectName(subject.name);
         }
 
         WorkflowDefinitionVersionEntity version =
@@ -191,6 +198,13 @@ public class WorkflowRunBeanMapper {
                     entry.output(),
                     io.apitomy.axiom.api.beans.Output.class));
         }
+        if (entry.input() != null && !entry.input().isEmpty()) {
+            bean.setInput(objectMapper.convertValue(entry.input(),
+                    io.apitomy.axiom.api.beans.Input.class));
+        }
+        if (entry.title() != null) {
+            bean.setTitle(entry.title());
+        }
         TaskEntity task = entry.nodeId() != null
                 ? tasksByNode.get(entry.nodeId()) : null;
         if (task != null) {
@@ -201,34 +215,92 @@ public class WorkflowRunBeanMapper {
     }
 
     /**
-     * Searches runs with optional project/definition/status filters, newest first.
+     * Searches runs with optional subject/definition/status filters, newest first.
      *
-     * @param projectId    optional project filter (nullable)
-     * @param definitionId optional definition filter (nullable; used by the per-definition endpoint)
+     * @param subjectId    optional subject filter (nullable)
+     * @param definitionId optional definition filter (nullable)
      * @param status       optional comma-separated status filter (nullable)
      * @param page         1-based page number (nullable → 1)
      * @param limit        page size (nullable → 20)
      * @return paginated run summaries
      */
-    public WorkflowRunSearchResults search(Long projectId, Long definitionId, String status,
+    public WorkflowRunSearchResults search(Long subjectId, Long definitionId, String status,
+                                           BigInteger page, BigInteger limit) {
+        return search(subjectId, definitionId, status, null, page, limit);
+    }
+
+    /**
+     * Searches runs with optional subject/definition/status/label filters, newest first.
+     * <p>
+     * Labels are stored as a JSON text column, so label filtering is a simplification: each
+     * {@code key:value} filter matches runs whose labels JSON contains the text
+     * {@code "key":"value"} (a {@code like} match on Jackson's compact serialization). All label
+     * filters must match. Filters without a {@code :} are ignored.
+     *
+     * @param subjectId    optional subject filter (nullable)
+     * @param definitionId optional definition filter (nullable)
+     * @param status       optional comma-separated status filter (nullable)
+     * @param labels       optional label filters in {@code key:value} form (nullable)
+     * @param page         1-based page number (nullable → 1)
+     * @param limit        page size (nullable → 20)
+     * @return paginated run summaries
+     */
+    public WorkflowRunSearchResults search(Long subjectId, Long definitionId, String status,
+                                           List<String> labels, BigInteger page, BigInteger limit) {
+        return search(subjectId, definitionId, status, labels, null, page, limit);
+    }
+
+    /**
+     * Searches runs with optional subject/definition/status/label/triggering-event filters, newest first.
+     * Label filtering works as described in
+     * {@link #search(Long, Long, String, List, BigInteger, BigInteger)}.
+     *
+     * @param subjectId      optional subject filter (nullable)
+     * @param definitionId   optional definition filter (nullable)
+     * @param status         optional comma-separated status filter (nullable)
+     * @param labels         optional label filters in {@code key:value} form (nullable)
+     * @param triggerEventId optional filter on the stream event that triggered the run (nullable)
+     * @param page           1-based page number (nullable → 1)
+     * @param limit          page size (nullable → 20)
+     * @return paginated run summaries
+     */
+    public WorkflowRunSearchResults search(Long subjectId, Long definitionId, String status,
+                                           List<String> labels, java.util.UUID triggerEventId,
                                            BigInteger page, BigInteger limit) {
         int pageNum = page != null ? Math.max(1, page.intValue()) : 1;
         int pageSize = limit != null ? Math.max(1, limit.intValue()) : 20;
 
         StringBuilder hql = new StringBuilder("1=1");
         Map<String, Object> params = new HashMap<>();
-        if (projectId != null) {
-            hql.append(" and projectId = :projectId");
-            params.put("projectId", projectId);
+        if (subjectId != null) {
+            hql.append(" and subjectId = :subjectId");
+            params.put("subjectId", subjectId);
         }
         if (definitionId != null) {
             hql.append(" and definitionId = :definitionId");
             params.put("definitionId", definitionId);
         }
+        if (triggerEventId != null) {
+            hql.append(" and triggerEventId = :triggerEventId");
+            params.put("triggerEventId", triggerEventId);
+        }
         if (status != null && !status.isBlank()) {
             hql.append(" and status in :statuses");
             params.put("statuses", java.util.Arrays.stream(status.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList());
+        }
+        if (labels != null) {
+            int index = 0;
+            for (String label : labels) {
+                int sep = label != null ? label.indexOf(':') : -1;
+                if (sep <= 0) {
+                    continue;
+                }
+                String param = "label" + index++;
+                hql.append(" and labels like :").append(param);
+                params.put(param, "%" + toJsonString(label.substring(0, sep)) + ":"
+                        + toJsonString(label.substring(sep + 1)) + "%");
+            }
         }
 
         long totalCount = WorkflowRunEntity.count(hql.toString(), params);
@@ -237,12 +309,12 @@ public class WorkflowRunBeanMapper {
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 
-        Map<Long, String> projectNames = resolveProjectNames(runs);
+        Map<Long, String> subjectNames = resolveSubjectNames(runs);
         Map<Long, String> definitionNames = resolveDefinitionNames(runs);
 
         WorkflowRunSearchResults results = new WorkflowRunSearchResults();
         results.setItems(runs.stream()
-                .map(r -> toSummary(r, projectNames, definitionNames))
+                .map(r -> toSummary(r, subjectNames, definitionNames))
                 .toList());
         results.setTotalCount(totalCount);
         results.setPage(pageNum);
@@ -250,12 +322,12 @@ public class WorkflowRunBeanMapper {
         return results;
     }
 
-    private Map<Long, String> resolveProjectNames(List<WorkflowRunEntity> runs) {
-        Set<Long> ids = runs.stream().map(r -> r.projectId).collect(Collectors.toSet());
+    private Map<Long, String> resolveSubjectNames(List<WorkflowRunEntity> runs) {
+        Set<Long> ids = runs.stream().map(r -> r.subjectId).collect(Collectors.toSet());
         if (ids.isEmpty()) {
             return Map.of();
         }
-        return ProjectEntity.<ProjectEntity>find("id in :ids", Map.of("ids", ids)).list().stream()
+        return SubjectEntity.<SubjectEntity>find("id in :ids", Map.of("ids", ids)).list().stream()
                 .collect(Collectors.toMap(p -> p.id, p -> p.name));
     }
 
@@ -269,15 +341,18 @@ public class WorkflowRunBeanMapper {
                 .collect(Collectors.toMap(d -> d.id, d -> d.name));
     }
 
-    private WorkflowRunSummary toSummary(WorkflowRunEntity run, Map<Long, String> projectNames,
+    private WorkflowRunSummary toSummary(WorkflowRunEntity run, Map<Long, String> subjectNames,
                                          Map<Long, String> definitionNames) {
         WorkflowRunSummary summary = new WorkflowRunSummary();
         summary.setRunId(run.id);
-        summary.setProjectId(run.projectId);
-        summary.setProjectName(projectNames.getOrDefault(run.projectId, "Unknown"));
+        summary.setSubjectId(run.subjectId);
+        summary.setSubjectName(subjectNames.getOrDefault(run.subjectId, "Unknown"));
         summary.setDefinitionId(run.definitionId);
         summary.setDefinitionName(definitionNames.getOrDefault(run.definitionId, "Unknown"));
         summary.setDefinitionVersion(run.definitionVersion);
+        summary.setTitle(run.title);
+        summary.setLabels(readJson(run.labels, io.apitomy.axiom.api.beans.Labels.class));
+        summary.setInputs(readJson(run.inputs, io.apitomy.axiom.api.beans.Inputs.class));
         summary.setStatus(run.status);
         if (run.traceId != null) {
             summary.setTraceId(run.traceId);
@@ -295,5 +370,24 @@ public class WorkflowRunBeanMapper {
         // currentNodeName is intentionally omitted on the list to avoid an N+1 content
         // read per row; the detail bean (toBean) carries it. Populate later if the UI needs it.
         return summary;
+    }
+
+    private String toJsonString(String value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private <T> T readJson(String json, Class<T> type) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JsonProcessingException e) {
+            return null;
+        }
     }
 }

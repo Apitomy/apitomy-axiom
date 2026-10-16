@@ -49,4 +49,15 @@ class ValidationFeedbackTrackerTest {
         tracker.markValid(fileB);
         assertFalse(tracker.shouldSend(fileA, "err1"));
     }
+
+    @Test
+    void transitionedToAllValidFiresOnceAfterProblemsAreFixed() {
+        ValidationFeedbackTracker tracker = new ValidationFeedbackTracker();
+        assertFalse(tracker.transitionedToAllValid(), "No problems ever: no transition");
+        tracker.shouldSend(fileA, "err1");
+        assertFalse(tracker.transitionedToAllValid(), "Still has problems");
+        tracker.markValid(fileA);
+        assertTrue(tracker.transitionedToAllValid());
+        assertFalse(tracker.transitionedToAllValid(), "Fires only once");
+    }
 }

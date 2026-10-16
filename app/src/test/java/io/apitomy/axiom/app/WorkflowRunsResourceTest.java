@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -25,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @QuarkusTest
 class WorkflowRunsResourceTest {
 
-    private static final String PROJECTS_PATH = "/api/v1/projects";
+    private static final String SUBJECTS_PATH = "/api/v1/subjects";
     private static final String WORKFLOWS_PATH = "/api/v1/workflow/definitions";
 
     @Inject
@@ -38,21 +39,21 @@ class WorkflowRunsResourceTest {
      */
     @Test
     void triggeringActionWorkflowStoresTraceId() {
-        int projectId = createProject("WF Trace Project");
+        int subjectId = createSubject("WF Trace Subject");
         int definitionId = createAndPublishActionWorkflow("Trace WF");
 
         given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
 
         // Verify trace was created by querying the entity directly
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
-                WorkflowRunEntity.find("projectId", (long) projectId).firstResult());
+                WorkflowRunEntity.find("subjectId", (long) subjectId).firstResult());
         assertNotNull(run, "Run should exist");
         assertNotNull(run.traceId, "Trace ID should be set on the run entity");
     }
@@ -63,7 +64,7 @@ class WorkflowRunsResourceTest {
      */
     @Test
     void completedRunAllowsNewTrigger() {
-        int projectId = createProject("WF History Project");
+        int subjectId = createSubject("WF History Subject");
         int definitionId = createAndPublishDefinition("History WF");
 
         // First trigger completes immediately (start→end)
@@ -71,7 +72,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
@@ -81,14 +82,14 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
 
         // Verify 2 run rows exist
         long count = QuarkusTransaction.requiringNew().call(() ->
-                WorkflowRunEntity.count("projectId", (long) projectId));
+                WorkflowRunEntity.count("subjectId", (long) subjectId));
         assertEquals(2, count, "Should have 2 run rows (history)");
     }
 
@@ -98,7 +99,7 @@ class WorkflowRunsResourceTest {
      */
     @Test
     void activeRunRejectsDuplicate() {
-        int projectId = createProject("WF Active Run Project");
+        int subjectId = createSubject("WF Active Run Subject");
         int definitionId = createAndPublishActionWorkflow("Active Run WF");
 
         // First trigger stays active (waiting at action node)
@@ -106,7 +107,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
@@ -116,7 +117,7 @@ class WorkflowRunsResourceTest {
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(409);
     }
@@ -127,21 +128,21 @@ class WorkflowRunsResourceTest {
      */
     @Test
     void nodeTaskCarriesRunNodeAndTrace() {
-        int projectId = createProject("WF Node Task Project");
+        int subjectId = createSubject("WF Node Task Subject");
         int definitionId = createAndPublishActionWorkflow("Node Task WF");
 
         given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
 
         // Query the spawned task entity directly
         TaskEntity task = QuarkusTransaction.requiringNew().call(() ->
-                TaskEntity.find("projectId", (long) projectId).firstResult());
+                TaskEntity.find("subjectId", (long) subjectId).firstResult());
         assertNotNull(task, "Task should exist");
         assertNotNull(task.workflowRunId, "Task should have workflowRunId");
         assertNotNull(task.nodeId, "Task should have nodeId");
@@ -162,23 +163,23 @@ class WorkflowRunsResourceTest {
     }
 
     /**
-     * Verifies that the project workflow instance returns the latest run and
+     * Verifies that the subject workflow instance returns the latest run and
      * includes runId and traceId fields.
      */
     @Test
-    void projectWorkflowReturnsLatestRunWithRunIdAndTrace() {
-        int projectId = createProject("WF Latest Run Project");
+    void subjectWorkflowReturnsLatestRunWithRunIdAndTrace() {
+        int subjectId = createSubject("WF Latest Run Subject");
         int definitionId = createAndPublishActionWorkflow("Latest Run WF");
 
         Integer firstRunId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200).extract().path("runId");
 
         given()
                 .when()
-                    .get(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .get(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("runId", equalTo(firstRunId))
@@ -192,21 +193,21 @@ class WorkflowRunsResourceTest {
      */
     @Test
     void runTraceStaysOpenUntilRunCompletes() {
-        int projectId = createProject("WF Trace Lifecycle Project");
+        int subjectId = createSubject("WF Trace Lifecycle Subject");
         int definitionId = createAndPublishTwoActionWorkflow("Trace Lifecycle WF");
 
         given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
                 .when()
-                    .post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                    .post(TestRunsResource.path(subjectId))
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("waiting"));
 
         // Query the run and the first action node's task
         Object[] runAndTask = QuarkusTransaction.requiringNew().call(() -> {
-            WorkflowRunEntity run = WorkflowRunEntity.find("projectId", (long) projectId)
+            WorkflowRunEntity run = WorkflowRunEntity.find("subjectId", (long) subjectId)
                     .firstResult();
             assertNotNull(run, "Run should exist");
             assertNotNull(run.traceId, "Run should have traceId");
@@ -241,7 +242,7 @@ class WorkflowRunsResourceTest {
 
     // -- Helpers copied from WorkflowInstanceResourceTest --
 
-    private int createProject(String name) {
+    private int createSubject(String name) {
         return given()
                 .contentType(ContentType.JSON)
                 .body(String.format("""
@@ -253,7 +254,7 @@ class WorkflowRunsResourceTest {
                     """, name,
                         "test/" + name.toLowerCase().replace(" ", "-")))
                 .when()
-                    .post(PROJECTS_PATH)
+                    .post(SUBJECTS_PATH)
                 .then()
                     .statusCode(200)
                     .extract().path("id");
@@ -435,22 +436,22 @@ class WorkflowRunsResourceTest {
 
     @Test
     void listAndGetWorkflowRuns() {
-        int projectId = createProject("WF Runs List Project");
+        int subjectId = createSubject("WF Runs List Subject");
         int definitionId = createAndPublishActionWorkflow("Runs List WF");
 
         Integer runId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200).extract().path("runId");
 
         given()
-                .when().get("/api/v1/workflow/runs?projectId=" + projectId)
+                .when().get("/api/v1/workflow/runs?subjectId=" + subjectId)
                 .then()
                     .statusCode(200)
                     .body("totalCount", equalTo(1))
                     .body("items[0].runId", equalTo(runId))
-                    .body("items[0].projectName", equalTo("WF Runs List Project"))
+                    .body("items[0].subjectName", equalTo("WF Runs List Subject"))
                     .body("items[0].definitionName", equalTo("Runs List WF"));
 
         given()
@@ -458,22 +459,68 @@ class WorkflowRunsResourceTest {
                 .then()
                     .statusCode(200)
                     .body("runId", equalTo(runId))
-                    .body("projectId", equalTo(projectId));
+                    .body("subjectId", equalTo(subjectId));
 
         given()
                 .when().get("/api/v1/workflow/runs/999999")
                 .then().statusCode(404);
     }
 
+    /**
+     * Runs can be filtered by subject, definition and label; the run carries its title and labels.
+     */
+    @Test
+    void filtersRunsBySubjectAndLabel() {
+        long subjectA = TestFixtures.createSubject("filter-subject-a");
+        long subjectB = TestFixtures.createSubject("filter-subject-b");
+        long definitionId = TestFixtures.createWaitDefinition("Filter WF");
+
+        Integer runA = given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d, \"title\": \"Run A\", \"labels\": {\"filter\": \"alpha\"}}"
+                        .formatted(definitionId))
+                .when().post(TestRunsResource.path(subjectA))
+                .then().statusCode(200).body("title", equalTo("Run A")).extract().path("runId");
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d, \"labels\": {\"filter\": \"beta\"}}"
+                        .formatted(definitionId))
+                .when().post(TestRunsResource.path(subjectB))
+                .then().statusCode(200).body("title", nullValue());
+
+        given()
+                .when().get("/api/v1/workflow/runs?label=filter:alpha&definitionId=" + definitionId)
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(1))
+                    .body("items[0].runId", equalTo(runA))
+                    .body("items[0].title", equalTo("Run A"))
+                    .body("items[0].labels.filter", equalTo("alpha"));
+
+        given()
+                .when().get("/api/v1/workflow/runs?status=waiting&subjectId=" + subjectB
+                        + "&label=filter:beta")
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(1))
+                    .body("items[0].subjectId", equalTo((int) subjectB));
+
+        given()
+                .when().get("/api/v1/workflow/runs?subjectId=" + subjectA + "&label=filter:beta")
+                .then()
+                    .statusCode(200)
+                    .body("totalCount", equalTo(0));
+    }
+
     @Test
     void listRunsForDefinition() {
-        int projectId = createProject("WF DefRuns Project");
+        int subjectId = createSubject("WF DefRuns Subject");
         int definitionId = createAndPublishActionWorkflow("DefRuns WF");
 
         given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200);
 
         given()
@@ -497,7 +544,7 @@ class WorkflowRunsResourceTest {
      */
     @Test
     void deletingDefinitionCascadesVersionsRunsAndTasks() {
-        int projectId = createProject("WF Cascade Delete Project");
+        int subjectId = createSubject("WF Cascade Delete Subject");
         int definitionId = createAndPublishActionWorkflow("Cascade Delete WF");
 
         // Trigger the action workflow so it stops at the action node, creating a
@@ -505,7 +552,7 @@ class WorkflowRunsResourceTest {
         Integer runId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"workflowDefinitionId\": %d}".formatted(definitionId))
-                .when().post(PROJECTS_PATH + "/" + projectId + "/workflow")
+                .when().post(TestRunsResource.path(subjectId))
                 .then().statusCode(200).body("status", equalTo("waiting"))
                 .extract().path("runId");
 

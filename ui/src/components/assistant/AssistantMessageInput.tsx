@@ -7,6 +7,10 @@ import "./AssistantMessageInput.css";
 interface AssistantMessageInputProps {
     onSend: (message: string) => void;
     disabled?: boolean;
+    /** Overrides the default placeholder text when set. */
+    placeholder?: string;
+    /** When the nonce changes, replaces the input text and focuses the input. */
+    prefill?: { text: string; nonce: number };
     /** When true, a Stop button is shown next to the Send button. */
     isProcessing?: boolean;
     /** True while a stop request is in flight; disables the Stop button. */
@@ -17,11 +21,51 @@ interface AssistantMessageInputProps {
 }
 
 export function AssistantMessageInput({
-    onSend, disabled, slashCommands = [], isProcessing = false, isStopping = false, onStop,
+    onSend, disabled, placeholder, prefill, slashCommands = [], isProcessing = false, isStopping = false, onStop,
 }: AssistantMessageInputProps) {
     const [value, setValue] = useState("");
+    const prefillNonce: number | undefined = prefill?.nonce;
+    const prefillText: string | undefined = prefill?.text;
     const [selectedIndex, setSelectedIndex] = useState(0);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
+
+    /**
+     * Resizes the auto-resizing text area to its content; needed when the value is set programmatically.
+     * Mirrors PatternFly TextArea's own auto-resize: content height plus the field's borders and the
+     * wrapper's padding.
+     */
+    const resizeToContent = useCallback(() => {
+        const textarea = textAreaRef.current;
+        const parent = textarea?.parentElement;
+        if (!textarea || !parent) {
+            return;
+        }
+        parent.style.setProperty("height", "inherit");
+        const field = window.getComputedStyle(textarea);
+        const wrapper = window.getComputedStyle(parent);
+        const height: number = (parseInt(field.borderTopWidth) || 0) + textarea.scrollHeight
+            + (parseInt(field.borderBottomWidth) || 0)
+            + (parseInt(wrapper.paddingTop) || 0) + (parseInt(wrapper.paddingBottom) || 0);
+        parent.style.setProperty("height", `${height}px`);
+    }, []);
+
+    useEffect(() => {
+        if (prefillNonce === undefined) {
+            return;
+        }
+        setValue(prefillText ?? "");
+        textAreaRef.current?.focus();
+        // Wait for the new value to render before measuring it.
+        setTimeout(() => {
+            resizeToContent();
+            const textarea = textAreaRef.current;
+            if (textarea) {
+                textarea.selectionStart = textarea.selectionEnd = textarea.value.length;
+            }
+        }, 0);
+        // Only a new nonce applies the prefill; text alone must not overwrite user edits.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillNonce]);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     const filteredCommands = useMemo(() => {
@@ -110,11 +154,7 @@ export function AssistantMessageInput({
                 setValue(newValue);
                 setTimeout(() => {
                     textarea.selectionStart = textarea.selectionEnd = start + 1;
-                    const parent = textarea.parentElement;
-                    if (parent) {
-                        parent.style.removeProperty("height");
-                        parent.style.height = textarea.scrollHeight + "px";
-                    }
+                    resizeToContent();
                 }, 0);
             }
         }
@@ -144,7 +184,7 @@ export function AssistantMessageInput({
                         value={value}
                         onChange={(_e, val) => { if (val !== value) setValue(val); }}
                         onKeyDown={handleKeyDown}
-                        placeholder="Type a message... (/ for commands)"
+                        placeholder={placeholder ?? "Type a message... (/ for commands)"}
                         aria-label="Message input"
                         autoResize
                         rows={1}

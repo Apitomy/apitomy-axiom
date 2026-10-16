@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * Polls for pending tasks and dispatches them to agents via the TaskExecutionService.
- * Respects project-level task serialization — only one active task per project.
+ * Respects subject-level task serialization — only one active task per subject.
  */
 @ApplicationScoped
 public class TaskQueuePoller {
@@ -37,20 +37,20 @@ public class TaskQueuePoller {
         if (shuttingDown) {
             return;
         }
-        // Find distinct project IDs that have pending tasks
-        List<Long> projectIds = TaskEntity.find(
-                "select distinct t.projectId from TaskEntity t where t.status = 'Pending'")
+        // Find distinct subject IDs that have pending tasks
+        List<Long> subjectIds = TaskEntity.find(
+                "select distinct t.subjectId from TaskEntity t where t.status = 'Pending'")
                 .project(Long.class)
                 .list();
 
-        if (projectIds.isEmpty()) {
+        if (subjectIds.isEmpty()) {
             return;
         }
 
-        LOG.debugf("Task queue: %d project(s) with pending tasks", projectIds.size());
+        LOG.debugf("Task queue: %d subject(s) with pending tasks", subjectIds.size());
 
-        for (Long projectId : projectIds) {
-            taskExecutionService.executeNextTask(projectId);
+        for (Long subjectId : subjectIds) {
+            taskExecutionService.executeNextTask(subjectId);
         }
     }
 }

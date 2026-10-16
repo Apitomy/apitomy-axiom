@@ -6,11 +6,19 @@ persona, tools, MCP servers, and working directory — so you can create session
 tailored to specific workflows, from generating Axiom configuration to general-purpose
 coding assistance.
 
-Out of the box, Axiom ships three built-in templates: a **Configuration Assistant** for
-creating and updating tools, action types, report definitions, scheduled jobs, toolsets,
-connections, subscriptions, workflows, and session templates, a **General Assistant** for
-open-ended tasks, and a **Project Assistant** for working within the context of a
-specific project. You can also create your own templates to define custom workflows.
+Out of the box, Axiom ships three built-in templates you can start sessions from: a **Configuration
+Assistant** for creating and updating tools, action types, toolsets,
+event sources, subscriptions, workflows, and session templates, a **General Assistant** for
+open-ended tasks, and a **Subject Assistant** for working within the context of a
+specific subject. A fourth built-in template, **Workflow Workbench**, drives the AI Assistant of the
+[Workflow Workbench](workbench.md); it only works inside the workbench, so the template picker does not list
+it. You can also create your own templates to define custom workflows.
+
+!!! note "AI help in other pages"
+    The AI Assistant is the general conversational interface. The Workflow Workbench has its own AI
+    assistant, built into the workbench page, that works on the workflow, action types and tools of a
+    composition; see [Workflow Workbench](workbench.md). The action type and tool editors no longer have
+    their own **AI Assistant** buttons; use the Workbench or a Configuration Assistant session instead.
 
 !!! note
     The AI Assistant requires at least one registered agent that supports interactive
@@ -27,9 +35,9 @@ specific project. You can also create your own templates to define custom workfl
     warning message with the error reported by OpenCode.
 
     OpenCode sessions run in the same working directory as Claude Code sessions: the template's working
-    directory if set, otherwise the project workspace for project sessions, otherwise a directory created
-    inside the session directory. The template's environment variables and, for project sessions only,
-    `AXIOM_PROJECT_ID`, `AXIOM_PROJECT_NAME`, `AXIOM_REF`, and `AXIOM_REPOSITORY` are passed to the
+    directory if set, otherwise the subject workspace for subject sessions, otherwise a directory created
+    inside the session directory. The template's environment variables and, for subject sessions only,
+    `AXIOM_SUBJECT_ID`, `AXIOM_SUBJECT_NAME`, `AXIOM_REF`, and `AXIOM_REPOSITORY` are passed to the
     session's `opencode serve` process, so they are available to OpenCode's tools and MCP servers.
     Environment variables (including template secrets) are visible to the agent's tools, for example its
     shell tool. Like Claude Code with `CLAUDE.md`, OpenCode also loads project-level configuration
@@ -46,20 +54,20 @@ specific project. You can also create your own templates to define custom workfl
     OpenCode may ask a second time for the same tool call, for example to access a directory outside
     the session working directory; this prompt appears on the same tool block.
 
-    The template's system prompt, including project context for project sessions, is applied to both engines.
+    The template's system prompt, including subject context for subject sessions, is applied to both engines.
     Claude Code receives it with `--append-system-prompt`; OpenCode receives it as the system prompt of every
     message, added to OpenCode's own system prompt.
 
     OpenCode sessions use the template's model (in `provider/model` form, for example
-    `github-copilot/claude-sonnet-5`), or `axiom.agent.opencode.model` when the template has none. The model is
-    checked against the providers OpenCode has configured; if it is not available, the chat shows a warning and
-    the session falls back to `axiom.agent.opencode.model`, or to OpenCode's own default model if that is also
-    unavailable (in which case the session header shows no model).
+    `github-copilot/claude-sonnet-5`), or `axiom.agent.opencode.model` when the template has none. The model
+    is checked against the providers OpenCode has configured; if it is not available, the chat shows a warning
+    and the session falls back to `axiom.agent.opencode.model`, or to OpenCode's own default model if that is
+    also unavailable (in which case the session header shows no model).
 
     Each OpenCode session's local server is protected with a generated password (a template value for
     `OPENCODE_SERVER_PASSWORD` is ignored). If the connection to OpenCode drops, Axiom reconnects and shows a
-    notice that some updates may be missing. If stopping a reply fails, a notice is shown and the session keeps
-    running.
+    notice that some updates may be missing. If stopping a reply fails, a notice is shown and the session
+    keeps running.
 
     OpenCode sessions support slash commands: type `/` to list OpenCode's commands (for example `/init`).
     Commands run without the template's system prompt, because OpenCode's command endpoint cannot carry one.
@@ -72,10 +80,10 @@ specific project. You can also create your own templates to define custom workfl
 
 ## Accessing the Assistant
 
-Click the robot icon in the top-right corner of the Axiom masthead. The icon may pulse
-if you have never clicked it before.
+Click the robot icon (**AI Assistant**) in the top-right corner of the Axiom masthead. The icon
+throbs until you click it for the first time. It is shown only when an interactive AI engine is available.
 
-This takes you to the **Assistant Sessions** page, where you can create a new session
+This takes you to the **AI Assistant** page (`/assistant`), where you can create a new session
 or resume an existing one.
 
 ---
@@ -91,34 +99,38 @@ Each template specifies:
 | **System Prompt** | Markdown instructions passed to the active interactive engine. |
 | **Welcome Message** | First message shown in the chat, attributed to the assistant. |
 | **Agent Type** | Optional override selecting which registered agent type (`claude-code`, `opencode`) drives sessions created from this template. Falls back to the instance's default agent type when unset. |
-| **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For project-scoped sessions, defaults to the project workspace. |
-| **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{projectName}}` placeholder. |
+| **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For subject-scoped sessions, defaults to the subject workspace. |
+| **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{subjectName}}` placeholder. |
 | **Model** | Optional AI model override (e.g., a specific Claude model). |
 | **MCP Servers** | Named MCP server configurations to include in the session. |
 | **Allowed Tools** | Tool patterns for `--allowedTools` (e.g., `Read(*)`, `Bash(ls *)`). Use `@ToolsetName` to include all tools from a toolset. |
 | **Init Script** | Optional startup script executed when the session is created (see [Init Scripts](#init-scripts) below). |
-| **Environment** | Optional key-value environment variables injected into the interactive engine process. Values support `${secret:NAME}` syntax. |
+| **Environment** | Optional key-value environment variables for the interactive engine process, the only variables it gets beyond Axiom's own. Values support `${secret:NAME}` syntax; secrets are not injected automatically, and a missing secret stops the session from starting. |
 
 ### Built-in Templates
 
-Axiom ships three immutable built-in templates:
+Axiom ships four immutable built-in templates:
 
-- **Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
-  and updating Axiom configuration items (tools, action types, report definitions,
-  scheduled jobs, toolsets, and session templates) with a two-panel layout and Apply
+- **Axiom Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
+  and updating Axiom configuration items (tools, action types, toolsets, event sources,
+  subscriptions, workflows, and session templates) with a two-panel layout and Apply
   workflow.
 - **General Assistant** (`general-assistant`) — a minimal template for open-ended tasks
   with no sidebar or special behavior.
-- **Project Assistant** (`project-assistant`) — scoped to a specific Axiom project, with
-  the working directory set to the project workspace and access to project-specific MCP
+- **Subject Assistant** (`subject-assistant`) — scoped to a specific Axiom subject, with
+  the working directory set to the subject workspace and access to subject-specific MCP
   tools for querying tasks, events, and the discussion thread.
+- **Workflow Workbench** (`axiom-workbench`) — the template behind the
+  [Workflow Workbench](workbench.md)'s AI Assistant. It works on a workbench composition through the
+  `axiom-workbench` MCP server; use it from the Workbench rather than from the AI Assistant page.
 
-Built-in templates cannot be modified or deleted, but you can clone them to create
-editable copies.
+Built-in templates cannot be modified or deleted. You can clone the General, Subject and Workflow
+Workbench templates to create editable copies; the Configuration Assistant cannot be cloned.
 
 ### User-Defined Templates
 
-You create and manage custom templates from **Configuration > Session Templates**. Each
+You create and manage custom templates from **Components > AI Assistant** (the **AI Assistant
+Templates** page, `/session-templates`). Click **Create Template** to add one. Each
 template supports all the fields listed above, giving you full control over the
 assistant's persona and capabilities.
 
@@ -222,13 +234,19 @@ The session header toolbar provides quick access to session controls and status:
 
 - **Session name** — displayed prominently, editable inline via the pencil icon
 - **Plan Mode** — an orange label appears when the assistant is in plan mode
+- **Engine** — a label showing the interactive engine (Claude Code or OpenCode)
 - **Model** — shows the AI model in use for this session
-- **Running cost** — real-time cost display (e.g., `$0.0342`) that accumulates per turn
-- **Auto-approval badge** — shield icon with a count of active auto-approval rules
+- **Running cost** — real-time cost display (e.g., `$0.0342`) that accumulates per turn; hover to see
+  input and output tokens. When the engine reports no cost, the token count is shown instead
+- **Subject** — for subject sessions, a label linking to the subject
 - **Apply All** — imports generated items (Config Assistant sessions only; disabled when
   no items exist)
+- **Allow All** — a switch that, after a confirmation, approves every tool request in the session
+  without prompting
+- **Auto-approval badge** — shield icon with a count of active auto-approval rules (shown when at least
+  one rule exists)
 - **End Session** — stops the session with a confirmation prompt
-- **Breakout Window** — opens the session in a dedicated browser tab for a focused,
+- **Open in new window** — opens the session in a dedicated browser tab (breakout window) for a focused,
   full-screen experience
 
 ### Chat Panel
@@ -245,11 +263,13 @@ The chat panel is a conversation interface where you interact with the assistant
     - Teal — AskUser interactions
 
 You can send another message while the assistant is still working; it is queued and answered after the current
-reply. If a message cannot be delivered, the chat shows a "Message was not delivered" notice. When you stop the
-assistant, OpenCode discards messages that are still queued, while Claude Code answers them after stopping.
+reply. If a message cannot be delivered, the chat shows a "Message was not delivered" notice. When you stop
+the assistant, OpenCode discards messages that are still queued, while Claude Code answers them after
+stopping.
 
 While the assistant is working, a **Stop** button appears next to **Send**. It stops the current reply without
-ending the session, so you can continue the conversation. If the reply can't be stopped, the chat shows a notice.
+ending the session, so you can continue the conversation. If the reply can't be stopped, the chat shows a
+notice.
 
 #### Slash Commands
 
@@ -302,7 +322,7 @@ Click the icon to view active rules or delete individual ones.
 
 ## Breakout Window
 
-Click the **Breakout Window** button in the session toolbar to open the session in a
+Click the **Open in new window** icon in the session toolbar to open the session in a
 dedicated browser tab. This hides the Axiom masthead and sidebar, giving you a focused,
 full-screen chat experience. The breakout window stays connected to the same session —
 you can switch between the main window and the breakout at any time.
@@ -338,12 +358,10 @@ can work with these types of configuration items:
 | Type | What it produces |
 |------|-----------------|
 | **Tools** | Script-based tools with parameters, descriptions, and bash script templates |
-| **Action Types** | Agent or script-mode action types with prompt templates, allowed tools, and trigger settings |
-| **Report Definitions** | Scheduled or ad-hoc reports with prompt templates, allowed tools, and time windows |
-| **Scheduled Jobs** | CRON-style automation with prompt or script templates, allowed tools, and schedule settings |
+| **Action Types** | Agent or script-mode action types with prompt templates, allowed tools, and inputs/outputs |
 | **Toolsets** | Named groups of tools that can be referenced in action types and session templates using `@ToolsetName` |
 | **Session Templates** | Custom AI Assistant session configurations with a persona, system prompt, MCP servers, and allowed tools |
-| **Connections** | Links to GitHub or Jira for the event stream pipeline |
+| **Event Sources** | Links to GitHub or Jira for the event stream pipeline |
 | **Subscriptions** | Filter expressions and routing rules over the event stream |
 | **Workflows** | Versioned, multi-step automation definitions |
 
@@ -355,11 +373,28 @@ The assistant understands the relationships between these items. When it creates
 action type that needs a custom tool, it creates the tool first and adds it to the
 action type's allowed tools list automatically.
 
+When it writes action types, the assistant declares an input for everything the action operates on (issue
+reference, repository, ids) and maps those inputs on workflow `action` nodes from `context.*` or earlier
+outputs — action types never rely on ambient subject data. It also leaves output-format instructions out of
+prompts, because Axiom appends the output contract automatically. See
+[Inputs, Placeholders and Mappings](concepts.md#inputs-placeholders-and-mappings).
+
 ### Validation
 
-The assistant receives validation feedback in real time. When a generated item has
-errors, those errors are sent back to Claude as messages, allowing the assistant to
-fix issues automatically without you having to point them out.
+The assistant follows a **validate-before-write** loop. Before it writes a generated item, it checks the
+item with the `axiom_validate_item(type, item)` MCP tool (or the equivalent REST endpoint
+`POST /api/v1/assistant/sessions/{sessionId}/validate`), fixes any reported problems, and only then writes
+the item. The `type` is one of `tool`, `action-type`, `toolset`, `session-template`, `workflow`,
+`event-source`, or `subscription`.
+
+Validation uses the same rules Axiom uses when importing a configuration pack and on Apply, so an item that
+passes validation in the session will be accepted by Apply. After an item is written, the assistant still
+receives validation feedback in real time: any errors are sent back to the assistant as messages, allowing
+it to fix issues without you having to point them out.
+
+The assistant's system prompt includes a generated reference of every item type, its fields, and worked
+examples. These examples are checked by Axiom's test suite, so the patterns the assistant copies are known
+to validate and apply cleanly.
 
 ### Applying Generated Items
 
@@ -367,11 +402,26 @@ Generated items exist only within the session until you apply them. Nothing is s
 to your Axiom configuration until you explicitly click **Apply All** in the session
 header.
 
-Apply All validates all items, then applies them to your Axiom configuration in one
-atomic operation. Items with names matching existing configuration are **updated in
-place**; items with new names are **created**. A summary dialog shows what was applied
-with a breakdown of created and updated counts (e.g., "2 tool(s) created, 1 tool(s)
-updated"). After applying, the session ends and you are returned to the sessions list.
+Apply All first validates **every** item in the session. If any item has an error, nothing is written and
+the problems are reported. Otherwise the items are applied to your Axiom configuration in one atomic
+operation, in dependency order: tools, toolsets, action types, session templates, workflows, event
+sources, and finally subscriptions. If anything fails part-way, the whole operation is rolled back.
+
+During Apply:
+
+- Items with names matching existing configuration are **updated in place**; items with new names are
+  **created**.
+- Workflows are **published**, so they can be started immediately. A workflow whose definition is unchanged
+  from its latest published version is not re-published.
+- Subscription routing rules of type `create-workflow` may reference a workflow by name using
+  `workflowDefinitionName` instead of `workflowDefinitionId`. The name is resolved to the workflow's id, so
+  a subscription can target a workflow created in the same session.
+- Event sources and subscriptions created by the assistant are **disabled** unless the item sets
+  `enabled: true`; the assistant is instructed to leave them disabled. Review them and enable them on their
+  detail pages when you are ready for events to flow.
+
+A summary dialog shows what was applied with a breakdown of created and updated counts (e.g., "2 tool(s)
+created, 1 tool(s) updated"). After applying, the session ends and you are returned to the sessions list.
 
 !!! warning
     If you end a session without applying, all generated items are discarded. This
@@ -381,7 +431,7 @@ updated"). After applying, the session ends and you are returned to the sessions
 
 The Configuration Assistant has access to an MCP server that lets it query your
 existing Axiom configuration — it can list your current tools, action types, event
-sources, scheduled jobs, and more to understand what is already set up. This is
+sources, workflows, and more to understand what is already set up. This is
 especially useful when updating existing items, as the assistant fetches the current
 definition before making changes.
 
@@ -399,8 +449,8 @@ The assistant will:
 
 1. Create `fetch_github_labels`, `fetch_github_issue`, and `apply_github_labels` tools
    with appropriate parameters and scripts
-2. Create an `Auto-Label Issue` action type with a prompt template referencing all three
-   tools
+2. Create an `Auto-Label Issue` action type with `ref` and `repository` inputs and a prompt
+   template referencing all three tools
 3. Show all four items in the Generated Items panel with validation status
 
 You can then review each item, ask for changes, and apply them all at once.
@@ -409,7 +459,7 @@ You can then review each item, ask for changes, and apply them all at once.
 
 ## Managing Sessions
 
-The **Assistant Sessions** page lists all sessions with color-coded status labels:
+The **AI Assistant** page lists all sessions with color-coded status labels:
 
 - **Starting** (blue) — session is initializing
 - **Running** (green) — session is active and ready
@@ -437,7 +487,7 @@ modal.
   and what to change. It will fetch the current definition, apply your changes, and
   write the updated JSON. When you apply, matching names are updated in place.
 - **Ask about existing configuration.** The assistant can query your current tools,
-  action types, scheduled jobs, toolsets, session templates, and other configuration
+  action types, workflows, toolsets, session templates, and other configuration
   to understand your setup before creating or updating items.
 
 ### General Tips
@@ -454,5 +504,6 @@ modal.
   during complex multi-step tasks. End sessions when you are done to avoid unnecessary
   token usage.
 - **Choose the right template.** Use the Configuration Assistant when you need to
-  create or update Axiom configuration items. Use the General Assistant or a custom
+  create or update Axiom configuration items. To build or fix a workflow together with its action types
+  and tools, use the [Workflow Workbench](workbench.md). Use the General Assistant or a custom
   template for everything else.

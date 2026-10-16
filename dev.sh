@@ -21,6 +21,7 @@
 #   ./dev.sh --skip-ui          # start backend only (Quarkus dev mode)
 #   ./dev.sh --persist          # enable persistent storage (H2 file-based DB)
 #   ./dev.sh --portOffset=100   # offset all ports by 100 (backend 9190, UI 9291)
+#   ./dev.sh --dataDir=/path    # store the H2 database in /path (implies --persist)
 #
 # Open http://localhost:9191 in your browser.
 #
@@ -33,13 +34,31 @@ cd "$SCRIPT_DIR"
 SKIP_UI=false
 PERSIST=false
 PORT_OFFSET=0
-for arg in "$@"; do
-    case "$arg" in
+DATA_DIR=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --skip-ui) SKIP_UI=true ;;
         --persist) PERSIST=true ;;
-        --portOffset=*) PORT_OFFSET="${arg#--portOffset=}" ;;
+        --portOffset=*) PORT_OFFSET="${1#--portOffset=}" ;;
+        --dataDir=*) DATA_DIR="${1#--dataDir=}" ;;
+        --dataDir)
+            if [[ $# -lt 2 || -z "$2" ]]; then
+                echo "ERROR: --dataDir requires a directory argument"
+                exit 1
+            fi
+            DATA_DIR="$2"
+            shift
+            ;;
     esac
+    shift
 done
+
+if [[ -n "$DATA_DIR" ]]; then
+    # A file-based DB only makes sense with the persist profile (dev profile drops the schema)
+    PERSIST=true
+    mkdir -p "$DATA_DIR"
+    DATA_DIR="$(cd "$DATA_DIR" && pwd)"
+fi
 
 BACKEND_PORT=$((9090 + PORT_OFFSET))
 UI_PORT=$((9191 + PORT_OFFSET))
@@ -121,6 +140,10 @@ trap cleanup EXIT INT TERM
 JAVA_ARGS=(-Dquarkus.http.port="$BACKEND_PORT")
 if [[ "$PERSIST" == true ]]; then
     JAVA_ARGS+=(-Dquarkus.profile=persist)
+    if [[ -n "$DATA_DIR" ]]; then
+        JAVA_ARGS+=("-Dquarkus.datasource.jdbc.url=jdbc:h2:file:$DATA_DIR/axiom;AUTO_SERVER=TRUE")
+        echo "Using data directory: $DATA_DIR"
+    fi
     echo "Starting backend on http://localhost:$BACKEND_PORT (persistence enabled) ..."
 else
     JAVA_ARGS+=(-Dquarkus.profile=dev)

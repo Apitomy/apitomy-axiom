@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { hasCapability } from "../config/capabilities";
 import {
     Button,
     Flex,
@@ -150,7 +151,7 @@ export function SessionTemplatesPage() {
                                     </Label>
                                 </Td>
                                 <Td>
-                                    {t.templateId !== "axiom-config-assistant" && (
+                                    {!hasCapability(t, "config-items") && (
                                         <Button variant="plain" size="sm"
                                             onClick={(e) => {
                                                 e.stopPropagation();

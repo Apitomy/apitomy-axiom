@@ -76,16 +76,6 @@ public interface Agent {
     CompletableFuture<AgentResult> execute(AgentRequest request);
 
     /**
-     * Executes a prompt with a JSON schema constraint for structured output.
-     * The agent enforces that the response conforms to the given JSON schema.
-     *
-     * @param request    the agent request containing prompt, config, and environment
-     * @param jsonSchema the JSON schema that the response must conform to
-     * @return a future that completes with the structured agent result
-     */
-    CompletableFuture<AgentResult> executeWithSchema(AgentRequest request, String jsonSchema);
-
-    /**
      * Best-effort cancellation of a running execution.
      *
      * @param executionId the execution identifier assigned by the caller

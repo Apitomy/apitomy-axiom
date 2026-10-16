@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager;
@@ -28,17 +29,17 @@ import java.util.Map;
  *
  * <p>For each task execution, this generator:</p>
  * <ol>
- *   <li>Ensures the Axiom MCP server Node.js project is installed (once)</li>
+ *   <li>Ensures the Axiom MCP server Node.js subject is installed (once)</li>
  *   <li>For "script" tools: writes a per-task tools JSON file and references the
  *       pre-built server in the MCP config</li>
  *   <li>For "mcp-server" tools: includes them directly in the config</li>
  *   <li>Writes the MCP config JSON file</li>
  * </ol>
  *
- * <p>The MCP server project is a Node.js application bundled as a classpath resource
+ * <p>The MCP server subject is a Node.js application bundled as a classpath resource
  * at {@code templates/axiom-mcp-server/}. On first use it is copied to
  * {@code ~/.axiom/mcp-server/} and {@code npm install} is run once to resolve
- * dependencies. Subsequent invocations reuse the installed project.</p>
+ * dependencies. Subsequent invocations reuse the installed subject.</p>
  *
  * <p>This class also implements {@link io.apitomy.axiom.agents.spi.AgentMcpManager}
  * for the Claude Code and Copilot engines, via the {@link io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager}
@@ -70,7 +71,7 @@ public class McpConfigGenerator {
     @Inject
     CopilotMcpManager copilotMcpManager;
 
-    /** Lazily resolved path to the installed MCP server project directory. */
+    /** Lazily resolved path to the installed MCP server subject directory. */
     private volatile Path mcpServerDir;
 
     /**
@@ -223,13 +224,12 @@ public class McpConfigGenerator {
     }
 
     /**
-     * Cleans up the MCP config directory for a given task/report ID.
+     * Cleans up the MCP config directory for a given task ID.
      *
-     * @param taskId the task or report ID used when generating the files
+     * @param taskId the task ID used when generating the files
      */
     public void cleanupTempFiles(Long taskId) {
-        Path taskDir = Path.of(System.getProperty("user.home"), ".axiom", "tasks",
-                String.valueOf(taskId));
+        Path taskDir = AxiomHome.resolve("tasks", String.valueOf(taskId));
         if (!Files.isDirectory(taskDir)) return;
         try (var stream = Files.walk(taskDir)) {
             stream.sorted(java.util.Comparator.reverseOrder())
@@ -251,21 +251,20 @@ public class McpConfigGenerator {
      * creating it if it does not exist.
      */
     private Path getTaskDirectory(Long taskId) throws IOException {
-        Path taskDir = Path.of(System.getProperty("user.home"), ".axiom", "tasks",
-                String.valueOf(taskId));
+        Path taskDir = AxiomHome.resolve("tasks", String.valueOf(taskId));
         Files.createDirectories(taskDir);
         return taskDir;
     }
 
     /**
-     * Ensures the Axiom MCP server Node.js project is installed and dependencies
-     * are resolved. On first call, copies the template project from classpath
+     * Ensures the Axiom MCP server Node.js subject is installed and dependencies
+     * are resolved. On first call, copies the template subject from classpath
      * resources to {@code ~/.axiom/mcp-server/} and runs {@code npm install}.
      * Subsequent calls return the cached path. Used by both the task execution
      * path and the assistant session path.
      *
-     * @return path to the installed MCP server project directory
-     * @throws IOException if the project cannot be installed
+     * @return path to the installed MCP server subject directory
+     * @throws IOException if the subject cannot be installed
      */
     public Path ensureMcpServerInstalled() throws IOException {
         if (mcpServerDir != null && Files.exists(mcpServerDir.resolve("node_modules"))
@@ -279,7 +278,7 @@ public class McpConfigGenerator {
                 return mcpServerDir;
             }
 
-            Path axiomHome = Path.of(System.getProperty("user.home"), ".axiom");
+            Path axiomHome = AxiomHome.path();
             Path serverDir = axiomHome.resolve(MCP_SERVER_DIR_NAME);
             Files.createDirectories(serverDir);
 

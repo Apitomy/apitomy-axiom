@@ -27,12 +27,22 @@ public final class ActionTypeValidator {
             Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
     private static final Pattern MALFORMED_PLACEHOLDER_PATTERN =
             Pattern.compile("\\{\\{\\s+|\\s+\\}\\}|\\{\\{[^}]*$");
-    private static final Set<String> RECOGNIZED_PROMPT_PLACEHOLDERS = Set.of(
-            "input", "managerInput", "actionType", "ref", "repository",
-            "projectName", "workDir");
-    private static final Set<String> RECOGNIZED_SCRIPT_PLACEHOLDERS = Set.of(
-            "projectId", "eventId", "taskId", "ref", "repository",
-            "projectName", "managerInput", "apiBaseUrl", "workDir");
+    /** Former placeholders and how to replace them; any of these in a template is an error. */
+    public static final Map<String, String> REMOVED_PLACEHOLDER_HINTS = Map.ofEntries(
+            Map.entry("ref", "Declare an input 'ref' and map it from context.subject.ref on the workflow node."),
+            Map.entry("repository",
+                    "Declare an input 'repository' and map it from context.subject.repository on the workflow node."),
+            Map.entry("subjectName",
+                    "Declare an input 'subjectName' and map it from context.subject.name on the workflow node."),
+            Map.entry("subjectId",
+                    "Declare an input 'subjectId' and map it from context.subject.id on the workflow node."),
+            Map.entry("eventId",
+                    "Declare an input 'eventId' and map it from context.event.id on the workflow node."),
+            Map.entry("workDir", "Not a placeholder. Scripts can use $AXIOM_WORK_DIR; agents already run there."),
+            Map.entry("apiBaseUrl", "Not a placeholder. Scripts can use $AXIOM_API_URL."),
+            Map.entry("taskId", "Not a placeholder. Scripts can use $AXIOM_TASK_ID."),
+            Map.entry("actionType", "Not available. Remove it."),
+            Map.entry("input", "Not available. Declare named inputs and use {{inputs.<name>}}."));
     private static final Pattern SECRET_REF_PATTERN =
             Pattern.compile("\\$\\{secret:([^}]+)\\}");
     private static final Pattern MALFORMED_SECRET_REF_PATTERN =
@@ -81,8 +91,10 @@ public final class ActionTypeValidator {
         validateExecutionMode(def, messages);
         validatePromptTemplate(def, messages);
         validateScriptTemplate(def, messages);
+        validateCodeTemplate(def, messages);
         validateAllowedTools(def, known, messages);
         validateEnvironment(def, known, messages);
+        validateUndeclaredSecrets(def, known, messages);
         validateFields(def.getInputs(), "inputs", messages);
         validateFields(def.getOutputs(), "outputs", messages);
 
@@ -98,8 +110,8 @@ public final class ActionTypeValidator {
     private static void validateDescription(NewActionType def, List<ValidationMessage> messages) {
         if (def.getDescription() == null || def.getDescription().isBlank()) {
             messages.add(warning("description",
-                    "Action type has no description. A description helps the AI Manager "
-                            + "decide when to use this action type."));
+                    "Action type has no description. A description helps users and AI "
+                            + "agents decide when to use this action type."));
         }
     }
 
@@ -126,15 +138,7 @@ public final class ActionTypeValidator {
 
         checkMalformedPlaceholders(prompt, "promptTemplate", messages);
 
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(prompt);
-        while (matcher.find()) {
-            String name = matcher.group(1);
-            if (!RECOGNIZED_PROMPT_PLACEHOLDERS.contains(name)) {
-                messages.add(error("promptTemplate",
-                        "Unrecognized placeholder '{{" + name + "}}'. Supported: "
-                                + RECOGNIZED_PROMPT_PLACEHOLDERS + "."));
-            }
-        }
+        checkUnsupportedPlaceholders(prompt, "promptTemplate", messages);
 
         checkInputPlaceholders(prompt, "promptTemplate", def, messages);
     }
@@ -152,17 +156,10 @@ public final class ActionTypeValidator {
 
         checkMalformedPlaceholders(script, "scriptTemplate", messages);
 
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(script);
-        while (matcher.find()) {
-            String name = matcher.group(1);
-            if (!RECOGNIZED_SCRIPT_PLACEHOLDERS.contains(name)) {
-                messages.add(error("scriptTemplate",
-                        "Unrecognized placeholder '{{" + name + "}}'. Supported: "
-                                + RECOGNIZED_SCRIPT_PLACEHOLDERS + "."));
-            }
-        }
+        checkUnsupportedPlaceholders(script, "scriptTemplate", messages);
 
         checkInputPlaceholders(script, "scriptTemplate", def, messages);
+        checkQuotedHeredocPlaceholders(script, messages);
 
         // Script binding only substitutes inputs whose names are valid shell
         // identifiers; any other declared input is silently skipped at runtime.
@@ -178,6 +175,58 @@ public final class ActionTypeValidator {
                 }
             }
         }
+    }
+
+    /** Axiom-placeholder-shaped text in node code; excludes {@code ${{ ... }}} and mustache sections. */
+    private static final java.util.regex.Pattern AXIOM_PLACEHOLDER_IN_CODE =
+            java.util.regex.Pattern.compile("(?<!\\$)\\{\\{\\s*[A-Za-z_][\\w.]*\\s*\\}\\}");
+
+    private static void validateCodeTemplate(NewActionType def, List<ValidationMessage> messages) {
+        if (!"node".equals(executionMode(def))) {
+            return;
+        }
+        String code = def.getCodeTemplate();
+        if (code == null || code.isBlank()) {
+            messages.add(error("codeTemplate", "Code is required for node-mode action types."));
+            return;
+        }
+        if (AXIOM_PLACEHOLDER_IN_CODE.matcher(code).find()) {
+            messages.add(error("codeTemplate",
+                    "Node actions receive inputs as run(inputs, ctx); placeholders are not supported."));
+        }
+        NodeModuleChecks.importSpecifiers(code).stream()
+                .filter(spec -> !NodeModuleChecks.isBuiltin(spec))
+                .distinct()
+                .forEach(spec -> messages.add(error("codeTemplate", "Import '" + spec
+                        + "' is not a Node.js built-in module; only built-ins (e.g. node:fs) are allowed.")));
+        if (!NodeModuleChecks.exportsRun(code)) {
+            messages.add(error("codeTemplate", "The module must export async function run(inputs, ctx)."));
+        }
+        try {
+            NodeModuleChecks.syntaxError(code).ifPresent(output ->
+                    messages.add(error("codeTemplate", "Syntax error: " + errorLine(output))));
+        } catch (IllegalStateException e) {
+            messages.add(warning("codeTemplate", "node unavailable".equals(e.getMessage())
+                    ? "Syntax not checked: Node.js not found."
+                    : "Syntax not checked: " + e.getMessage() + "."));
+        }
+        Set<String> declared = declaredInputNames(def);
+        NodeModuleChecks.inputReads(code).stream()
+                .filter(name -> !declared.contains(name))
+                .forEach(name -> messages.add(warning("codeTemplate",
+                        "Reads inputs." + name + ", which is not a declared input.")));
+    }
+
+    /**
+     * Picks the meaningful line from {@code node --check} output. Node prints the temp file path first, so
+     * prefer the first {@code ...Error:} line and fall back to the first non-blank line.
+     */
+    private static String errorLine(String output) {
+        List<String> lines = output.lines().map(String::strip).filter(l -> !l.isEmpty()).toList();
+        return lines.stream()
+                .filter(l -> l.matches("^[A-Za-z]*Error:.*"))
+                .findFirst()
+                .orElse(lines.isEmpty() ? "" : lines.get(0));
     }
 
     private static void validateAllowedTools(NewActionType def, KnownNames known,
@@ -277,6 +326,66 @@ public final class ActionTypeValidator {
         }
     }
 
+    /**
+     * Warns when script or Node code uses a secret by name ({@code $NAME}, {@code ${NAME}},
+     * {@code process.env.NAME}) that the environment does not declare: secrets are not injected automatically,
+     * so the variable would be empty at run time. Prompts of agent action types cannot be checked this way.
+     */
+    private static void validateUndeclaredSecrets(NewActionType def, KnownNames known,
+                                                  List<ValidationMessage> messages) {
+        if (known == null || known.secretNames() == null || known.secretNames().isEmpty()) {
+            return;
+        }
+        Set<String> declared = def.getEnvironment() != null && def.getEnvironment().getAdditionalProperties() != null
+                ? def.getEnvironment().getAdditionalProperties().keySet() : Set.of();
+        String mode = def.getExecutionMode() != null ? def.getExecutionMode().value() : "";
+        String field = "node".equals(mode) ? "codeTemplate" : "script".equals(mode) ? "scriptTemplate" : null;
+        String code = "node".equals(mode) ? def.getCodeTemplate() : "script".equals(mode) ? def.getScriptTemplate()
+                : null;
+        if (field == null || code == null) {
+            return;
+        }
+        for (String secret : usedSecrets(code, known.secretNames(), "node".equals(mode))) {
+            if (!declared.contains(secret)) {
+                messages.add(warning(field, undeclaredSecretMessage(secret)));
+            }
+        }
+    }
+
+    /**
+     * Returns the secrets a script or Node module refers to by name as environment variables.
+     *
+     * @param code        the script or module source
+     * @param secretNames the names of existing secrets
+     * @param node        whether the code is a Node module ({@code process.env}) rather than a shell script
+     * @return the referenced secret names, sorted
+     */
+    public static Set<String> usedSecrets(String code, Set<String> secretNames, boolean node) {
+        Set<String> used = new java.util.TreeSet<>();
+        for (String secret : secretNames) {
+            String quoted = Pattern.quote(secret);
+            Pattern use = node
+                    ? Pattern.compile("process\\.env(?:\\." + quoted + "(?![A-Za-z0-9_$])|\\[\\s*['\"`]" + quoted
+                            + "['\"`]\\s*])")
+                    : Pattern.compile("\\$(?:" + quoted + "(?![A-Za-z0-9_])|\\{" + quoted + "(?![A-Za-z0-9_]))");
+            if (use.matcher(code).find()) {
+                used.add(secret);
+            }
+        }
+        return used;
+    }
+
+    /**
+     * The warning for a secret used in code but not declared in the environment.
+     *
+     * @param secret the secret name
+     * @return the message
+     */
+    public static String undeclaredSecretMessage(String secret) {
+        return "Uses the secret " + secret + ", which is not declared in the environment. Secrets are not "
+                + "injected automatically: add " + secret + "=${secret:" + secret + "} to the environment.";
+    }
+
     private static void validateFields(java.util.List<io.apitomy.axiom.api.beans.ActionTypeField> fields,
                                        String prefix, List<ValidationMessage> messages) {
         if (fields == null || fields.isEmpty()) {
@@ -301,6 +410,34 @@ public final class ActionTypeValidator {
             }
             if (f.getType() == null) {
                 messages.add(error(field, "Field type is required."));
+            }
+        }
+    }
+
+    private static void checkUnsupportedPlaceholders(String text, String field,
+                                                     List<ValidationMessage> messages) {
+        Matcher matcher = PLACEHOLDER_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String name = matcher.group(1);
+            String hint = REMOVED_PLACEHOLDER_HINTS.getOrDefault(name,
+                    "Only {{inputs.<name>}} placeholders for declared inputs are supported.");
+            messages.add(error(field, "Placeholder '{{" + name + "}}' is not supported. " + hint));
+        }
+    }
+
+    /**
+     * Rejects {@code {{inputs.X}}} inside the body of a quoted heredoc ({@code <<'EOF'}), where bash expands
+     * nothing, so the value would never reach the script.
+     */
+    private static void checkQuotedHeredocPlaceholders(String script, List<ValidationMessage> messages) {
+        ShellContext.Context[] contexts = ShellContext.analyze(script);
+        Matcher matcher = INPUT_PLACEHOLDER_PATTERN.matcher(script);
+        while (matcher.find()) {
+            if (contexts[matcher.start()] == ShellContext.Context.QUOTED_HEREDOC) {
+                String placeholder = matcher.group();
+                messages.add(error("scriptTemplate", placeholder + " is inside a quoted heredoc (<<'EOF'), "
+                        + "where bash expands nothing, so the value would never reach the script. Use an "
+                        + "unquoted heredoc (<<EOF) or pipe the value: printf '%s' " + placeholder + " | ..."));
             }
         }
     }

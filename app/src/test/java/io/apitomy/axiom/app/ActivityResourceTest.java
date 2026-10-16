@@ -38,14 +38,14 @@ class ActivityResourceTest {
         createEntry(1L, 11L, EVENT_A, "task-failed", "FILTER-TEST task beta failed");
         createEntry(2L, 20L, EVENT_B, "task-completed", "FILTER-TEST task gamma completed");
         createEntry(null, null, EVENT_C, "event-ignored", "FILTER-TEST event ignored");
-        createEntry(3L, 30L, null, "project-created", "FILTER-TEST project created");
+        createEntry(3L, 30L, null, "subject-created", "FILTER-TEST subject created");
         createTracedEntry("FILTER-TEST traced");
         createTracedEntry("TRACE-TEST traced second");
     }
 
     private void createTracedEntry(String summary) {
         ActivityLogEntity entry = new ActivityLogEntity();
-        entry.projectId = 4L;
+        entry.subjectId = 4L;
         entry.entryType = "task-completed";
         entry.summary = summary;
         entry.traceId = TRACE_A;
@@ -53,10 +53,10 @@ class ActivityResourceTest {
         entry.persist();
     }
 
-    private void createEntry(Long projectId, Long taskId, UUID eventId,
+    private void createEntry(Long subjectId, Long taskId, UUID eventId,
                               String entryType, String summary) {
         ActivityLogEntity entry = new ActivityLogEntity();
-        entry.projectId = projectId;
+        entry.subjectId = subjectId;
         entry.taskId = taskId;
         entry.eventId = eventId;
         entry.entryType = entryType;
@@ -148,18 +148,18 @@ class ActivityResourceTest {
                 .body("items.size()", greaterThanOrEqualTo(5));
     }
 
-    // ── Filter by project ID ─────────────────────────────────────────
+    // ── Filter by subject ID ─────────────────────────────────────────
 
     @Test
-    void testFilterByProjectId() {
+    void testFilterBySubjectId() {
         given()
-            .queryParam("filterProjectId", 1)
+            .queryParam("filterSubjectId", 1)
             .when()
                 .get(ACTIVITY_PATH)
             .then()
                 .statusCode(200)
                 .body("items.size()", greaterThanOrEqualTo(2))
-                .body("items.projectId", everyItem(equalTo(1)));
+                .body("items.subjectId", everyItem(equalTo(1)));
     }
 
     // ── Filter by event ID ───────────────────────────────────────────
@@ -193,14 +193,14 @@ class ActivityResourceTest {
     void testCombinedFilters() {
         given()
             .queryParam("filterEntryType", "task-completed")
-            .queryParam("filterProjectId", 1)
+            .queryParam("filterSubjectId", 1)
             .when()
                 .get(ACTIVITY_PATH)
             .then()
                 .statusCode(200)
                 .body("items.size()", greaterThanOrEqualTo(1))
                 .body("items.entryType", everyItem(equalTo("task-completed")))
-                .body("items.projectId", everyItem(equalTo(1)));
+                .body("items.subjectId", everyItem(equalTo(1)));
     }
 
     @Test
