@@ -34,6 +34,7 @@ import { LabelDisplay } from "./LabelDisplay";
 import { ToolListEditor } from "./ToolListEditor";
 import { NodeCodeTab } from "./NodeCodeTab";
 import { ValidationProblemsPanel } from "./ValidationProblemsPanel";
+import type { editor as MonacoEditor } from "monaco-editor";
 import {
     type NewActionType,
     type ToolValidationMessage,
@@ -456,7 +457,7 @@ function PromptTemplateTab({ value, onChange, inputs, readOnly = false }: {
                 height="500px"
                 isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
-                onEditorDidMount={(editor, monaco) => {
+                onEditorDidMount={(editor: MonacoEditor.IStandaloneCodeEditor, monaco) => {
                     editorRef.current = editor;
                     monacoRef.current = monaco;
                     registerPlaceholderCompletions(editor, monaco, "markdown", allPlaceholders);
@@ -570,7 +571,7 @@ function ScriptTab({ value, onChange, inputs, readOnly = false }: {
                 height="500px"
                 isDarkTheme={effectiveTheme === "dark"}
                 isLineNumbersVisible
-                onEditorDidMount={(editor, monaco) => {
+                onEditorDidMount={(editor: MonacoEditor.IStandaloneCodeEditor, monaco) => {
                     editorRef.current = editor;
                     monacoRef.current = monaco;
                     registerPlaceholderCompletions(editor, monaco, "shell", allPlaceholders);
