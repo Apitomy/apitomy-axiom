@@ -36,17 +36,30 @@ public class ToolsetResolver {
             return List.of();
         }
 
+        return resolve(Arrays.stream(allowedTools.split(",")).toList());
+    }
+
+    /**
+     * Resolves a list of allowed tool entries, expanding any {@code @ToolsetName}
+     * references (recursively, with cycle detection) into their constituent tools.
+     * Entries are not split on commas.
+     *
+     * @param allowedTools the tool entries (may contain @references); may be null
+     * @return the flat, deduplicated list of individual tool strings
+     */
+    public List<String> resolve(List<String> allowedTools) {
+        if (allowedTools == null || allowedTools.isEmpty()) {
+            return List.of();
+        }
+
         Set<String> resolved = new LinkedHashSet<>();
         Set<String> visited = new LinkedHashSet<>(); // cycle detection
 
-        List<String> entries = Arrays.stream(allowedTools.split(","))
+        allowedTools.stream()
+                .filter(s -> s != null)
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .toList();
-
-        for (String entry : entries) {
-            expandEntry(entry, resolved, visited);
-        }
+                .forEach(entry -> expandEntry(entry, resolved, visited));
 
         return new ArrayList<>(resolved);
     }
@@ -64,7 +77,7 @@ public class ToolsetResolver {
             visited.add(toolsetName);
 
             ToolsetEntity toolset = ToolsetEntity.find("name", toolsetName).firstResult();
-            if (toolset == null) {
+            if (toolset == null || toolset.tools == null) {
                 LOG.warnf("Toolset not found: @%s", toolsetName);
                 return;
             }
