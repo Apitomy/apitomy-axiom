@@ -15,7 +15,7 @@
         "@apitomy/flow-ui": "^3.0.2",
         "@patternfly/react-charts": "8.7.0",
         "@patternfly/react-code-editor": "6.6.1",
-        "@patternfly/react-core": "6.6.1",
+        "@patternfly/react-core": "6.7.0",
         "@patternfly/react-icons": "6.7.0",
         "@patternfly/react-table": "6.6.1",
         "@types/react-syntax-highlighter": "15.5.13",
