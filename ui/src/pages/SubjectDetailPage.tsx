@@ -80,6 +80,7 @@ import { LineageModal } from "../components/LineageModal";
 import { CreateSessionModal } from "../components/assistant/CreateSessionModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
+import type { editor as MonacoEditor } from "monaco-editor";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     InProgress: "green",
@@ -434,7 +435,7 @@ export function SubjectDetailPage() {
                                         // end. Seeding `defaultValue` and clearing `value` keeps the
                                         // editor authoritative over its own content.
                                         editorProps={{ value: undefined, defaultValue: editBody }}
-                                        onEditorDidMount={(editor, monaco) => {
+                                        onEditorDidMount={(editor: MonacoEditor.IStandaloneCodeEditor, monaco) => {
                                             editor.onKeyDown((e) => {
                                                 if (e.keyCode === monaco.KeyCode.Escape) {
                                                     e.preventDefault();
