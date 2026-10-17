@@ -1,6 +1,7 @@
 package io.apitomy.axiom.core.services;
 
 import io.apitomy.axiom.core.entities.SubjectEntity;
+import io.apitomy.axiom.core.util.BoundedProcessRunner;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -92,10 +93,10 @@ public class WorkspaceService {
             ProcessBuilder pb = new ProcessBuilder("du", "-s", "--block-size=1",
                     workspace.toAbsolutePath().toString());
             pb.redirectErrorStream(true);
-            Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes()).trim();
-            boolean completed = process.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
-            if (completed && process.exitValue() == 0 && !output.isEmpty()) {
+            BoundedProcessRunner.Result result = BoundedProcessRunner.run(pb, java.time.Duration.ofSeconds(10),
+                    64 * 1024);
+            String output = result.stdout().trim();
+            if (!result.timedOut() && result.exitCode() == 0 && !output.isEmpty()) {
                 return Long.parseLong(output.split("\\s+")[0]);
             }
         } catch (Exception e) {

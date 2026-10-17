@@ -15,6 +15,7 @@ import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ShellContext;
 import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.util.BoundedProcessRunner;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -32,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -215,7 +215,8 @@ public class ScriptExecutionService {
 
     /**
      * Reads stdout and stderr concurrently (so neither pipe can fill up and block the script), waits up to the
-     * timeout, and kills the script and its child processes if it is still running.
+     * timeout, and kills the script and its child processes if it is still running. Each stream is capped at
+     * {@link BoundedProcessRunner#DEFAULT_MAX_OUTPUT_BYTES}.
      *
      * @param process        the started process
      * @param timeoutSeconds maximum run time
@@ -223,35 +224,10 @@ public class ScriptExecutionService {
      * @throws InterruptedException if interrupted while waiting
      */
     static CapturedOutput capture(Process process, long timeoutSeconds) throws InterruptedException {
-        java.util.concurrent.CompletableFuture<String> stdout = readAsync(process.getInputStream());
-        java.util.concurrent.CompletableFuture<String> stderr = readAsync(process.getErrorStream());
-        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-        if (!finished) {
-            process.descendants().forEach(ProcessHandle::destroyForcibly);
-            process.destroyForcibly();
-            process.waitFor(5, TimeUnit.SECONDS);
-        }
-        int exitCode = finished ? process.exitValue() : 1;
-        return new CapturedOutput(join(stdout), join(stderr), exitCode, finished);
-    }
-
-    private static java.util.concurrent.CompletableFuture<String> readAsync(java.io.InputStream in) {
-        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-            try {
-                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                return "";
-            }
-        });
-    }
-
-    private static String join(java.util.concurrent.CompletableFuture<String> future) {
-        try {
-            return future.get(5, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            future.cancel(true);
-            return "";
-        }
+        BoundedProcessRunner.Result result = BoundedProcessRunner.await(process,
+                java.time.Duration.ofSeconds(timeoutSeconds), BoundedProcessRunner.DEFAULT_MAX_OUTPUT_BYTES);
+        int exitCode = result.timedOut() ? 1 : result.exitCode();
+        return new CapturedOutput(result.stdout(), result.stderr(), exitCode, !result.timedOut());
     }
 
     /**

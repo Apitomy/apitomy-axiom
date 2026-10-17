@@ -16,6 +16,7 @@ import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
+import io.apitomy.axiom.core.util.BoundedProcessRunner;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -34,7 +35,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Implementation of the Tools REST API.
@@ -180,19 +180,17 @@ public class ToolsResourceImpl implements ToolsResource {
                     LOG.infof("Injected %d environment variable(s) for tool test", testEnv.size());
                 }
 
-                Process process = pb.start();
-                String output = new String(process.getInputStream().readAllBytes());
-                boolean finished = process.waitFor(TEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-
+                BoundedProcessRunner.Result result = BoundedProcessRunner.run(pb,
+                        java.time.Duration.ofSeconds(TEST_TIMEOUT_SECONDS));
                 long durationMs = java.time.Duration.between(startTime, Instant.now()).toMillis();
 
+                String output = result.stdout();
                 int exitCode;
-                if (!finished) {
-                    process.destroyForcibly();
+                if (result.timedOut()) {
                     exitCode = 1;
                     output = output + "\n[Script timed out after " + TEST_TIMEOUT_SECONDS + "s]";
                 } else {
-                    exitCode = process.exitValue();
+                    exitCode = result.exitCode();
                 }
 
                 ToolTestResponse response = new ToolTestResponse();

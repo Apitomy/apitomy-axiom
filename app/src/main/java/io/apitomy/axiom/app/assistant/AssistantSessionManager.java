@@ -24,6 +24,7 @@ import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
+import io.apitomy.axiom.core.util.BoundedProcessRunner;
 import jakarta.enterprise.event.Event;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
@@ -60,6 +61,12 @@ import java.util.stream.Stream;
 public class AssistantSessionManager {
 
     private static final Logger LOG = Logger.getLogger(AssistantSessionManager.class);
+
+    /** Upper bound for {@code npm install} of a bundled MCP server (network fetches can be slow). */
+    private static final java.time.Duration NPM_INSTALL_TIMEOUT = java.time.Duration.ofMinutes(5);
+
+    /** Upper bound for a session's init script. */
+    private static final java.time.Duration INIT_SCRIPT_TIMEOUT = java.time.Duration.ofSeconds(60);
 
     private static final String ASSISTANT_MCP_DIR_NAME = "assistant-mcp-server";
     private static final String WORKBENCH_MCP_DIR_NAME = "workbench-mcp-server";
@@ -517,24 +524,20 @@ public class AssistantSessionManager {
                 scriptFile.toAbsolutePath().toString())
                 .directory(workDir.toFile())
                 .redirectErrorStream(true);
-        Process process = pb.start();
-        String output = new String(process.getInputStream().readAllBytes());
-
-        boolean finished;
+        BoundedProcessRunner.Result result;
         try {
-            finished = process.waitFor(60, java.util.concurrent.TimeUnit.SECONDS);
+            result = BoundedProcessRunner.run(pb, INIT_SCRIPT_TIMEOUT);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            process.destroyForcibly();
             throw new IOException("Init script interrupted");
         }
+        String output = result.stdout();
 
-        if (!finished) {
-            process.destroyForcibly();
-            throw new IOException("Init script timed out after 60 seconds");
+        if (result.timedOut()) {
+            throw new IOException("Init script timed out after " + INIT_SCRIPT_TIMEOUT.toSeconds() + " seconds");
         }
 
-        int exitCode = process.exitValue();
+        int exitCode = result.exitCode();
         if (exitCode != 0) {
             LOG.warnf("Init script failed (exit %d): %s", exitCode, output);
             throw new IOException("Init script failed (exit code " + exitCode + "): "
@@ -1227,15 +1230,19 @@ public class AssistantSessionManager {
             ProcessBuilder pb = new ProcessBuilder("npm", "install", "--production")
                     .directory(serverDir.toFile())
                     .redirectErrorStream(true);
-            Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes());
-            int exitCode;
+            BoundedProcessRunner.Result result;
             try {
-                exitCode = process.waitFor();
+                result = BoundedProcessRunner.run(pb, NPM_INSTALL_TIMEOUT);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException("npm install interrupted", e);
             }
+            String output = result.stdout();
+            if (result.timedOut()) {
+                throw new IOException("npm install timed out after " + NPM_INSTALL_TIMEOUT.toMinutes()
+                        + " minutes: " + output);
+            }
+            int exitCode = result.exitCode();
 
             if (exitCode != 0) {
                 throw new IOException("npm install failed (exit code " + exitCode + "): " + output);

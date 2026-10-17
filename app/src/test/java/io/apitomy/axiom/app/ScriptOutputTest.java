@@ -76,7 +76,10 @@ class ScriptOutputTest {
 
         assertTrue(captured.finished());
         assertEquals("{\"ok\":true}", ScriptExecutionService.extractScriptOutput(captured.stdout()));
-        assertEquals(2_000_000, captured.stderr().length());
+        // Fully drained, but only the first 1 MiB is kept.
+        assertTrue(captured.stderr().startsWith("x".repeat(io.apitomy.axiom.core.util.BoundedProcessRunner
+                .DEFAULT_MAX_OUTPUT_BYTES)));
+        assertTrue(captured.stderr().endsWith(io.apitomy.axiom.core.util.BoundedProcessRunner.TRUNCATION_MARKER));
     }
 
     @Test
@@ -86,5 +89,27 @@ class ScriptOutputTest {
 
         assertFalse(captured.finished());
         assertEquals(1, captured.exitCode());
+    }
+
+    @Test
+    void timeoutAppliesWhenChildKeepsStdoutOpen() throws IOException, InterruptedException {
+        long start = System.nanoTime();
+        Process process = new ProcessBuilder("/bin/bash", "-c", "sleep 60 & wait").start();
+        ScriptExecutionService.CapturedOutput captured = ScriptExecutionService.capture(process, 1);
+        long elapsedMs = java.time.Duration.ofNanos(System.nanoTime() - start).toMillis();
+
+        assertFalse(captured.finished());
+        assertTrue(elapsedMs < 15_000, "took " + elapsedMs + "ms");
+    }
+
+    @Test
+    void hugeStdoutIsCapped() throws IOException, InterruptedException {
+        Process process = new ProcessBuilder("/bin/bash", "-c",
+                "head -c 5000000 /dev/zero | tr '\\0' 'x'").start();
+        ScriptExecutionService.CapturedOutput captured = ScriptExecutionService.capture(process, 30);
+
+        assertTrue(captured.finished());
+        assertTrue(captured.stdout().length() < 2_000_000, "length " + captured.stdout().length());
+        assertTrue(captured.stdout().endsWith(io.apitomy.axiom.core.util.BoundedProcessRunner.TRUNCATION_MARKER));
     }
 }
