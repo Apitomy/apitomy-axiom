@@ -192,8 +192,8 @@ A typical development loop:
 | Profile | Database | Schema Management |
 |---------|----------|-------------------|
 | `dev` (default) | H2 in-memory | Hibernate `drop-and-create` — recreated on restart |
-| `persist` | H2 file (`~/.axiom/data/axiom`) | Flyway migrations |
-| `prod` | H2 file (`~/.axiom/data/axiom`) | Flyway migrations |
+| `persist` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Flyway migrations |
+| `prod` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Flyway migrations |
 
 Use `--persist` with `dev.sh` or `-Dquarkus.profile=persist` with Maven to keep data
 between restarts during development.

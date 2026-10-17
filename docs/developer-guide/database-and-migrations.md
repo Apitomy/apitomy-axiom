@@ -12,8 +12,8 @@ Axiom has three database configurations, selected via Quarkus profiles:
 | Profile | Storage | Schema Management | Use Case |
 |---------|---------|-------------------|----------|
 | `dev` (default) | H2 in-memory | Hibernate `drop-and-create` | Fast development — schema rebuilt on every restart |
-| `persist` | H2 file (`~/.axiom/data/axiom`) | Flyway migrations | Development with persistent data |
-| `prod` | H2 file (`~/.axiom/data/axiom`) | Flyway migrations | Production (uber-jar) |
+| `persist` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Flyway migrations | Development with persistent data |
+| `prod` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Flyway migrations | Production (uber-jar) |
 
 Activate the `persist` profile during development:
 

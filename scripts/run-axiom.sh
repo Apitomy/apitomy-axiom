@@ -4,7 +4,7 @@
 #
 # This script queries the GitHub API for the most recent release,
 # downloads the application JAR, and runs it. The JAR is cached
-# in ~/.axiom/releases/ so subsequent runs skip the download.
+# in ${AXIOM_HOME:-~/.axiom}/releases/ so subsequent runs skip the download.
 #
 # Prerequisites:
 #   - Java 25+
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 REPO="Apitomy/apitomy-axiom"
-CACHE_DIR="${HOME}/.axiom/releases"
+CACHE_DIR="${AXIOM_HOME:-${HOME}/.axiom}/releases"
 
 # ── Check prerequisites ───────────────────────────────────────────
 if ! command -v java &>/dev/null; then

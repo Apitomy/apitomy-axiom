@@ -54,7 +54,7 @@ CLI). Set the default agent used for tasks
 
 | Property | Default | Description |
 |----------|---------|--------------|
-| `axiom.home` | `~/.axiom` | Home for assistant sessions, task files, MCP servers, workspaces and the encryption key |
+| `axiom.home` | `~/.axiom` | Home for the database (`data/`), assistant sessions, task files, MCP servers, workspaces and the encryption key. Override with `-Daxiom.home=...` or the `AXIOM_HOME` environment variable |
 | `axiom.agent.default-type` | `claude-code` | Default agent type (`claude-code`, `opencode`, or `copilot`) |
 
 #### Claude Code Settings
@@ -172,8 +172,8 @@ Axiom uses H2 with different profiles for different environments:
 | Profile | Database | Usage |
 |---------|----------|-------|
 | `dev` (default) | H2 in-memory | Development — schema recreated on restart |
-| `persist` | H2 file (`~/.axiom/data/axiom`) | Persistent dev — Flyway migrations |
-| `prod` | H2 file | Production — release JAR with Flyway |
+| `persist` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Persistent dev — Flyway migrations |
+| `prod` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Production — release JAR with Flyway |
 
 When running from the release JAR, the `prod` profile is active automatically. For
 development with persistent data, activate the `persist` profile:

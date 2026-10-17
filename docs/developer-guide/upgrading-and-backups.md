@@ -23,7 +23,7 @@ remove the old data. To upgrade:
 
 1. Stop Axiom 2.x.
 2. Back up `~/.axiom` (or move it aside) if you want to keep the old data for reference.
-3. Delete the database directory, `~/.axiom/data/`.
+3. Delete the database directory, `~/.axiom/data/` (or `<axiom.home>/data/` if you set `axiom.home`).
 4. Start Axiom 3. It creates a new, empty database.
 5. Recreate your configuration: event sources, secrets, action types, tools, workflows and subscriptions.
    Many 2.x concepts were removed or reworked (see the 3.0.0 release notes), so 2.x configuration packs are
@@ -51,14 +51,15 @@ instance backup.** A configuration pack does not include:
   be exported)
 
 To fully back up and restore an Axiom instance, you need all of the following, taken
-together at the same point in time. `~/.axiom` is the default Axiom home (`axiom.home`):
+together at the same point in time. `~/.axiom` is the default Axiom home (`axiom.home`); if you override it,
+every location below moves with it, including the database:
 
 | Item | Location | Notes |
 |------|----------|-------|
-| Database | `~/.axiom/data/axiom.mv.db` (and related H2 files) | Only meaningful with `persist` or `prod` profiles, which use a file-based database |
-| Encryption key | `~/.axiom/secret.key` | Generated automatically on first startup. Secret values in the database are encrypted with this key — **without it, encrypted secrets cannot be decrypted, even by restoring the database.** |
-| Subject workspaces | `~/.axiom/workspaces/` (or `axiom.workspace.root` if overridden) | Working directories (`subject-<id>`) backing each subject |
-| Assistant session directories (optional) | `~/.axiom/assistant/sessions/` | Running agent processes do not survive a restart. Workbench composition session directories are kept and hold the conversation history that the workbench restores after a restart; other stale session directories are removed at startup |
+| Database | `<axiom.home>/data/axiom.mv.db` (and related H2 files) | Only meaningful with `persist` or `prod` profiles, which use a file-based database |
+| Encryption key | `<axiom.home>/secret.key` | Generated automatically on first startup. Secret values in the database are encrypted with this key — **without it, encrypted secrets cannot be decrypted, even by restoring the database.** |
+| Subject workspaces | `<axiom.home>/workspaces/` (or `axiom.workspace.root` if overridden) | Working directories (`subject-<id>`) backing each subject |
+| Assistant session directories (optional) | `<axiom.home>/assistant/sessions/` | Running agent processes do not survive a restart. Workbench composition session directories are kept and hold the conversation history that the workbench restores after a restart; other stale session directories are removed at startup |
 
 Stop the Axiom process before copying the database files to ensure a consistent
 snapshot (H2 does not support online hot backups of the file store used here).
@@ -66,9 +67,9 @@ snapshot (H2 does not support online hot backups of the file store used here).
 ### Restoring
 
 1. Install the target Axiom version.
-2. Restore `~/.axiom/data/` and `~/.axiom/secret.key` from backup **together** — the
+2. Restore `<axiom.home>/data/` and `<axiom.home>/secret.key` from backup **together** — the
    encryption key must match the database it was used to encrypt secrets for.
-3. Restore `~/.axiom/workspaces/` if subject workspaces are needed.
+3. Restore `<axiom.home>/workspaces/` if subject workspaces are needed.
 4. Start Axiom with the `persist` or `prod` profile. Restore into the same or a newer 3.x version than the
    one that created the backup; newer versions migrate the restored database at startup.
 

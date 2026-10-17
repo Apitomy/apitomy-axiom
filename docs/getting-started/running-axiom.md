@@ -39,9 +39,10 @@ cd apitomy-axiom
 The script will:
 
 1. Query GitHub for the latest Apitomy Axiom release
-2. Download the application JAR (cached in `~/.axiom/releases/` for future runs)
+2. Download the application JAR (cached in `$AXIOM_HOME/releases/`, default `~/.axiom/releases/`, for future
+   runs)
 3. Start the application on **http://localhost:9191** with the `prod` profile (file-based H2 database
-   in `~/.axiom/data/`)
+   in `~/.axiom/data/`, or `<axiom.home>/data/` if `axiom.home` is set)
 
 Open **http://localhost:9191** in your browser to access the Axiom UI. The REST API is served under
 `http://localhost:9191/api/v1`. Arguments passed to the script are passed on to `java -jar`.
@@ -56,7 +57,7 @@ java -jar apitomy-axiom-3.0.0.jar
 ```
 
 The release JAR uses the `prod` profile: it listens on port **9191** and stores its H2 database in
-`~/.axiom/data/`.
+`~/.axiom/data/` (`<axiom.home>/data/` if `axiom.home` is set).
 
 !!! warning "Local access only"
     Axiom has no authentication, so the release build only accepts connections from the same machine
@@ -78,7 +79,7 @@ requests to the backend.
 | Option | Effect |
 |--------|--------|
 | `--skip-ui` | Start the backend only |
-| `--persist` | Use the `persist` profile (file-based H2 database in `~/.axiom/data/`) instead of the in-memory `dev` database |
+| `--persist` | Use the `persist` profile (file-based H2 database in `<axiom.home>/data/`, default `~/.axiom/data/`) instead of the in-memory `dev` database |
 | `--dataDir=/path` | Store the H2 database in `/path` (implies `--persist`) |
 | `--portOffset=N` | Add `N` to both ports (for example `100` gives backend 9190 and UI 9291) |
 
