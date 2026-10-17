@@ -2,6 +2,7 @@ package io.apitomy.axiom.events.jira.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
@@ -10,6 +11,7 @@ import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
 import io.quarkus.scheduler.Scheduled;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -19,6 +21,8 @@ import org.jboss.logging.Logger;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @ApplicationScoped
 public class JiraEventSourcePoller {
@@ -41,6 +45,23 @@ public class JiraEventSourcePoller {
 
     @Inject
     EncryptionService encryptionService;
+
+    /** Default safety cap on the number of search pages fetched in one poll window. */
+    static final int DEFAULT_MAX_SEARCH_PAGES = 200;
+
+    /**
+     * Safety cap on the number of search pages fetched in one poll window. When the cap is
+     * hit, the checkpoint is not advanced.
+     */
+    @ConfigProperty(name = "axiom.events.jira.max-search-pages", defaultValue = "" + DEFAULT_MAX_SEARCH_PAGES)
+    int maxSearchPages = DEFAULT_MAX_SEARCH_PAGES;
+
+    /**
+     * In-memory record of the last poll attempt per event source. Used for scheduling
+     * only, so that a failed poll (which does not move the persisted checkpoint) is not
+     * retried on every tick.
+     */
+    private final Map<String, Instant> lastAttemptAt = new ConcurrentHashMap<>();
 
     private volatile boolean shuttingDown = false;
 
@@ -67,10 +88,33 @@ public class JiraEventSourcePoller {
         }
     }
 
-    private boolean isDue(EventSourceEntity eventSource, Instant now) {
+    /**
+     * Determines whether an event source is due for polling, based on the later of its
+     * persisted checkpoint and the last in-memory poll attempt.
+     *
+     * @param eventSource the event source
+     * @param now         the current time
+     * @return true if the poll interval has elapsed
+     */
+    boolean isDue(EventSourceEntity eventSource, Instant now) {
         if (eventSource.lastPolledAt == null) return true;
         int interval = eventSource.pollInterval != null ? eventSource.pollInterval : DEFAULT_POLL_INTERVAL;
-        return now.isAfter(eventSource.lastPolledAt.plusSeconds(interval));
+        Instant reference = eventSource.lastPolledAt;
+        Instant attempt = lastAttemptAt.get(eventSource.id);
+        if (attempt != null && attempt.isAfter(reference)) {
+            reference = attempt;
+        }
+        return now.isAfter(reference.plusSeconds(interval));
+    }
+
+    /**
+     * Records the time of a poll attempt for scheduling purposes.
+     *
+     * @param eventSourceId the event source id
+     * @param attemptAt     the attempt time
+     */
+    void recordAttempt(String eventSourceId, Instant attemptAt) {
+        lastAttemptAt.put(eventSourceId, attemptAt);
     }
 
     private void pollEventSource(EventSourceEntity eventSource) {
@@ -79,7 +123,7 @@ public class JiraEventSourcePoller {
         // First poll: set baseline and skip historical events
         if (eventSource.lastPolledAt == null) {
             LOG.infof("First poll for Jira event source %s — setting baseline to now", eventSource.id);
-            updateLastPolledAt(eventSource.id);
+            updateLastPolledAt(eventSource.id, Instant.now());
             recordPollLog(eventSource.id, "success", "Baseline set (first poll)",
                     null, 0, System.currentTimeMillis() - startMs);
             return;
@@ -108,44 +152,161 @@ public class JiraEventSourcePoller {
         }
 
         Instant since = eventSource.lastPolledAt;
+        // Window start is captured before fetching so changes made during the poll are
+        // picked up by the next window rather than skipped.
+        Instant windowStart = Instant.now();
+        recordAttempt(eventSource.id, windowStart);
 
-        // Fetch issues with changelog
-        ApiResult result = apiClient.fetchIssuesWithChangelog(
-                eventSource.baseUrl, projects, since, credentials);
+        WindowResult result = ingestWindow(eventSource.id, eventSource.baseUrl, projects,
+                since, credentials, windowStart);
+        long duration = System.currentTimeMillis() - startMs;
 
-        if (!result.success()) {
-            LOG.warnf("Failed to poll Jira for event source %s: %s", eventSource.id, result.errorMessage());
-            updateLastPolledAt(eventSource.id);
-            recordPollLog(eventSource.id, "error", "API request failed",
-                    result.errorMessage(), 0, System.currentTimeMillis() - startMs);
-            return;
+        if (result.checkpoint() != null) {
+            updateLastPolledAt(eventSource.id, result.checkpoint());
         }
 
-        // Process each issue
-        JsonNode issues = result.data().path("issues");
+        if (result.complete()) {
+            recordPollLog(eventSource.id, "success",
+                    "Polled " + projects.size() + " projects, " + result.issuesProcessed() + " issues",
+                    null, result.eventsIngested(), duration);
+            LOG.infof("Polled Jira event source %s: %d events ingested from %d issues",
+                    eventSource.id, result.eventsIngested(), result.issuesProcessed());
+        } else {
+            LOG.errorf("Incomplete Jira poll for event source %s: %s (checkpoint %s)",
+                    eventSource.id, result.errorMessage(),
+                    result.checkpoint() != null ? "advanced to " + result.checkpoint() : "unchanged");
+            recordPollLog(eventSource.id, "error", "Poll incomplete",
+                    result.errorMessage(), result.eventsIngested(), duration);
+        }
+    }
+
+    /**
+     * Outcome of ingesting one poll window.
+     *
+     * @param complete        true if every page and issue in the window was fetched and ingested
+     * @param checkpoint      the new checkpoint to persist, or {@code null} to keep the previous one
+     * @param issuesProcessed number of issues fully processed
+     * @param eventsIngested  number of new (non-duplicate) events persisted
+     * @param errorMessage    reason the window is incomplete, or {@code null}
+     */
+    record WindowResult(boolean complete, Instant checkpoint, int issuesProcessed,
+                        int eventsIngested, String errorMessage) {
+    }
+
+    /**
+     * Fetches all pages of changed issues since {@code since} and ingests their events.
+     * The checkpoint is only advanced (to {@code windowStart}) when the whole window was
+     * ingested. On API failure, persistence failure or shutdown, the checkpoint is left
+     * unchanged so the next poll re-fetches; re-ingestion is safe because events are
+     * de-duplicated by their deterministic source event id. If the page safety cap is hit,
+     * the checkpoint is also left unchanged: results are ordered by issue {@code updated},
+     * so advancing to a partial bound could drop older changes of unfetched issues.
+     *
+     * @param eventSourceId the event source id
+     * @param baseUrl       Jira base URL
+     * @param projects      project keys
+     * @param since         the current (last successful) checkpoint
+     * @param credentials   email:api_token credentials
+     * @param windowStart   time captured before the first request of this window
+     * @return the window outcome
+     */
+    WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
+                              Instant since, String credentials, Instant windowStart) {
+        // Normalizer cutoff overlaps the previous window to tolerate clock skew and
+        // boundary timestamps; duplicates are dropped by source-event de-duplication.
+        Instant normalizeSince = since.minus(JiraEventsApiClient.QUERY_OVERLAP);
+        int issuesProcessed = 0;
         int totalIngested = 0;
+        String nextPageToken = null;
 
-        if (issues.isArray()) {
-            for (JsonNode issue : issues) {
-                if (shuttingDown) break;
+        for (int pageNum = 0; pageNum < maxSearchPages; pageNum++) {
+            ApiResult page = apiClient.fetchIssuesPage(baseUrl, projects, since, credentials, nextPageToken);
+            if (page == null || !page.success()) {
+                String msg = page != null ? page.errorMessage() : "no response";
+                return new WindowResult(false, null, issuesProcessed, totalIngested,
+                        "API request failed: " + msg);
+            }
 
-                List<NormalizedEvent> events = normalizer.normalizeIssue(
-                        issue, since, eventSource.id, eventSource.baseUrl);
-
-                for (NormalizedEvent event : events) {
-                    boolean persisted = eventStreamService.persistEvent(event);
-                    if (persisted) totalIngested++;
+            JsonNode issues = page.data().path("issues");
+            if (issues.isArray()) {
+                for (JsonNode issue : issues) {
+                    if (shuttingDown) {
+                        return new WindowResult(false, null, issuesProcessed, totalIngested,
+                                "Interrupted by shutdown");
+                    }
+                    try {
+                        JsonNode completeIssue = withFullChangelog(baseUrl, issue, credentials);
+                        if (completeIssue == null) {
+                            return new WindowResult(false, null, issuesProcessed, totalIngested,
+                                    "Failed to fetch changelog for " + issue.path("key").asText());
+                        }
+                        List<NormalizedEvent> events = normalizer.normalizeIssue(
+                                completeIssue, normalizeSince, eventSourceId, baseUrl);
+                        for (NormalizedEvent event : events) {
+                            if (eventStreamService.persistEvent(event)) {
+                                totalIngested++;
+                            }
+                        }
+                    } catch (RuntimeException e) {
+                        LOG.warnf(e, "Failed to ingest Jira issue %s", issue.path("key").asText());
+                        return new WindowResult(false, null, issuesProcessed, totalIngested,
+                                "Ingestion failed: " + e.getMessage());
+                    }
+                    issuesProcessed++;
                 }
+            }
+
+            JsonNode tokenNode = page.data().path("nextPageToken");
+            nextPageToken = tokenNode.isTextual() && !tokenNode.asText().isBlank() ? tokenNode.asText() : null;
+            boolean isLast = page.data().path("isLast").asBoolean(false);
+            if (nextPageToken == null && !isLast && page.data().has("isLast")) {
+                LOG.warnf("Jira search for event source %s returned isLast=false without a "
+                        + "nextPageToken; treating the page as the last one", eventSourceId);
+            }
+            if (nextPageToken == null || isLast) {
+                return new WindowResult(true, windowStart, issuesProcessed, totalIngested, null);
             }
         }
 
-        updateLastPolledAt(eventSource.id);
-        long duration = System.currentTimeMillis() - startMs;
-        recordPollLog(eventSource.id, "success",
-                "Polled " + projects.size() + " projects, " + issues.size() + " issues",
-                null, totalIngested, duration);
-        LOG.infof("Polled Jira event source %s: %d events ingested from %d issues",
-                eventSource.id, totalIngested, issues.size());
+        LOG.errorf("Jira event source %s hit the search page cap (%d pages); checkpoint not advanced. "
+                + "Increase axiom.events.jira.max-search-pages", eventSourceId, maxSearchPages);
+        return new WindowResult(false, null, issuesProcessed, totalIngested,
+                "Search page cap of " + maxSearchPages + " reached (axiom.events.jira.max-search-pages); "
+                        + "checkpoint not advanced");
+    }
+
+    /**
+     * Returns the issue with its complete changelog, fetching remaining changelog pages
+     * when the embedded changelog is truncated. A 404 or 403 on the changelog fetch (issue
+     * deleted or no longer visible) falls back to the embedded changelog with a warning.
+     *
+     * @return the (possibly augmented) issue, or {@code null} if the changelog fetch failed
+     *         with a transient error (5xx, 429, network) and the window must be retried
+     */
+    private JsonNode withFullChangelog(String baseUrl, JsonNode issue, String credentials) {
+        JsonNode changelog = issue.path("changelog");
+        JsonNode histories = changelog.path("histories");
+        int total = changelog.path("total").asInt(0);
+        int embedded = histories.isArray() ? histories.size() : 0;
+        if (total <= embedded) {
+            return issue;
+        }
+        ApiResult full = apiClient.fetchFullChangelog(baseUrl, issue.path("key").asText(), credentials);
+        if (full != null && !full.success() && (full.statusCode() == 404 || full.statusCode() == 403)) {
+            LOG.warnf("Changelog fetch for Jira issue %s returned %d; using the embedded changelog",
+                    issue.path("key").asText(), full.statusCode());
+            return issue;
+        }
+        if (full == null || !full.success()) {
+            return null;
+        }
+        ObjectNode copy = ((ObjectNode) issue).deepCopy();
+        ObjectNode newChangelog = copy.putObject("changelog");
+        newChangelog.put("startAt", 0);
+        newChangelog.put("maxResults", full.data().size());
+        newChangelog.put("total", full.data().size());
+        newChangelog.set("histories", full.data());
+        return copy;
     }
 
     /**
@@ -184,10 +345,10 @@ public class JiraEventSourcePoller {
     }
 
     @Transactional
-    void updateLastPolledAt(String eventSourceId) {
+    void updateLastPolledAt(String eventSourceId, Instant checkpoint) {
         EventSourceEntity eventSource = EventSourceEntity.findById(eventSourceId);
         if (eventSource != null) {
-            eventSource.lastPolledAt = Instant.now();
+            eventSource.lastPolledAt = checkpoint;
         }
     }
 }

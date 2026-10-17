@@ -33,19 +33,19 @@ public class EventStreamService {
      * Persists a normalized event to the stream. If an event with the same
      * sourceEventId already exists, the event is silently skipped (dedup).
      *
+     * <p>Payload serialization happens before the duplicate check; a serialization failure
+     * raises {@link EventPersistenceException} so callers never mistake it for a duplicate.
+     * A concurrent insert of the same {@code sourceEventId} between the check and the commit
+     * is not mapped to a duplicate here: the constraint violation surfaces at commit time
+     * (outside this method) and the transaction is already rollback-only, so it propagates as
+     * an error and the poller retries the window, where the check then reports a duplicate.</p>
+     *
      * @param event the normalized event to persist
      * @return true if the event was persisted, false if it was a duplicate
+     * @throws EventPersistenceException if the event payload cannot be serialized
      */
     @Transactional
     public boolean persistEvent(NormalizedEvent event) {
-        // Dedup check
-        long existing = StreamEventEntity.count("sourceEventId", event.sourceEventId());
-        if (existing > 0) {
-            LOG.debugf("Skipping duplicate event: %s (sourceEventId: %s)",
-                    event.type().value(), event.sourceEventId());
-            return false;
-        }
-
         StreamEventEntity entity = new StreamEventEntity();
         entity.id = UUID.fromString(event.id());
         entity.sourceEventId = event.sourceEventId();
@@ -63,6 +63,15 @@ public class EventStreamService {
             }
         } catch (Exception e) {
             LOG.errorf(e, "Failed to serialize event payload for %s", event.sourceEventId());
+            throw new EventPersistenceException(
+                    "Failed to serialize event payload for " + event.sourceEventId(), e);
+        }
+
+        // Dedup check
+        long existing = StreamEventEntity.count("sourceEventId", event.sourceEventId());
+        if (existing > 0) {
+            LOG.debugf("Skipping duplicate event: %s (sourceEventId: %s)",
+                    event.type().value(), event.sourceEventId());
             return false;
         }
 
