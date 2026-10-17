@@ -39,6 +39,40 @@ public class SubscriptionFilterEvaluator {
     }
 
     /**
+     * Evaluates a filter expression against an event map, reporting an evaluation failure as an
+     * {@link SubscriptionFilterResult.Outcome#ERROR} result rather than as a non-match.
+     *
+     * @param filterExpression the EL expression (null or blank = match all)
+     * @param eventMap         the event data, exposed as the "event" variable
+     * @return the match, no-match or error result
+     */
+    public SubscriptionFilterResult evaluateFilter(String filterExpression, Map<String, Object> eventMap) {
+        try {
+            return evaluate(filterExpression, eventMap) ? SubscriptionFilterResult.match() : SubscriptionFilterResult.noMatch();
+        } catch (Exception e) {
+            return SubscriptionFilterResult.error(describe(e));
+        }
+    }
+
+    /**
+     * Describes an evaluation failure: its message plus, when different, the message of its root cause.
+     */
+    private static String describe(Exception e) {
+        String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        if (root != e) {
+            String rootMessage = root.getMessage() != null ? root.getMessage() : root.getClass().getSimpleName();
+            if (!message.contains(rootMessage)) {
+                message = message + " (caused by: " + rootMessage + ")";
+            }
+        }
+        return message;
+    }
+
+    /**
      * Evaluates a filter expression against an event map, reporting errors instead of treating them as no
      * match. Used by previews; live matching uses {@link #matches}.
      *

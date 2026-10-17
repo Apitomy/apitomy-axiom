@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
+import io.apitomy.axiom.app.EventStreamOrchestrator;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.app.validation.ConfigProblem;
@@ -32,6 +33,7 @@ import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -52,6 +54,9 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
+
+    @Inject
+    EventStreamOrchestrator orchestrator;
 
     @Inject
     ConfigItemValidationService validationService;
@@ -128,8 +133,19 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
     @Transactional
     public Subscription updateSubscription(long subscriptionId, NewSubscription data) {
         EventSubscriptionEntity entity = findOrThrow(subscriptionId);
+        String previousFilter = entity.filters;
         applyFields(entity, data);
         entity.modifiedOn = Instant.now();
+        if (!Objects.equals(previousFilter, entity.filters)) {
+            // Write (and lock) the subscription row before re-queuing, so a tick recording a
+            // filter error concurrently either sees the new modifiedOn or is re-queued here
+            entity.flush();
+            int due = orchestrator.retryFilterErrors(subscriptionId);
+            if (due > 0) {
+                LOG.infof("Subscription %d filter changed; %d filter error(s) queued for re-evaluation",
+                        subscriptionId, due);
+            }
+        }
         return toBean(entity);
     }
 

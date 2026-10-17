@@ -56,6 +56,7 @@ const STATUS_COLORS: Record<string, "green" | "grey" | "red" | "yellow" | "orang
     skipped: "grey",
     failed: "orange",
     exhausted: "red",
+    filter_error: "red",
     pending: "yellow",
 };
 
@@ -392,9 +393,11 @@ function AttemptSummary({ entry, retrying, onRetry }: {
     retrying: boolean;
     onRetry: () => void;
 }) {
-    const canRetry = entry.status === "failed" || entry.status === "exhausted";
+    const canRetry = entry.status === "failed" || entry.status === "exhausted"
+        || entry.status === "filter_error";
     let next = "---";
     if (entry.status === "exhausted") next = "Gave up";
+    else if (entry.status === "filter_error") next = "Not retried automatically (fix the filter)";
     else if (entry.nextAttemptAt) next = new Date(entry.nextAttemptAt).toLocaleString();
     return (
         <div style={{ display: "flex", gap: "24px", alignItems: "center", flexWrap: "wrap",
@@ -462,7 +465,8 @@ function ProcessingTab({ eventId, entries, loading, onRetried }: {
             {entries.map((entry) => {
                 const isExpanded = expandedItems.has(entry.id);
                 const hasOutcomes = entry.outcomes && entry.outcomes.length > 0;
-                const hasFailed = entry.status === "failed" || entry.status === "exhausted";
+                const hasFailed = entry.status === "failed" || entry.status === "exhausted"
+                    || entry.status === "filter_error";
                 const hasAttempts = (entry.attemptCount ?? 0) > 0;
                 const isExpandable = hasOutcomes || hasFailed || hasAttempts;
 
@@ -490,7 +494,7 @@ function ProcessingTab({ eventId, entries, loading, onRetried }: {
                                     <DataListCell key="status" width={1}>
                                         <Label isCompact
                                             color={STATUS_COLORS[entry.status] || "grey"}>
-                                            {entry.status}
+                                            {entry.status === "filter_error" ? "filter error" : entry.status}
                                         </Label>
                                     </DataListCell>,
                                     <DataListCell key="sub" width={2}

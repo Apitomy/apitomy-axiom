@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.EventProcessingLedgerEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
@@ -239,12 +240,15 @@ public class WorkflowEventDispatcher {
                             + " EventSubscriptionEntity s"
                             + " where l.eventId = e.id and s.id = l.subscriptionId"
                             + " and e.type = :type and e.timestamp >= :from"
-                            // skipped = the subscription's filter did not match
-                            + " and l.status <> 'skipped' and s.routing like :routing"
+                            // skipped = the subscription's filter did not match;
+                            // filter_error = it could not be evaluated (fail closed)
+                            + " and l.status not in :excluded and s.routing like :routing"
                             + " and not exists (select r.id from WorkflowRunResumeEntity r"
                             + "   where r.runId = :runId and r.eventId = e.id)"
                             + " group by e.id, e.timestamp, e.createdOn"
                             + " order by e.timestamp, e.createdOn", Object[].class)
+                    .setParameter("excluded", List.of(EventProcessingLedgerEntity.SKIPPED,
+                            EventProcessingLedgerEntity.FILTER_ERROR))
                     .setParameter("type", sub.eventType)
                     .setParameter("from", sub.lookbackFrom)
                     .setParameter("routing", "%\"" + RoutingRule.TYPE_WORKFLOW_DISPATCH + "\"%")
