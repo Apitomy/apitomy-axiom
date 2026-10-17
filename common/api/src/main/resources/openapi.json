@@ -4491,10 +4491,11 @@
           {
             "name": "limit",
             "in": "query",
-            "description": "Items per page",
+            "description": "Items per page (at most 500)",
             "required": false,
             "schema": {
-              "type": "integer"
+              "type": "integer",
+              "maximum": 500
             }
           },
           {
@@ -10569,9 +10570,56 @@
           "matchedSubscriptions": {
             "format": "int32",
             "type": "integer",
-            "description": "Number of subscriptions that matched this event (completed status in the processing ledger)"
+            "description": "Number of subscriptions whose filter matched this event, counted as event/subscription pairs in the processing ledger in any state except 'skipped' and 'filter_error' (pending, completed, failed or exhausted). Zero when no subscription matched, when every evaluated filter errored, or when the event has not been evaluated yet; processingStates shows which subscriptions were evaluated and how, but an absent processingStates does not distinguish 'no eligible subscriptions' from 'not evaluated yet'. Populated by the list endpoint only."
+          },
+          "processingStates": {
+            "$ref": "#/components/schemas/StreamEventProcessingStates",
+            "description": "Per-state counts of this event's event/subscription pairs in the processing ledger. Absent when the event has no ledger entries, which happens both when no subscription was eligible and when the event has not been evaluated yet (the two cases are not distinguished). Populated by the list endpoint only."
           }
         }
+      },
+      "StreamEventProcessingStates": {
+        "type": "object",
+        "description": "Counts of event/subscription pairs in the processing ledger for one event, by processing state. Each count is a number of subscriptions, not events.",
+        "properties": {
+          "pending": {
+            "format": "int32",
+            "type": "integer",
+            "minimum": 0,
+            "description": "Matched pairs with a routing attempt in progress"
+          },
+          "completed": {
+            "format": "int32",
+            "type": "integer",
+            "minimum": 0,
+            "description": "Matched pairs whose routing succeeded"
+          },
+          "failed": {
+            "format": "int32",
+            "type": "integer",
+            "minimum": 0,
+            "description": "Matched pairs whose last attempt failed and that will be retried"
+          },
+          "exhausted": {
+            "format": "int32",
+            "type": "integer",
+            "minimum": 0,
+            "description": "Matched pairs that failed and have no retries left"
+          },
+          "skipped": {
+            "format": "int32",
+            "type": "integer",
+            "minimum": 0,
+            "description": "Evaluated pairs whose subscription filter did not match (not counted in matchedSubscriptions)"
+          },
+          "filterError": {
+            "format": "int32",
+            "type": "integer",
+            "minimum": 0,
+            "description": "Pairs whose subscription filter failed to evaluate (not counted in matchedSubscriptions)"
+          }
+        },
+        "required": ["pending", "completed", "failed", "exhausted", "skipped", "filterError"]
       },
       "StreamEventSearchResults": {
         "type": "object",

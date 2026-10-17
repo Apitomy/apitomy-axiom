@@ -8,6 +8,7 @@ import {
     PageSection,
     Pagination,
     Title,
+    Tooltip,
     Toolbar,
     ToolbarContent,
     ToolbarItem,
@@ -15,6 +16,8 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import InProgressIcon from "@patternfly/react-icons/dist/esm/icons/in-progress-icon";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -210,12 +213,7 @@ export function EventStreamPage() {
                                 <Tr key={event.id} isClickable
                                     onRowClick={() => navigate(`/events/stream/${event.id}`)}>
                                     <Td>
-                                        {(event.matchedSubscriptions ?? 0) > 0 && (
-                                            <CheckCircleIcon
-                                                color="var(--pf-v6-global--success-color--200, #3e8635)"
-                                                title={`Matched ${event.matchedSubscriptions} subscription(s)`}
-                                            />
-                                        )}
+                                        <MatchIndicator event={event} />
                                     </Td>
                                     <Td style={{ whiteSpace: "nowrap" }}>
                                         {new Date(event.timestamp).toLocaleString()}
@@ -269,3 +267,60 @@ export function EventStreamPage() {
         </PageSection>
     );
 }
+
+/** Formats a count with a singular or plural noun. */
+function plural(count: number, singular: string, pluralForm: string): string {
+    return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
+/**
+ * Summarises how many subscriptions matched an event and how their processing went: red when any
+ * matched subscription failed or any filter errored, an in-progress icon while any is pending, green
+ * when all completed. Nothing is shown when no subscription matched and no filter errored.
+ */
+export function MatchIndicator({ event }: { event: StreamEvent }) {
+    const matched = event.matchedSubscriptions ?? 0;
+    const states = event.processingStates;
+    const filterErrors = states?.filterError ?? 0;
+    if (matched <= 0 && filterErrors <= 0) {
+        return null;
+    }
+    const failedMatches = (states?.failed ?? 0) + (states?.exhausted ?? 0);
+    const failures = failedMatches + filterErrors;
+    const pending = states?.pending ?? 0;
+    const completed = states?.completed ?? 0;
+    const phrases: string[] = [];
+    if (matched > 0) {
+        const parts: string[] = [];
+        if (completed > 0) parts.push(`${completed} completed`);
+        if (pending > 0) parts.push(`${pending} pending`);
+        if (failedMatches > 0) parts.push(`${failedMatches} failed`);
+        const head = `Matched ${plural(matched, "subscription", "subscriptions")}`;
+        phrases.push(parts.length > 0 ? `${head}: ${parts.join(", ")}` : head);
+    }
+    if (filterErrors > 0) {
+        phrases.push(plural(filterErrors, "filter error", "filter errors"));
+    }
+    const label = phrases.join("; ");
+    let state: "danger" | "in-progress" | "success";
+    let icon;
+    if (failures > 0) {
+        state = "danger";
+        icon = <ExclamationCircleIcon aria-hidden="true"
+            color="var(--pf-t--global--icon--color--status--danger--default)" />;
+    } else if (pending > 0) {
+        state = "in-progress";
+        icon = <InProgressIcon aria-hidden="true"
+            color="var(--pf-t--global--icon--color--status--info--default)" />;
+    } else {
+        state = "success";
+        icon = <CheckCircleIcon aria-hidden="true"
+            color="var(--pf-t--global--icon--color--status--success--default)" />;
+    }
+    return (
+        <Tooltip content={label}>
+            <span role="img" aria-label={label} data-state={state} tabIndex={0}>{icon}</span>
+        </Tooltip>
+    );
+}
+

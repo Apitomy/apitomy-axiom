@@ -2082,7 +2082,21 @@ export interface StreamEvent {
     payload?: Record<string, unknown>;
     sourceData?: Record<string, unknown>;
     createdOn?: string;
+    /** Subscriptions whose filter matched (every ledger state except skipped and filter errors). */
     matchedSubscriptions?: number;
+    /** Per-state ledger counts; absent when the event has no ledger entries. */
+    processingStates?: StreamEventProcessingStates;
+}
+
+/** Counts of an event's event/subscription pairs in the processing ledger, by state. */
+export interface StreamEventProcessingStates {
+    pending: number;
+    completed: number;
+    failed: number;
+    exhausted: number;
+    skipped: number;
+    /** Subscriptions whose filter failed to evaluate; not a match, but shown as a failure. */
+    filterError: number;
 }
 
 export async function fetchStreamEvents(

@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -172,6 +173,40 @@ class EventManualRunTest {
                 .body("[0].workflowDefinitionId", equalTo((int) definitionId))
                 .body("[0].subscriptionId", equalTo((int) subscriptionId))
                 .body("[0].subscriptionName", equalTo("suggest-sub"));
+    }
+
+    /**
+     * Pending and failed ledger entries are matches and yield suggestions; skipped and filter-error
+     * entries are not matches and yield none.
+     */
+    @Test
+    void suggestionsExcludeSkippedAndFilterErrorEntries() {
+        long pendingDef = createDefinition("Pending WF", "suggest-await-" + UUID.randomUUID());
+        long failedDef = createDefinition("Failed WF", "suggest-await-" + UUID.randomUUID());
+        long skippedDef = createDefinition("Skipped WF", "suggest-await-" + UUID.randomUUID());
+        long errorDef = createDefinition("Error WF", "suggest-await-" + UUID.randomUUID());
+        long pendingSub = createSubscription("pending-sub", routingTo(pendingDef));
+        long failedSub = createSubscription("failed-sub", routingTo(failedDef));
+        long skippedSub = createSubscription("skipped-sub", routingTo(skippedDef));
+        long errorSub = createSubscription("error-sub", routingTo(errorDef));
+        UUID eventId = UUID.randomUUID();
+        createEvent(eventId, "issue.created", eventRef(eventId));
+        createLedger(eventId, pendingSub, EventProcessingLedgerEntity.PENDING);
+        createLedger(eventId, failedSub, EventProcessingLedgerEntity.FAILED);
+        createLedger(eventId, skippedSub, EventProcessingLedgerEntity.SKIPPED);
+        createLedger(eventId, errorSub, EventProcessingLedgerEntity.FILTER_ERROR);
+
+        given()
+            .when()
+                .get("/api/v1/stream/events/" + eventId + "/workflow-suggestions")
+            .then()
+                .statusCode(200)
+                .body("$", hasSize(2))
+                .body("subscriptionId", containsInAnyOrder((int) pendingSub, (int) failedSub));
+    }
+
+    private static String routingTo(long definitionId) {
+        return "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":" + definitionId + "}]";
     }
 
     private long createSubscription(String name, String routing) {
