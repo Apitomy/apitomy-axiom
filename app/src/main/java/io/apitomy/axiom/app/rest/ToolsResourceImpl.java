@@ -187,7 +187,7 @@ public class ToolsResourceImpl implements ToolsResource {
                 String output = result.stdout();
                 int exitCode;
                 if (result.timedOut()) {
-                    exitCode = 1;
+                    exitCode = BoundedProcessRunner.TIMEOUT_EXIT_CODE;
                     output = output + "\n[Script timed out after " + TEST_TIMEOUT_SECONDS + "s]";
                 } else {
                     exitCode = result.exitCode();
@@ -203,17 +203,25 @@ public class ToolsResourceImpl implements ToolsResource {
             } finally {
                 Files.deleteIfExists(scriptFile);
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            LOG.warnf("Tool test for '%s' was interrupted", entity.name);
+            return errorResponse("Execution interrupted", resolvedScript, startTime);
         } catch (Exception e) {
             LOG.errorf(e, "Tool test execution failed for '%s'", entity.name);
-            ToolTestResponse response = new ToolTestResponse();
-            response.setSuccess(false);
-            response.setExitCode(1);
-            response.setOutput("Execution error: " + e.getMessage());
-            response.setResolvedScript(resolvedScript);
-            long durationMs = java.time.Duration.between(startTime, Instant.now()).toMillis();
-            response.setDurationMs(durationMs);
-            return response;
+            return errorResponse("Execution error: " + e.getMessage(), resolvedScript, startTime);
         }
+    }
+
+    private static ToolTestResponse errorResponse(String message, String resolvedScript, Instant startTime) {
+        ToolTestResponse response = new ToolTestResponse();
+        response.setSuccess(false);
+        response.setExitCode(1);
+        response.setOutput(message);
+        response.setResolvedScript(resolvedScript);
+        long durationMs = java.time.Duration.between(startTime, Instant.now()).toMillis();
+        response.setDurationMs(durationMs);
+        return response;
     }
 
     private String resolveParameters(String template, ToolTestRequest data) {

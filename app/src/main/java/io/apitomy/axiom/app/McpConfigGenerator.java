@@ -53,8 +53,11 @@ public class McpConfigGenerator {
 
     private static final Logger LOG = Logger.getLogger(McpConfigGenerator.class);
 
-    /** Upper bound for {@code npm install} of a bundled MCP server (network fetches can be slow). */
-    private static final java.time.Duration NPM_INSTALL_TIMEOUT = java.time.Duration.ofMinutes(5);
+    /**
+     * Upper bound for {@code npm install} of a bundled MCP server (network fetches can be slow); shared with
+     * {@code AssistantSessionManager}.
+     */
+    public static final java.time.Duration NPM_INSTALL_TIMEOUT = java.time.Duration.ofMinutes(5);
 
     private static final String MCP_SERVER_DIR_NAME = "mcp-server";
     private static final String[] TEMPLATE_FILES = {

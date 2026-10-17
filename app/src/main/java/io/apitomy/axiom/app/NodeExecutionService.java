@@ -157,12 +157,7 @@ public class NodeExecutionService {
             ScriptExecutionService.CapturedOutput captured =
                     ScriptExecutionService.capture(process, timeoutSeconds);
             long durationMs = Duration.between(startTime, Instant.now()).toMillis();
-            String stdout = captured.stdout();
-            if (!captured.finished()) {
-                stdout = stdout + "\n[Node action timed out after " + timeoutSeconds + "s]";
-            }
-            return new ScriptExecutionService.ActionRun(captured.exitCode(), stdout, captured.stderr(),
-                    ScriptExecutionService.extractScriptOutput(stdout), durationMs, captured.finished(), null);
+            return ScriptExecutionService.toActionRun(captured, "Node action", timeoutSeconds, durationMs, null);
         } finally {
             deleteRecursively(codeDir);
             if (workDir != null) {

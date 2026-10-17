@@ -62,9 +62,6 @@ public class AssistantSessionManager {
 
     private static final Logger LOG = Logger.getLogger(AssistantSessionManager.class);
 
-    /** Upper bound for {@code npm install} of a bundled MCP server (network fetches can be slow). */
-    private static final java.time.Duration NPM_INSTALL_TIMEOUT = java.time.Duration.ofMinutes(5);
-
     /** Upper bound for a session's init script. */
     private static final java.time.Duration INIT_SCRIPT_TIMEOUT = java.time.Duration.ofSeconds(60);
 
@@ -529,7 +526,7 @@ public class AssistantSessionManager {
             result = BoundedProcessRunner.run(pb, INIT_SCRIPT_TIMEOUT);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IOException("Init script interrupted");
+            throw new IOException("Init script interrupted", e);
         }
         String output = result.stdout();
 
@@ -1232,14 +1229,14 @@ public class AssistantSessionManager {
                     .redirectErrorStream(true);
             BoundedProcessRunner.Result result;
             try {
-                result = BoundedProcessRunner.run(pb, NPM_INSTALL_TIMEOUT);
+                result = BoundedProcessRunner.run(pb, McpConfigGenerator.NPM_INSTALL_TIMEOUT);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException("npm install interrupted", e);
             }
             String output = result.stdout();
             if (result.timedOut()) {
-                throw new IOException("npm install timed out after " + NPM_INSTALL_TIMEOUT.toMinutes()
+                throw new IOException("npm install timed out after " + McpConfigGenerator.NPM_INSTALL_TIMEOUT.toMinutes()
                         + " minutes: " + output);
             }
             int exitCode = result.exitCode();

@@ -179,7 +179,7 @@ public class DraftTestRunner {
             scriptExecutionService.applyActionEnvironment(pb, holder);
             Instant start = Instant.now();
             ScriptExecutionService.CapturedOutput captured =
-                    ScriptExecutionService.capture(pb.start(), toolTimeoutSeconds);
+                    ScriptExecutionService.capture(ScriptExecutionService.startScript(pb), toolTimeoutSeconds);
             long durationMs = Duration.between(start, Instant.now()).toMillis();
             List<String> runProblems = captured.finished() ? List.of() : List.of("Timed out.");
             String status = captured.exitCode() == 0 && runProblems.isEmpty() ? "passed" : "failed";
