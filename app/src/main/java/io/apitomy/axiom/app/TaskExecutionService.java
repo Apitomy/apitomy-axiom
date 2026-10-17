@@ -12,6 +12,7 @@ import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.TraceNodeEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.logging.LogContext;
@@ -30,7 +31,10 @@ import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.interceptor.Interceptor;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.nio.file.Path;
@@ -549,6 +553,46 @@ public class TaskExecutionService {
         TaskEntity task = TaskEntity.findById(taskId);
         if (task == null) {
             return;
+        }
+        try (LogContext ignored = taskLogContext(task)) {
+            recordTaskCompletion(task, result);
+        }
+    }
+
+    /**
+     * Completes a human (Inbox) task with a person's response, guarding against a concurrent
+     * cancellation or failure of its workflow run. The run row is locked first (the same order
+     * as {@code WorkflowExecutionService.cancelWorkflowRun}), then the task status and run
+     * state are re-checked under the lock.
+     *
+     * @param taskId the task ID
+     * @param result the response, as an agent result
+     * @throws WebApplicationException 404 when the task is missing or no longer awaiting input,
+     *         409 when its workflow run has ended (e.g. was cancelled)
+     */
+    @Transactional
+    public void completeHumanTask(Long taskId, AgentResult result) {
+        TaskEntity task = TaskEntity.findById(taskId);
+        if (task == null) {
+            throw new WebApplicationException("Inbox item not found: " + taskId, 404);
+        }
+        if (task.workflowRunId != null) {
+            WorkflowRunEntity run = WorkflowRunEntity.findById(task.workflowRunId,
+                    LockModeType.PESSIMISTIC_WRITE);
+            // Re-read the task now that a racing cancel (which holds the same lock) has committed.
+            TaskEntity.getEntityManager().refresh(task);
+            if (run == null || WorkflowExecutionService.isTerminal(run)
+                    || HumanTaskStatuses.CANCELLED.equals(task.status)) {
+                String outcome = run != null ? run.status : "removed";
+                throw new WebApplicationException(Response.status(409)
+                        .entity(Map.of("message", "Cannot complete Inbox item " + taskId
+                                + ": its workflow run was " + outcome))
+                        .build());
+            }
+        }
+        if (!HumanTaskStatuses.AWAITING_INPUT.equals(task.status)) {
+            throw new WebApplicationException(
+                    "Inbox item not found or not awaiting input: " + taskId, 404);
         }
         try (LogContext ignored = taskLogContext(task)) {
             recordTaskCompletion(task, result);

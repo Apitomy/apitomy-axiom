@@ -44,6 +44,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
@@ -286,10 +287,15 @@ public class WorkflowExecutionService {
         long taskId = task.id;
 
         WorkflowRunEntity entity =
-                WorkflowRunEntity.findById(task.workflowRunId);
+                WorkflowRunEntity.findById(task.workflowRunId, LockModeType.PESSIMISTIC_WRITE);
         if (entity == null) {
             LOG.warnf("Workflow instance %d not found for task %d",
                     task.workflowRunId, taskId);
+            return;
+        }
+        if (isTerminal(entity)) {
+            LOG.infof("Workflow run %d is already %s; not advancing it for task %d",
+                    entity.id, entity.status, taskId);
             return;
         }
 
@@ -539,7 +545,7 @@ public class WorkflowExecutionService {
                     "Workflow completed", entity.traceId);
         } else if (advanced.status() == InstanceStatus.FAILED) {
             // A failed run can never consume the human tasks of its other branches.
-            orphanedHumanTaskCleanup.deletePendingHumanTasks(List.of(entity.id));
+            orphanedHumanTaskCleanup.cancelPendingHumanTasks(entity.id, "failed");
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "failed");
             logActivity(entity.subjectId, "workflow-failed",
@@ -581,7 +587,8 @@ public class WorkflowExecutionService {
      */
     @Transactional
     public void cancelWorkflowRun(long runId) {
-        WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
+        // Serializes with a concurrent Inbox completion, which locks the same row first.
+        WorkflowRunEntity entity = WorkflowRunEntity.findById(runId, LockModeType.PESSIMISTIC_WRITE);
         if (entity == null) {
             throw new WebApplicationException("Workflow run not found", 404);
         }
@@ -600,7 +607,7 @@ public class WorkflowExecutionService {
         persistInstanceState(entity, cancelled);
         WorkflowWaitEntity.delete("runId", entity.id);
         WorkflowEventSubscriptionEntity.delete("runId", entity.id);
-        orphanedHumanTaskCleanup.deletePendingHumanTasks(List.of(entity.id));
+        orphanedHumanTaskCleanup.cancelPendingHumanTasks(entity.id, "cancelled");
         entity.completedOn = Instant.now();
         completeRunTrace(entity, "cancelled");
 
@@ -622,6 +629,16 @@ public class WorkflowExecutionService {
     }
 
     // -- Private helpers --
+
+    /**
+     * Whether a run has reached a terminal state (completed, failed or cancelled).
+     *
+     * @param run the workflow run
+     * @return true when the run can no longer advance
+     */
+    static boolean isTerminal(WorkflowRunEntity run) {
+        return HistoryCleanup.FINISHED_WORKFLOW_RUN_STATUSES.contains(run.status);
+    }
 
     /**
      * Rebuilds a {@link TraceContext} rooted at a run's trace root node, or

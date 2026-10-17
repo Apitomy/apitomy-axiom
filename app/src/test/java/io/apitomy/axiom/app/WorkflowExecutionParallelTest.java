@@ -1,7 +1,11 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.agents.spi.AgentResult;
+import io.apitomy.axiom.core.entities.TaskEntity;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -9,6 +13,8 @@ import java.util.Map;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 /**
  * Exercises fork/join parallel execution end-to-end through the REST layer: a workflow
@@ -30,6 +36,9 @@ import static org.hamcrest.Matchers.notNullValue;
  */
 @QuarkusTest
 class WorkflowExecutionParallelTest {
+
+    @Inject
+    TaskExecutionService taskExecutionService;
 
     private static final String SUBJECTS_PATH = "/api/v1/subjects";
     private static final String WORKFLOWS_PATH = "/api/v1/workflow/definitions";
@@ -191,6 +200,68 @@ class WorkflowExecutionParallelTest {
                 .then()
                     .statusCode(200)
                     .body("status", equalTo("completed"));
+    }
+
+    /**
+     * A failed branch fails the whole instance: the other branch's pending human task must
+     * no longer be awaiting input and must leave the Inbox.
+     */
+    @Test
+    void failingOneBranchCancelsOtherBranchHumanTask() {
+        int subjectId = createSubject("Fork Fail Subject");
+        int definitionId = createAndPublishForkJoinDefinition("Fork Fail WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(Map.of("workflowDefinitionId", definitionId))
+                .when()
+                    .post(TestRunsResource.path(subjectId))
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("waiting"));
+
+        Integer branchATaskId = given()
+                .when()
+                    .get(INBOX_PATH)
+                .then()
+                    .statusCode(200)
+                    .extract()
+                    .path("items.find { it.subjectId == " + subjectId
+                            + " && it.actionType == 'Branch A' }.id");
+        Integer branchBTaskId = given()
+                .when()
+                    .get(INBOX_PATH)
+                .then()
+                    .statusCode(200)
+                    .extract()
+                    .path("items.find { it.subjectId == " + subjectId
+                            + " && it.actionType == 'Branch B' }.id");
+
+        QuarkusTransaction.requiringNew().run(() -> taskExecutionService.onTaskCompleted(
+                branchATaskId.longValue(), AgentResult.failure("Branch A failed")));
+
+        given()
+                .when()
+                    .get(TestRunsResource.path(subjectId))
+                .then()
+                    .statusCode(200)
+                    .body("status", equalTo("failed"));
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            TaskEntity branchB = TaskEntity.findById(branchBTaskId.longValue());
+            assertNotEquals("AwaitingInput", branchB.status);
+            assertEquals("Cancelled", branchB.status);
+            assertEquals("Cancelled: workflow run " + branchB.workflowRunId + " was failed",
+                    branchB.output);
+        });
+
+        given()
+                .when()
+                    .get(INBOX_PATH)
+                .then()
+                    .statusCode(200)
+                    .body("items.findAll { it.subjectId == " + subjectId + " }.size()",
+                            equalTo(0));
     }
 
     // -- Helpers --

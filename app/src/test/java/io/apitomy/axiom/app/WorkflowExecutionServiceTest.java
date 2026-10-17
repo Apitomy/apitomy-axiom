@@ -13,9 +13,14 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import io.restassured.http.ContentType;
+
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -381,33 +386,70 @@ class WorkflowExecutionServiceTest {
         """;
 
     /**
-     * Cancelling a run parked on a human-task node must delete the pending Inbox task so it
-     * does not linger in the Inbox forever.
+     * Cancelling a run parked on a human-task node marks the pending Inbox task Cancelled (kept
+     * for audit history) so it leaves the Inbox and no longer blocks anything.
      */
     @Test
-    void cancellingRunDeletesPendingHumanTask() {
+    void cancellingRunCancelsPendingHumanTask() {
         long[] ids = createSubjectAndDefinition("Human Task Cancel Subject", HUMAN_TASK_CONTENT);
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
-        QuarkusTransaction.requiringNew().run(() -> assertEquals(1,
-                TaskEntity.count("workflowRunId = ?1 and status = ?2", run.id, "AwaitingInput"),
-                "Human task should be awaiting input"));
+        long taskId = QuarkusTransaction.requiringNew().call(() -> {
+            TaskEntity task = TaskEntity.find("workflowRunId", run.id).firstResult();
+            assertEquals(HumanTaskStatuses.AWAITING_INPUT, task.status);
+            return task.id;
+        });
+        assertInInbox(taskId, true);
 
         QuarkusTransaction.requiringNew().run(() ->
                 workflowExecutionService.cancelWorkflowRun(run.id));
 
-        QuarkusTransaction.requiringNew().run(() -> assertEquals(0,
-                TaskEntity.count("workflowRunId", run.id),
-                "Cancelling the run should delete its pending human task"));
+        QuarkusTransaction.requiringNew().run(() -> {
+            TaskEntity task = TaskEntity.findById(taskId);
+            assertNotNull(task, "The task must be kept for audit history");
+            assertEquals("Cancelled", task.status);
+            assertEquals("Cancelled: workflow run " + run.id + " was cancelled", task.output);
+            assertNotNull(task.completedOn);
+        });
+        assertInInbox(taskId, false);
+    }
+
+    /**
+     * Completing an Inbox task after its run was cancelled loses the race cleanly with a 409.
+     */
+    @Test
+    void completingInboxTaskOfCancelledRunReturns409() {
+        long[] ids = createSubjectAndDefinition("Human Task Race Subject", HUMAN_TASK_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        long taskId = QuarkusTransaction.requiringNew().call(() ->
+                TaskEntity.<TaskEntity>find("workflowRunId", run.id).firstResult().id);
+        QuarkusTransaction.requiringNew().run(() ->
+                workflowExecutionService.cancelWorkflowRun(run.id));
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"approved\": true}")
+                .when()
+                    .post("/api/v1/inbox/" + taskId + "/complete")
+                .then()
+                    .statusCode(409)
+                    .body(containsString("workflow run was cancelled"));
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            assertEquals("Cancelled", TaskEntity.<TaskEntity>findById(taskId).status);
+            assertEquals("cancelled", WorkflowRunEntity.<WorkflowRunEntity>findById(run.id).status);
+        });
     }
 
     /**
      * Pending human tasks left behind by runs that already reached a terminal state (from
-     * before the cancel fix) are deleted by the startup cleanup.
+     * before the cancel fix) are marked Cancelled by the startup cleanup.
      */
     @Test
-    void orphanedHumanTaskCleanupDeletesTasksOfTerminalRuns() {
+    void orphanedHumanTaskCleanupCancelsTasksOfTerminalRuns() {
         long[] ids = createSubjectAndDefinition("Human Task Orphan Subject", HUMAN_TASK_CONTENT);
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
@@ -418,11 +460,26 @@ class WorkflowExecutionServiceTest {
             r.completedOn = Instant.now();
         });
 
-        QuarkusTransaction.requiringNew().run(() -> orphanedHumanTaskCleanup.cleanupOrphans());
+        QuarkusTransaction.requiringNew().run(() -> orphanedHumanTaskCleanup.cancelOrphans());
 
-        QuarkusTransaction.requiringNew().run(() -> assertEquals(0,
-                TaskEntity.count("workflowRunId", run.id),
-                "Orphaned human task of a cancelled run should be deleted"));
+        QuarkusTransaction.requiringNew().run(() -> {
+            TaskEntity task = TaskEntity.find("workflowRunId", run.id).firstResult();
+            assertNotNull(task, "The task must be kept for audit history");
+            assertEquals("Cancelled", task.status);
+            assertEquals("Cancelled: workflow run " + run.id + " was cancelled", task.output);
+            assertNotNull(task.completedOn);
+        });
+    }
+
+    private static void assertInInbox(long taskId, boolean expected) {
+        List<Integer> inboxIds = given()
+                .when()
+                    .get("/api/v1/inbox?limit=1000")
+                .then()
+                    .statusCode(200)
+                    .extract().path("items.id");
+        assertEquals(expected, inboxIds.stream().anyMatch(id -> id.longValue() == taskId),
+                "Task " + taskId + " Inbox presence");
     }
 
     /**
