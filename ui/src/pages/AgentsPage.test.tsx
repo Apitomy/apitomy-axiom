@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -31,7 +31,7 @@ describe("AgentsPage", () => {
         expect(within(dialog).getAllByText(/engine/i).length).toBeGreaterThan(0);
         const closeButtons = within(dialog).getAllByRole("button", { name: "Close" });
         await userEvent.click(closeButtons[closeButtons.length - 1]);
-        expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
 
     it("asks to confirm a delete without opening the agent", async () => {
