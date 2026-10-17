@@ -69,6 +69,9 @@ public class WorkflowExecutionService {
     private static final int MAX_TITLE_LENGTH = 500;
 
     @Inject
+    OrphanedHumanTaskCleanup orphanedHumanTaskCleanup;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @Inject
@@ -535,6 +538,8 @@ public class WorkflowExecutionService {
             logActivity(entity.subjectId, "workflow-completed",
                     "Workflow completed", entity.traceId);
         } else if (advanced.status() == InstanceStatus.FAILED) {
+            // A failed run can never consume the human tasks of its other branches.
+            orphanedHumanTaskCleanup.deletePendingHumanTasks(List.of(entity.id));
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "failed");
             logActivity(entity.subjectId, "workflow-failed",
@@ -595,6 +600,7 @@ public class WorkflowExecutionService {
         persistInstanceState(entity, cancelled);
         WorkflowWaitEntity.delete("runId", entity.id);
         WorkflowEventSubscriptionEntity.delete("runId", entity.id);
+        orphanedHumanTaskCleanup.deletePendingHumanTasks(List.of(entity.id));
         entity.completedOn = Instant.now();
         completeRunTrace(entity, "cancelled");
 

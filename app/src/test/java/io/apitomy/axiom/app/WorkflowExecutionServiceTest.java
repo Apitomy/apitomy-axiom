@@ -37,6 +37,9 @@ class WorkflowExecutionServiceTest {
     @Inject
     TaskExecutionService taskExecutionService;
 
+    @Inject
+    OrphanedHumanTaskCleanup orphanedHumanTaskCleanup;
+
     private static final String LINEAR_CONTENT = """
         {
             "id": "linear-wf",
@@ -351,6 +354,75 @@ class WorkflowExecutionServiceTest {
             assertEquals(0, count,
                     "Cancelling the run should delete its event subscriptions");
         });
+    }
+
+    private static final String HUMAN_TASK_CONTENT = """
+        {
+            "id": "human-wf",
+            "name": "Human WF",
+            "nodes": [
+                {"id": "s1", "type": "start", "name": "Start",
+                 "config": {}, "position": {"x": 100, "y": 100}},
+                {"id": "ht1", "type": "human-task", "name": "Approve",
+                 "config": {"description": "Approve the request",
+                            "outputs": [{"name": "approved", "type": "boolean",
+                                         "required": true, "label": "Approve?"}]},
+                 "position": {"x": 100, "y": 200}},
+                {"id": "e1", "type": "end", "name": "End",
+                 "config": {}, "position": {"x": 100, "y": 300}}
+            ],
+            "edges": [
+                {"id": "edge1", "source": "s1", "target": "ht1",
+                 "priority": 0, "isDefault": true},
+                {"id": "edge2", "source": "ht1", "target": "e1",
+                 "priority": 0, "isDefault": true}
+            ]
+        }
+        """;
+
+    /**
+     * Cancelling a run parked on a human-task node must delete the pending Inbox task so it
+     * does not linger in the Inbox forever.
+     */
+    @Test
+    void cancellingRunDeletesPendingHumanTask() {
+        long[] ids = createSubjectAndDefinition("Human Task Cancel Subject", HUMAN_TASK_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        QuarkusTransaction.requiringNew().run(() -> assertEquals(1,
+                TaskEntity.count("workflowRunId = ?1 and status = ?2", run.id, "AwaitingInput"),
+                "Human task should be awaiting input"));
+
+        QuarkusTransaction.requiringNew().run(() ->
+                workflowExecutionService.cancelWorkflowRun(run.id));
+
+        QuarkusTransaction.requiringNew().run(() -> assertEquals(0,
+                TaskEntity.count("workflowRunId", run.id),
+                "Cancelling the run should delete its pending human task"));
+    }
+
+    /**
+     * Pending human tasks left behind by runs that already reached a terminal state (from
+     * before the cancel fix) are deleted by the startup cleanup.
+     */
+    @Test
+    void orphanedHumanTaskCleanupDeletesTasksOfTerminalRuns() {
+        long[] ids = createSubjectAndDefinition("Human Task Orphan Subject", HUMAN_TASK_CONTENT);
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity r = WorkflowRunEntity.findById(run.id);
+            r.status = "cancelled";
+            r.completedOn = Instant.now();
+        });
+
+        QuarkusTransaction.requiringNew().run(() -> orphanedHumanTaskCleanup.cleanupOrphans());
+
+        QuarkusTransaction.requiringNew().run(() -> assertEquals(0,
+                TaskEntity.count("workflowRunId", run.id),
+                "Orphaned human task of a cancelled run should be deleted"));
     }
 
     /**
