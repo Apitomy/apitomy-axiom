@@ -38,6 +38,7 @@ class JiraEventsApiClientTest {
     private JiraEventsApiClient client;
     private final List<JsonNode> searchBodies = new ArrayList<>();
     private final List<String> changelogQueries = new ArrayList<>();
+    private final List<String> changelogPaths = new ArrayList<>();
     private final Map<String, String> searchResponses = new ConcurrentHashMap<>();
 
     @BeforeEach
@@ -82,6 +83,24 @@ class JiraEventsApiClientTest {
     }
 
     @Test
+    void fetchIssuesPage_usesEpochMillisLowerBoundInJql() {
+        Instant since = Instant.parse("2026-10-01T10:00:00Z");
+        long expected = since.minus(JiraEventsApiClient.QUERY_OVERLAP).toEpochMilli();
+
+        client.fetchIssuesPage(baseUrl, List.of("P"), since, "a:b", null);
+
+        String jql = searchBodies.get(0).path("jql").asText();
+        assertTrue(jql.contains("updated >= " + expected), jql);
+    }
+
+    @Test
+    void fetchFullChangelog_urlEncodesIssueKey() {
+        client.fetchFullChangelog(baseUrl, "P 1", "a:b");
+
+        assertEquals("/rest/api/3/issue/P%201/changelog", changelogPaths.get(0));
+    }
+
+    @Test
     void fetchFullChangelog_followsAllPages() {
         ApiResult result = client.fetchFullChangelog(baseUrl, "P-1", "a:b");
 
@@ -102,6 +121,7 @@ class JiraEventsApiClientTest {
     private void handleChangelog(HttpExchange exchange) throws IOException {
         String query = exchange.getRequestURI().getQuery();
         changelogQueries.add(query);
+        changelogPaths.add(exchange.getRequestURI().getRawPath());
         int startAt = 0;
         for (String part : query.split("&")) {
             if (part.startsWith("startAt=")) {

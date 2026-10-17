@@ -11,6 +11,7 @@ import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
 import io.quarkus.scheduler.Scheduled;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -45,8 +46,15 @@ public class JiraEventSourcePoller {
     @Inject
     EncryptionService encryptionService;
 
-    /** Safety cap on the number of search pages fetched in one poll window. */
-    int maxSearchPages = 50;
+    /** Default safety cap on the number of search pages fetched in one poll window. */
+    static final int DEFAULT_MAX_SEARCH_PAGES = 200;
+
+    /**
+     * Safety cap on the number of search pages fetched in one poll window. When the cap is
+     * hit, the checkpoint is not advanced.
+     */
+    @ConfigProperty(name = "axiom.events.jira.max-search-pages", defaultValue = "" + DEFAULT_MAX_SEARCH_PAGES)
+    int maxSearchPages = DEFAULT_MAX_SEARCH_PAGES;
 
     /**
      * In-memory record of the last poll attempt per event source. Used for scheduling
@@ -164,7 +172,7 @@ public class JiraEventSourcePoller {
             LOG.infof("Polled Jira event source %s: %d events ingested from %d issues",
                     eventSource.id, result.eventsIngested(), result.issuesProcessed());
         } else {
-            LOG.warnf("Incomplete Jira poll for event source %s: %s (checkpoint %s)",
+            LOG.errorf("Incomplete Jira poll for event source %s: %s (checkpoint %s)",
                     eventSource.id, result.errorMessage(),
                     result.checkpoint() != null ? "advanced to " + result.checkpoint() : "unchanged");
             recordPollLog(eventSource.id, "error", "Poll incomplete",
@@ -191,8 +199,8 @@ public class JiraEventSourcePoller {
      * ingested. On API failure, persistence failure or shutdown, the checkpoint is left
      * unchanged so the next poll re-fetches; re-ingestion is safe because events are
      * de-duplicated by their deterministic source event id. If the page safety cap is hit,
-     * the checkpoint advances only to the latest {@code updated} time of the processed
-     * issues (results are ordered by {@code updated ASC}).
+     * the checkpoint is also left unchanged: results are ordered by issue {@code updated},
+     * so advancing to a partial bound could drop older changes of unfetched issues.
      *
      * @param eventSourceId the event source id
      * @param baseUrl       Jira base URL
@@ -209,7 +217,6 @@ public class JiraEventSourcePoller {
         Instant normalizeSince = since.minus(JiraEventsApiClient.QUERY_OVERLAP);
         int issuesProcessed = 0;
         int totalIngested = 0;
-        Instant maxUpdated = null;
         String nextPageToken = null;
 
         for (int pageNum = 0; pageNum < maxSearchPages; pageNum++) {
@@ -246,33 +253,35 @@ public class JiraEventSourcePoller {
                                 "Ingestion failed: " + e.getMessage());
                     }
                     issuesProcessed++;
-                    Instant updated = JiraEventNormalizerV2.parseJiraTimestamp(
-                            issue.path("fields").path("updated").asText(null));
-                    if (updated != null && (maxUpdated == null || updated.isAfter(maxUpdated))) {
-                        maxUpdated = updated;
-                    }
                 }
             }
 
             JsonNode tokenNode = page.data().path("nextPageToken");
             nextPageToken = tokenNode.isTextual() && !tokenNode.asText().isBlank() ? tokenNode.asText() : null;
-            if (nextPageToken == null || page.data().path("isLast").asBoolean(false)) {
+            boolean isLast = page.data().path("isLast").asBoolean(false);
+            if (nextPageToken == null && !isLast && page.data().has("isLast")) {
+                LOG.warnf("Jira search for event source %s returned isLast=false without a "
+                        + "nextPageToken; treating the page as the last one", eventSourceId);
+            }
+            if (nextPageToken == null || isLast) {
                 return new WindowResult(true, windowStart, issuesProcessed, totalIngested, null);
             }
         }
 
-        LOG.warnf("Jira event source %s hit the page cap (%d pages); remaining issues will be "
-                + "fetched in the next poll", eventSourceId, maxSearchPages);
-        Instant partial = maxUpdated != null && maxUpdated.isAfter(since) ? maxUpdated : null;
-        return new WindowResult(false, partial, issuesProcessed, totalIngested,
-                "Page cap of " + maxSearchPages + " reached");
+        LOG.errorf("Jira event source %s hit the search page cap (%d pages); checkpoint not advanced. "
+                + "Increase axiom.events.jira.max-search-pages", eventSourceId, maxSearchPages);
+        return new WindowResult(false, null, issuesProcessed, totalIngested,
+                "Search page cap of " + maxSearchPages + " reached (axiom.events.jira.max-search-pages); "
+                        + "checkpoint not advanced");
     }
 
     /**
      * Returns the issue with its complete changelog, fetching remaining changelog pages
-     * when the embedded changelog is truncated.
+     * when the embedded changelog is truncated. A 404 or 403 on the changelog fetch (issue
+     * deleted or no longer visible) falls back to the embedded changelog with a warning.
      *
      * @return the (possibly augmented) issue, or {@code null} if the changelog fetch failed
+     *         with a transient error (5xx, 429, network) and the window must be retried
      */
     private JsonNode withFullChangelog(String baseUrl, JsonNode issue, String credentials) {
         JsonNode changelog = issue.path("changelog");
@@ -283,6 +292,11 @@ public class JiraEventSourcePoller {
             return issue;
         }
         ApiResult full = apiClient.fetchFullChangelog(baseUrl, issue.path("key").asText(), credentials);
+        if (full != null && !full.success() && (full.statusCode() == 404 || full.statusCode() == 403)) {
+            LOG.warnf("Changelog fetch for Jira issue %s returned %d; using the embedded changelog",
+                    issue.path("key").asText(), full.statusCode());
+            return issue;
+        }
         if (full == null || !full.success()) {
             return null;
         }

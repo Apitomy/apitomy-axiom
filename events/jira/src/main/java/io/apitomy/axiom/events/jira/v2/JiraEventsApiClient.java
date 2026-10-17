@@ -14,11 +14,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 
@@ -32,15 +31,12 @@ public class JiraEventsApiClient {
 
     private static final Logger LOG = Logger.getLogger(JiraEventsApiClient.class);
 
-    private static final DateTimeFormatter JQL_DATE_FORMAT =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault());
-
     @Inject
     ObjectMapper objectMapper;
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
-    /** Overlap subtracted from the checkpoint in JQL (minute granularity + clock skew). */
+    /** Overlap subtracted from the checkpoint in JQL (clock skew and boundary timestamps). */
     static final Duration QUERY_OVERLAP = Duration.ofMinutes(2);
     private static final int SEARCH_PAGE_SIZE = 100;
     private static final int CHANGELOG_PAGE_SIZE = 100;
@@ -56,8 +52,9 @@ public class JiraEventsApiClient {
      * {@code updated ASC}. Callers must follow {@code nextPageToken} in the response
      * (until it is absent or {@code isLast} is true) to retrieve the full result set.
      *
-     * <p>The JQL lower bound is the given {@code since} minus a two-minute buffer, which
-     * covers JQL's minute granularity and modest clock skew. Duplicates resulting from
+     * <p>The JQL lower bound is the given {@code since} minus a two-minute buffer (covering
+     * modest clock skew), expressed in epoch milliseconds so it is independent of the Jira
+     * user's profile timezone. Duplicates resulting from
      * the overlap are removed by source-event de-duplication downstream.</p>
      *
      * @param baseUrl       Jira Cloud base URL (e.g., https://myorg.atlassian.net)
@@ -71,10 +68,11 @@ public class JiraEventsApiClient {
                                      String credentials, String nextPageToken) {
         Instant bufferedSince = since.minus(QUERY_OVERLAP);
 
-        // Build JQL: project in (A, B, C) AND updated >= "2026-09-18 10:00"
+        // Build JQL: project in (A, B, C) AND updated >= <epochMillis>. Epoch milliseconds are
+        // timezone-free, unlike "yyyy-MM-dd HH:mm" which Jira reads in the user's profile zone.
         String projectList = String.join(", ", projects);
-        String jql = "project in (" + projectList + ") AND updated>=\""
-                + JQL_DATE_FORMAT.format(bufferedSince) + "\" ORDER BY updated ASC";
+        String jql = "project in (" + projectList + ") AND updated >= "
+                + bufferedSince.toEpochMilli() + " ORDER BY updated ASC";
 
         String url = baseUrl + "/rest/api/3/search/jql";
 
@@ -117,8 +115,10 @@ public class JiraEventsApiClient {
         int startAt = 0;
         int pages = 0;
         boolean capAdjusted = false;
+        String changelogUrl = baseUrl + "/rest/api/3/issue/"
+                + URLEncoder.encode(issueKey, StandardCharsets.UTF_8).replace("+", "%20") + "/changelog";
         while (true) {
-            String url = baseUrl + "/rest/api/3/issue/" + issueKey + "/changelog?startAt=" + startAt
+            String url = changelogUrl + "?startAt=" + startAt
                     + "&maxResults=" + CHANGELOG_PAGE_SIZE;
             ApiResult page = doGet(url, credentials);
             if (!page.success()) {
@@ -146,8 +146,7 @@ public class JiraEventsApiClient {
                 break;
             }
         }
-        return ApiResult.ok(histories, "GET", baseUrl + "/rest/api/3/issue/" + issueKey + "/changelog",
-                null, null);
+        return ApiResult.ok(histories, "GET", changelogUrl, null, null);
     }
 
     /**

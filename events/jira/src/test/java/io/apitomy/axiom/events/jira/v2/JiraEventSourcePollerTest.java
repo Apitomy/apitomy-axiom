@@ -125,7 +125,7 @@ class JiraEventSourcePollerTest {
     }
 
     @Test
-    void pageCapHit_advancesOnlyToLastProcessedUpdateTime() {
+    void pageCapHit_doesNotAdvanceCheckpoint() {
         poller.maxSearchPages = 2;
         api.pages.add(page(issues(0, 2, "2026-10-01T10:01:00.000+0000"), "tok2"));
         api.pages.add(page(issues(2, 4, "2026-10-01T10:02:00.000+0000"), "tok3"));
@@ -134,8 +134,84 @@ class JiraEventSourcePollerTest {
         JiraEventSourcePoller.WindowResult result = ingest();
 
         assertFalse(result.complete());
-        assertEquals(Instant.parse("2026-10-01T10:02:00Z"), result.checkpoint());
+        assertNull(result.checkpoint());
+        assertTrue(result.errorMessage().contains("cap"));
         assertEquals(4, stream.ids.size());
+    }
+
+    @Test
+    void defaultPageCap_isGenerous() {
+        assertEquals(200, new JiraEventSourcePoller().maxSearchPages);
+    }
+
+    @Test
+    void changelogNotFound_usesEmbeddedChangelogAndCompletes() {
+        api.pages.add(page(List.of(truncatedIssue("P-9")), null));
+        api.changelogs.put("P-9", ApiResult.httpError(404, "GET", "url", null, "gone"));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertTrue(result.complete());
+        assertEquals(WINDOW_START, result.checkpoint());
+        assertEquals(Set.of("P-9-1"), stream.ids);
+    }
+
+    @Test
+    void changelogForbidden_usesEmbeddedChangelogAndCompletes() {
+        api.pages.add(page(List.of(truncatedIssue("P-9")), null));
+        api.changelogs.put("P-9", ApiResult.httpError(403, "GET", "url", null, "no"));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertTrue(result.complete());
+        assertEquals(Set.of("P-9-1"), stream.ids);
+    }
+
+    @Test
+    void changelogServerError_abortsWindow() {
+        api.pages.add(page(List.of(truncatedIssue("P-9")), null));
+        api.changelogs.put("P-9", ApiResult.httpError(503, "GET", "url", null, "down"));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertFalse(result.complete());
+        assertNull(result.checkpoint());
+    }
+
+    @Test
+    void changelogRateLimited_abortsWindow() {
+        api.pages.add(page(List.of(truncatedIssue("P-9")), null));
+        api.changelogs.put("P-9", ApiResult.httpError(429, "GET", "url", null, "slow down"));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertFalse(result.complete());
+        assertNull(result.checkpoint());
+    }
+
+    @Test
+    void changelogNetworkError_abortsWindow() {
+        api.pages.add(page(List.of(truncatedIssue("P-9")), null));
+        api.changelogs.put("P-9", ApiResult.exception(new java.io.IOException("reset"), "GET", "url", null));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertFalse(result.complete());
+        assertNull(result.checkpoint());
+    }
+
+    @Test
+    void notLastPageWithoutToken_completesWindow() {
+        ObjectNode data = MAPPER.createObjectNode();
+        data.putArray("issues").add(issue("P-1", "2026-10-01T10:01:00.000+0000",
+                "2026-10-01T10:01:00.000+0000"));
+        data.put("isLast", false);
+        api.pages.add(ApiResult.ok(data, "POST", "url", null, null));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertTrue(result.complete());
+        assertEquals(Set.of("P-1-created"), stream.ids);
     }
 
     @Test
@@ -221,6 +297,16 @@ class JiraEventSourcePollerTest {
         fields.putObject("reporter").put("accountId", "r").put("displayName", "r");
         fields.putArray("labels");
         fields.putNull("assignee");
+        return issue;
+    }
+
+    private static ObjectNode truncatedIssue(String key) {
+        ObjectNode issue = issue(key, "2026-09-01T00:00:00.000+0000", "2026-10-01T10:03:00.000+0000");
+        ObjectNode changelog = issue.putObject("changelog");
+        changelog.put("startAt", 0);
+        changelog.put("maxResults", 1);
+        changelog.put("total", 2);
+        changelog.putArray("histories").add(history("1", "2026-10-01T10:03:00.000+0000"));
         return issue;
     }
 
