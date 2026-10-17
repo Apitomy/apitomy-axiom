@@ -6,6 +6,7 @@ import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -53,45 +54,68 @@ public class ToolsetResolver {
         }
 
         Set<String> resolved = new LinkedHashSet<>();
-        Set<String> visited = new LinkedHashSet<>(); // cycle detection
+        Set<String> path = new HashSet<>();     // current recursion path (cycle detection)
+        Set<String> expanded = new HashSet<>(); // toolsets already fully expanded
 
         allowedTools.stream()
                 .filter(s -> s != null)
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
-                .forEach(entry -> expandEntry(entry, resolved, visited));
+                .forEach(entry -> expandEntry(entry, resolved, path, expanded));
 
         return new ArrayList<>(resolved);
     }
 
     /**
      * Expands a single entry — either a direct tool name or a @toolset reference.
+     *
+     * @param entry    the trimmed, non-empty entry
+     * @param resolved accumulator of resolved tool names (ordered, deduplicated)
+     * @param path     toolsets on the current recursion path, used for cycle detection
+     * @param expanded toolsets already expanded, which are skipped silently (e.g. diamonds)
      */
-    private void expandEntry(String entry, Set<String> resolved, Set<String> visited) {
-        if (entry.startsWith("@")) {
-            String toolsetName = entry.substring(1);
-            if (visited.contains(toolsetName)) {
-                LOG.warnf("Circular toolset reference detected: @%s", toolsetName);
-                return;
-            }
-            visited.add(toolsetName);
+    private void expandEntry(String entry, Set<String> resolved, Set<String> path, Set<String> expanded) {
+        if (!entry.startsWith("@")) {
+            resolved.add(entry);
+            return;
+        }
+        String toolsetName = entry.substring(1);
+        if (path.contains(toolsetName)) {
+            LOG.warnf("Circular toolset reference detected: @%s", toolsetName);
+            return;
+        }
+        if (!expanded.add(toolsetName)) {
+            return;
+        }
 
-            ToolsetEntity toolset = ToolsetEntity.find("name", toolsetName).firstResult();
-            if (toolset == null || toolset.tools == null) {
-                LOG.warnf("Toolset not found: @%s", toolsetName);
-                return;
-            }
+        ToolsetEntity toolset = findToolset(toolsetName);
+        if (toolset == null) {
+            LOG.warnf("Toolset not found: @%s", toolsetName);
+            return;
+        }
+        if (toolset.tools == null) {
+            LOG.warnf("Toolset @%s has no tools; skipping", toolsetName);
+            return;
+        }
 
-            // Recursively expand the toolset's tools
-            List<String> toolsetEntries = Arrays.stream(toolset.tools.split(","))
+        path.add(toolsetName);
+        try {
+            Arrays.stream(toolset.tools.split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
-                    .toList();
-            for (String subEntry : toolsetEntries) {
-                expandEntry(subEntry, resolved, visited);
-            }
-        } else {
-            resolved.add(entry);
+                    .forEach(subEntry -> expandEntry(subEntry, resolved, path, expanded));
+        } finally {
+            path.remove(toolsetName);
         }
+    }
+
+    /**
+     * Looks up a toolset by name. Package-private so unit tests can stub the lookup.
+     *
+     * @param name the toolset name (without the {@code @} prefix)
+     * @return the toolset, or {@code null} if not found
+     */
+    ToolsetEntity findToolset(String name) {
+        return ToolsetEntity.find("name", name).firstResult();
     }
 }

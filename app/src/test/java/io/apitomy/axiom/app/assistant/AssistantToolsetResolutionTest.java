@@ -6,14 +6,14 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
-
-import java.time.Duration;
 
 /**
  * Verifies that session template allowed tools are resolved through the shared
@@ -91,5 +91,30 @@ class AssistantToolsetResolutionTest {
                         template(List.of("@" + unique("Missing"), "Bash"))));
 
         assertEquals(List.of("Bash"), resolved);
+    }
+
+    @Test
+    void diamondToolsetsResolveOnce() {
+        String base = unique("Base");
+        String left = unique("Left");
+        String right = unique("Right");
+        String top = unique("Top");
+        createToolset(base, "Read, Grep");
+        createToolset(left, "@" + base + ", Edit");
+        createToolset(right, "@" + base + ", Write");
+        createToolset(top, "@" + left + ", @" + right);
+
+        // Called without a surrounding transaction, matching production usage.
+        List<String> resolved = sessionManager.resolveAllowedTools(template(List.of("@" + top)));
+
+        assertEquals(List.of("Read", "Grep", "Edit", "Write"), resolved);
+    }
+
+    @Test
+    void nullBlankAndDuplicateEntriesAreIgnored() {
+        List<String> resolved = sessionManager.resolveAllowedTools(
+                template(Arrays.asList("Read", null, " ", "Read")));
+
+        assertEquals(List.of("Read"), resolved);
     }
 }
