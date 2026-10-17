@@ -190,4 +190,18 @@ class SubscriptionFilterEvaluatorTest {
         assertEquals(SubscriptionFilterResult.Outcome.ERROR, result.outcome());
         assertNotNull(result.errorMessage());
     }
+
+    @Test
+    void evaluateFilterIncludesTheRootCauseMessage() {
+        SubscriptionFilterEvaluator failing = new SubscriptionFilterEvaluator() {
+            @Override
+            public boolean evaluate(String filterExpression, Map<String, Object> eventMap) {
+                throw new IllegalStateException("outer",
+                        new IllegalArgumentException("index 100 out of bounds"));
+            }
+        };
+        SubscriptionFilterResult result = failing.evaluateFilter("x", Map.of());
+        assertTrue(result.errorMessage().contains("outer"), result.errorMessage());
+        assertTrue(result.errorMessage().contains("index 100 out of bounds"), result.errorMessage());
+    }
 }

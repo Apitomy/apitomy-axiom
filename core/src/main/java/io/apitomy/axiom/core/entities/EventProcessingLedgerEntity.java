@@ -14,15 +14,31 @@ import java.util.UUID;
  * Each row represents one (event, subscription) pair and records whether the
  * event matched the subscription's filter and whether routing completed.
  *
- * <p>Statuses: {@code pending} (an attempt is in progress), {@code completed}
- * (routing succeeded), {@code skipped} (filter did not match), {@code failed}
- * (the last attempt failed; retried at {@code nextAttemptAt}) and {@code exhausted}
- * (the last allowed attempt failed; not retried unless retried manually).</p>
+ * <p>Statuses: {@link #PENDING} (an attempt is in progress), {@link #COMPLETED}
+ * (routing succeeded), {@link #SKIPPED} (filter did not match), {@link #FAILED}
+ * (the last attempt failed; retried at {@code nextAttemptAt}), {@link #EXHAUSTED}
+ * (the last allowed attempt failed; not retried unless retried manually) and
+ * {@link #FILTER_ERROR} (the subscription's filter could not be evaluated against the
+ * event; no route ran, and it is re-evaluated only after a manual retry or a change of
+ * the filter).</p>
  */
 @Entity
 @Table(name = "event_processing_ledger", indexes = @Index(name = "idx_epl_status_next",
         columnList = "status, next_attempt_at"))
 public class EventProcessingLedgerEntity extends PanacheEntity {
+
+    /** An attempt is in progress. */
+    public static final String PENDING = "pending";
+    /** Routing succeeded. */
+    public static final String COMPLETED = "completed";
+    /** The last attempt failed; retried at {@code nextAttemptAt}. */
+    public static final String FAILED = "failed";
+    /** The last allowed attempt failed; retried only manually. */
+    public static final String EXHAUSTED = "exhausted";
+    /** The subscription's filter did not match the event. */
+    public static final String SKIPPED = "skipped";
+    /** The subscription's filter could not be evaluated against the event (fail closed). */
+    public static final String FILTER_ERROR = "filter_error";
 
     @Column(name = "event_id", nullable = false)
     public UUID eventId;
@@ -31,13 +47,14 @@ public class EventProcessingLedgerEntity extends PanacheEntity {
     public Long subscriptionId;
 
     /**
-     * Processing status: "pending", "completed", "skipped", "failed", "exhausted".
+     * Processing status: one of {@link #PENDING}, {@link #COMPLETED}, {@link #SKIPPED},
+     * {@link #FAILED}, {@link #EXHAUSTED} or {@link #FILTER_ERROR}.
      */
     @Column(nullable = false, length = 32)
     public String status;
 
     /**
-     * Error message when status is "failed".
+     * Error message when status is {@link #FAILED}, {@link #EXHAUSTED} or {@link #FILTER_ERROR}.
      */
     @Column(name = "error_message", columnDefinition = "TEXT")
     public String errorMessage;

@@ -50,9 +50,26 @@ public class SubscriptionFilterEvaluator {
         try {
             return evaluate(filterExpression, eventMap) ? SubscriptionFilterResult.match() : SubscriptionFilterResult.noMatch();
         } catch (Exception e) {
-            String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            return SubscriptionFilterResult.error(message);
+            return SubscriptionFilterResult.error(describe(e));
         }
+    }
+
+    /**
+     * Describes an evaluation failure: its message plus, when different, the message of its root cause.
+     */
+    private static String describe(Exception e) {
+        String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        if (root != e) {
+            String rootMessage = root.getMessage() != null ? root.getMessage() : root.getClass().getSimpleName();
+            if (!message.contains(rootMessage)) {
+                message = message + " (caused by: " + rootMessage + ")";
+            }
+        }
+        return message;
     }
 
     /**

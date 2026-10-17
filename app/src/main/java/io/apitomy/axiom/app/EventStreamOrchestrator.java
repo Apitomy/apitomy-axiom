@@ -26,6 +26,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
@@ -61,11 +62,6 @@ public class EventStreamOrchestrator {
      * rule (it is not a rule type, so it never matches a rule when skipping on retry).
      */
     static final String ROUTING_TYPE_PROCESSING = "processing";
-
-    /**
-     * Ledger status of an entry whose subscription filter could not be evaluated against the event.
-     */
-    public static final String FILTER_ERROR = "filter_error";
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
@@ -267,7 +263,7 @@ public class EventStreamOrchestrator {
             eventMap = buildEventMap(event, parsePayload(event));
             SubscriptionFilterResult result = filterEvaluator.evaluateFilter(sub.filterExpression, eventMap);
             if (result.isError()) {
-                Long ledgerId = createLedgerEntry(event.id, sub.id, "pending");
+                Long ledgerId = createLedgerEntry(event.id, sub.id, EventProcessingLedgerEntity.PENDING);
                 if (ledgerId != null) {
                     recordFilterError(ledgerId, event.id, sub, result.errorMessage());
                 }
@@ -276,7 +272,7 @@ public class EventStreamOrchestrator {
             matched = result.matched();
         } catch (Exception e) {
             try {
-                Long ledgerId = createLedgerEntry(event.id, sub.id, "pending");
+                Long ledgerId = createLedgerEntry(event.id, sub.id, EventProcessingLedgerEntity.PENDING);
                 if (ledgerId != null) {
                     failProcessing(ledgerId, 1, e);
                 }
@@ -289,12 +285,12 @@ public class EventStreamOrchestrator {
         try {
             if (!matched) {
                 // Create a "skipped" ledger entry so we don't re-evaluate
-                createLedgerEntry(event.id, sub.id, "skipped");
+                createLedgerEntry(event.id, sub.id, EventProcessingLedgerEntity.SKIPPED);
                 return;
             }
 
             // Create a "pending" ledger entry: this is attempt 1
-            Long ledgerId = createLedgerEntry(event.id, sub.id, "pending");
+            Long ledgerId = createLedgerEntry(event.id, sub.id, EventProcessingLedgerEntity.PENDING);
             if (ledgerId == null) return; // Another entry already exists
 
             // Execute routing rules
@@ -321,7 +317,7 @@ public class EventStreamOrchestrator {
             EventProcessingLedgerEntity.<EventProcessingLedgerEntity>find(
                 "status = ?1 AND nextAttemptAt <= ?2 "
                         + "AND (lastAttemptAt IS NULL OR lastAttemptAt < ?3) "
-                        + "ORDER BY nextAttemptAt ASC", "failed", Instant.now(), tickStart)
+                        + "ORDER BY nextAttemptAt ASC", EventProcessingLedgerEntity.FAILED, Instant.now(), tickStart)
                 .page(0, BATCH_SIZE).list()
         );
 
@@ -424,8 +420,15 @@ public class EventStreamOrchestrator {
     /**
      * Marks a ledger entry {@code filter_error}: the subscription's filter could not be evaluated
      * against the event. No route runs (fail closed). Filter errors are usually deterministic, so the
-     * entry is not retried automatically; a manual retry or an update of the subscription makes it
-     * due again.
+     * entry is not retried automatically; a manual retry or a change of the filter makes it due again.
+     *
+     * <p>The error came from the filter in the tick's subscription snapshot. If the subscription
+     * was modified since the snapshot was taken (e.g. its filter was fixed while the tick evaluated
+     * the old one), {@link #retryFilterErrors} already ran and found the entry still pending, so the
+     * entry is made due ({@code failed}) instead, to be re-evaluated with the current filter. The
+     * subscription row is locked first so a concurrent update either commits before the check (and
+     * is seen) or runs its {@link #retryFilterErrors} after this transaction commits (and re-queues
+     * the entry). Only a {@code pending} entry is changed.</p>
      */
     private void recordFilterError(Long ledgerId, UUID eventId, SubscriptionWithFilters sub,
                                    String errorMessage) {
@@ -434,27 +437,48 @@ public class EventStreamOrchestrator {
         LOG.warnf("Filter of subscription %d ('%s') could not be evaluated for event %s: %s",
                 sub.id, sub.name, eventId, errorMessage);
         QuarkusTransaction.requiringNew().run(() -> {
-            EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
-            if (entry != null) {
-                entry.status = FILTER_ERROR;
-                entry.errorMessage = truncate(message, 2000);
-                entry.nextAttemptAt = null;
-                entry.processedOn = Instant.now();
+            EventSubscriptionEntity current = EventSubscriptionEntity.findById(sub.id,
+                    LockModeType.PESSIMISTIC_WRITE);
+            boolean stale = current != null && current.modifiedOn != null
+                    && (sub.modifiedOn == null || current.modifiedOn.isAfter(sub.modifiedOn));
+            Instant now = Instant.now();
+            if (stale) {
+                LOG.infof("Subscription %d changed while its filter was evaluated for event %s; "
+                        + "re-evaluating", sub.id, eventId);
+                EventProcessingLedgerEntity.update(
+                        "status = ?1, errorMessage = ?2, nextAttemptAt = ?3, processedOn = ?3 "
+                        + "where id = ?4 and status = ?5",
+                        EventProcessingLedgerEntity.FAILED, truncate(message, 2000), now, ledgerId,
+                        EventProcessingLedgerEntity.PENDING);
+            } else {
+                EventProcessingLedgerEntity.update(
+                        "status = ?1, errorMessage = ?2, nextAttemptAt = null, processedOn = ?3 "
+                        + "where id = ?4 and status = ?5",
+                        EventProcessingLedgerEntity.FILTER_ERROR, truncate(message, 2000), now,
+                        ledgerId, EventProcessingLedgerEntity.PENDING);
             }
         });
     }
 
     /**
-     * Makes every {@code filter_error} ledger entry of a subscription due for re-evaluation, e.g.
-     * after its filter was edited.
+     * Makes every {@code filter_error} ledger entry of an enabled subscription due for
+     * re-evaluation, e.g. after its filter was changed. Re-evaluating a filter is not a routing
+     * attempt, so the attempt count is reset: the re-evaluation becomes attempt 1. Must be called
+     * in the transaction that changed the subscription, after the change was flushed (see
+     * {@link #recordFilterError}).
      *
      * @param subscriptionId the subscription
-     * @return the number of entries made due
+     * @return the number of entries made due; 0 if the subscription is disabled or missing
      */
     public int retryFilterErrors(long subscriptionId) {
+        EventSubscriptionEntity subscription = EventSubscriptionEntity.findById(subscriptionId);
+        if (subscription == null || !subscription.enabled) {
+            return 0;
+        }
         return EventProcessingLedgerEntity.update(
-                "status = 'failed', nextAttemptAt = ?1 where subscriptionId = ?2 and status = ?3",
-                Instant.now(), subscriptionId, FILTER_ERROR);
+                "status = ?1, nextAttemptAt = ?2, attemptCount = 0 where subscriptionId = ?3 and status = ?4",
+                EventProcessingLedgerEntity.FAILED, Instant.now(), subscriptionId,
+                EventProcessingLedgerEntity.FILTER_ERROR);
     }
 
     /**
@@ -486,7 +510,7 @@ public class EventStreamOrchestrator {
             entry.subscriptionId = subscriptionId;
             entry.status = status;
             entry.createdOn = now;
-            if ("pending".equals(status)) {
+            if (EventProcessingLedgerEntity.PENDING.equals(status)) {
                 entry.attemptCount = 1;
                 entry.lastAttemptAt = now;
             } else {
@@ -520,11 +544,11 @@ public class EventStreamOrchestrator {
     }
 
     private void completeLedgerEntry(Long ledgerId) {
-        finishLedgerEntry(ledgerId, "completed");
+        finishLedgerEntry(ledgerId, EventProcessingLedgerEntity.COMPLETED);
     }
 
     private void skipLedgerEntry(Long ledgerId) {
-        finishLedgerEntry(ledgerId, "skipped");
+        finishLedgerEntry(ledgerId, EventProcessingLedgerEntity.SKIPPED);
     }
 
     private void finishLedgerEntry(Long ledgerId, String status) {
@@ -555,7 +579,7 @@ public class EventStreamOrchestrator {
                 String message = errorMessage != null ? errorMessage : "Unknown error";
                 int room = 2000 - suffix.length();
                 Instant now = Instant.now();
-                entry.status = exhausted ? "exhausted" : "failed";
+                entry.status = exhausted ? EventProcessingLedgerEntity.EXHAUSTED : EventProcessingLedgerEntity.FAILED;
                 entry.errorMessage = message.substring(0, Math.min(message.length(), room))
                         + suffix;
                 entry.processedOn = now;
@@ -582,9 +606,15 @@ public class EventStreamOrchestrator {
         return QuarkusTransaction.requiringNew().call(() -> {
             // A single conditional update: an attempt started concurrently (status pending)
             // is never made due again nor has its attempt count rolled back.
+            // Re-evaluating a filter is not a routing attempt: a filter_error entry restarts its
+            // attempt count (attemptCount = 0, so the re-evaluation is attempt 1).
             int updated = EventProcessingLedgerEntity.update(
-                    "status = 'failed', nextAttemptAt = ?1 where id = ?2 "
-                    + "and status in ('failed', 'exhausted', 'filter_error')", Instant.now(), ledgerId);
+                    "status = ?1, nextAttemptAt = ?2, "
+                    + "attemptCount = case when status = ?3 then 0 else attemptCount end "
+                    + "where id = ?4 and status in (?1, ?5, ?3)",
+                    EventProcessingLedgerEntity.FAILED, Instant.now(),
+                    EventProcessingLedgerEntity.FILTER_ERROR, ledgerId,
+                    EventProcessingLedgerEntity.EXHAUSTED);
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             if (entry == null) return null;
             if (updated == 0) {
@@ -1020,14 +1050,15 @@ public class EventStreamOrchestrator {
                         }
                     }
                     return new SubscriptionWithFilters(e.id, e.name, e.labels, e.filters, rules,
-                            e.processEventsFrom != null ? e.processEventsFrom : Instant.EPOCH);
+                            e.processEventsFrom != null ? e.processEventsFrom : Instant.EPOCH,
+                            e.modifiedOn);
                 })
                 .toList();
     }
 
     record SubscriptionWithFilters(long id, String name, List<String> labels,
                                     String filterExpression, List<RoutingRule> routing,
-                                    Instant processEventsFrom) {}
+                                    Instant processEventsFrom, Instant modifiedOn) {}
 
     // ── Activity and thread logging ────────────────────────────────
 

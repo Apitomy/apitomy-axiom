@@ -153,7 +153,10 @@ class RetryBackoffTest {
     }
 
     @Test
-    void preLedgerFilterFailureCreatesAFailedEntryAndIsCapped() {
+    void unexpectedExceptionBeforeTheLedgerEntryCreatesAFailedEntryAndIsCapped() {
+        // evaluateFilter reports evaluation errors as results and building the event map
+        // tolerates bad JSON, so no real input reaches this path: the mock throws to simulate
+        // an unexpected failure (a bug, a runtime error) before the ledger entry exists.
         Mockito.when(filterEvaluator.evaluateFilter(ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenThrow(new IllegalStateException("filter blew up"));
         UUID eventId = createEventAndSubscription();
@@ -433,11 +436,6 @@ class RetryBackoffTest {
         });
     }
 
-    /**
-     * Applies {@code change} to the ledger row in a transaction on another thread, runs
-     * {@code action} on a third thread while that transaction still holds the row, then
-     * commits the change and waits for the action.
-     */
     @Test
     void filterEvaluationErrorIsRecordedAsFilterErrorNotSkipped() {
         brokenFilter();
@@ -534,11 +532,115 @@ class RetryBackoffTest {
         assertEquals("skipped", ledger(eventId).status, "The fixed filter is re-evaluated");
     }
 
+    @Test
+    void filterFixedWhileATickEvaluatesTheOldFilterIsReEvaluated() {
+        UUID eventId = createEventAndSubscription();
+        Long subId = subscriptionId();
+        Mockito.when(filterEvaluator.isValid(ArgumentMatchers.any())).thenReturn(true);
+        // The tick evaluates the old (broken) filter; while it does, the user fixes the filter.
+        // retryFilterErrors runs and commits before the tick records the filter error.
+        Mockito.when(filterEvaluator.evaluateFilter(ArgumentMatchers.any(), ArgumentMatchers.any()))
+                .thenAnswer(invocation -> {
+                    putSubscription(subId, "event.type == 'fixed'", true);
+                    return SubscriptionFilterResult.error("bad property");
+                });
+
+        orchestrator.processNewEvents();
+
+        EventProcessingLedgerEntity entry = ledger(eventId);
+        assertEquals("failed", entry.status, "A filter error from a stale filter is re-evaluated");
+        assertNotNull(entry.nextAttemptAt);
+
+        // doReturn: when(...) would invoke the answer that updates the subscription
+        Mockito.doReturn(SubscriptionFilterResult.noMatch()).when(filterEvaluator)
+                .evaluateFilter(ArgumentMatchers.any(), ArgumentMatchers.any());
+        orchestrator.processNewEvents();
+        assertEquals("skipped", ledger(eventId).status);
+    }
+
+    @Test
+    void updatingTheSubscriptionWithoutChangingTheFilterDoesNotRequeueFilterErrors() {
+        brokenFilter();
+        UUID eventId = createEventAndSubscription();
+        orchestrator.processNewEvents();
+        Mockito.when(filterEvaluator.isValid(ArgumentMatchers.any())).thenReturn(true);
+
+        // createEventAndSubscription leaves the filter unset
+        putSubscription(subscriptionId(), null, true);
+
+        assertEquals("filter_error", ledger(eventId).status);
+    }
+
+    @Test
+    void updatingADisabledSubscriptionDoesNotRequeueFilterErrors() {
+        brokenFilter();
+        UUID eventId = createEventAndSubscription();
+        orchestrator.processNewEvents();
+        Mockito.when(filterEvaluator.isValid(ArgumentMatchers.any())).thenReturn(true);
+
+        putSubscription(subscriptionId(), "event.type == 'x'", false);
+
+        assertEquals("filter_error", ledger(eventId).status);
+    }
+
+    @Test
+    void reEvaluatingFilterErrorsAfterAFilterChangeDoesNotBurnAttempts() {
+        brokenFilter();
+        UUID eventId = createEventAndSubscription();
+        orchestrator.processNewEvents();
+        Mockito.when(filterEvaluator.isValid(ArgumentMatchers.any())).thenReturn(true);
+        for (int i = 0; i < 5; i++) {
+            putSubscription(subscriptionId(), "event.type == 'x" + i + "'", true);
+            orchestrator.processNewEvents();
+        }
+
+        EventProcessingLedgerEntity entry = ledger(eventId);
+        assertEquals("filter_error", entry.status, "Never exhausted by re-evaluations");
+        assertEquals(1, entry.attemptCount);
+    }
+
+    @Test
+    void manualRetriesOfAFilterErrorDoNotBurnAttempts() {
+        brokenFilter();
+        UUID eventId = createEventAndSubscription();
+        orchestrator.processNewEvents();
+        Long ledgerId = ledger(eventId).id;
+        for (int i = 0; i < 5; i++) {
+            given().when()
+                    .post("/api/v1/stream/events/" + eventId + "/processing/" + ledgerId + "/retry")
+                    .then().statusCode(200);
+            orchestrator.processNewEvents();
+        }
+
+        EventProcessingLedgerEntity entry = ledger(eventId);
+        assertEquals("filter_error", entry.status);
+        assertEquals(1, entry.attemptCount);
+    }
+
+    private static Long subscriptionId() {
+        return QuarkusTransaction.requiringNew().call(() ->
+                EventSubscriptionEntity.<EventSubscriptionEntity>findAll().firstResult().id);
+    }
+
+    private static void putSubscription(Long subId, String filter, boolean enabled) {
+        String filterJson = filter != null ? ",\"filterExpression\":\"" + filter + "\"" : "";
+        given().contentType("application/json")
+                .body("{\"name\":\"retry-sub\",\"enabled\":" + enabled
+                        + filterJson + "}")
+                .when().put("/api/v1/subscriptions/" + subId)
+                .then().statusCode(200);
+    }
+
     private void brokenFilter() {
         Mockito.when(filterEvaluator.evaluateFilter(ArgumentMatchers.any(), ArgumentMatchers.any()))
                 .thenReturn(SubscriptionFilterResult.error("bad property"));
     }
 
+    /**
+     * Applies {@code change} to the ledger row in a transaction on another thread, runs
+     * {@code action} on a third thread while that transaction still holds the row, then
+     * commits the change and waits for the action.
+     */
     private static void runWhileRowIsLocked(Long ledgerId, String change, Runnable action)
             throws Exception {
         java.util.concurrent.CountDownLatch locked = new java.util.concurrent.CountDownLatch(1);
