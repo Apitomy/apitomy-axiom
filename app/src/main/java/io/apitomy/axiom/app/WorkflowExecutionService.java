@@ -275,6 +275,10 @@ public class WorkflowExecutionService {
         }
     }
 
+    private static boolean isTerminalRunStatus(String status) {
+        return "completed".equals(status) || "failed".equals(status) || "cancelled".equals(status);
+    }
+
     private void advanceAfterTask(TaskEntity task) {
         long taskId = task.id;
 
@@ -286,9 +290,22 @@ public class WorkflowExecutionService {
             return;
         }
 
+        // A run that already ended (e.g. cancelled or failed) cannot accept node results: the engine
+        // would throw and mark the caller's transaction rollback-only (#343).
+        if (isTerminalRunStatus(entity.status)) {
+            LOG.debugf("Workflow run %d is %s; ignoring completion of task %d",
+                    entity.id, entity.status, Long.valueOf(taskId));
+            return;
+        }
+
         Workflow workflow = loadWorkflowContent(
                 entity.definitionId, entity.definitionVersion);
         WorkflowInstance instance = deserializeInstance(entity.instanceState);
+        if (instance.status() != InstanceStatus.WAITING) {
+            LOG.debugf("Workflow run %d instance is %s, not WAITING; ignoring completion of task %d",
+                    entity.id, instance.status(), Long.valueOf(taskId));
+            return;
+        }
 
         NodeResult result;
         HumanTaskInfo humanTaskInfo = workflowEngine.getHumanTaskInfo(workflow, instance, task.nodeId);
@@ -581,16 +598,17 @@ public class WorkflowExecutionService {
         entity.completedOn = Instant.now();
         completeRunTrace(entity, "cancelled");
 
-        TaskEntity activeTask = TaskEntity
-                .find("workflowRunId = ?1 and status in ?2",
+        List<TaskEntity> activeTasks = TaskEntity
+                .<TaskEntity>find("workflowRunId = ?1 and status in ?2",
                         entity.id,
                         List.of("Pending", "InProgress"))
-                .firstResult();
-        if (activeTask != null) {
+                .list();
+        Instant cancelledOn = Instant.now();
+        activeTasks.forEach(activeTask -> {
             activeTask.status = "Failed";
             activeTask.output = "Cancelled: workflow was cancelled";
-            activeTask.completedOn = Instant.now();
-        }
+            activeTask.completedOn = cancelledOn;
+        });
 
         logActivity(entity.subjectId, "workflow-cancelled", "Workflow cancelled", entity.traceId);
         sseEvents.fire(SseEvent.workflowUpdated(

@@ -6,9 +6,7 @@ import io.apitomy.axiom.core.entities.AgentCapabilityEntity;
 import io.apitomy.axiom.core.entities.AgentEntity;
 import io.apitomy.axiom.core.entities.AgentLeaseEntity;
 import io.apitomy.axiom.core.util.GlobMatcher;
-import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -40,10 +38,12 @@ public class AgentPool {
     AgentRegistry agentRegistry;
 
     /**
-     * Cleans up orphaned leases on startup (e.g. from a previous crash).
+     * Deletes all lease rows left by a previous process (e.g. after a crash or restart). Called once at
+     * startup by {@link TaskExecutionService#onStartup}, before interrupted tasks are failed, so that the
+     * agents are free again when the next task is dispatched.
      */
     @Transactional
-    void cleanup(@Observes StartupEvent event) {
+    public void releaseOrphanedLeases() {
         long orphaned = AgentLeaseEntity.deleteAll();
         if (orphaned > 0) {
             LOG.infof("Cleaned up %d orphaned agent lease(s) from previous run", orphaned);
