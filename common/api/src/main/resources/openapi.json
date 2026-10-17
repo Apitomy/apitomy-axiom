@@ -3116,6 +3116,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "The inbox item's workflow run was cancelled or has otherwise ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       },

@@ -11,6 +11,7 @@ import io.apitomy.axiom.api.beans.InboxItem;
 import io.apitomy.axiom.api.beans.InboxResponse;
 import io.apitomy.axiom.api.beans.InboxSearchResults;
 import io.apitomy.axiom.api.beans.NewInboxItem;
+import io.apitomy.axiom.app.HumanTaskStatuses;
 import io.apitomy.axiom.app.TaskExecutionService;
 import io.apitomy.axiom.api.beans.OutputSchema;
 import io.apitomy.axiom.api.beans.OutputSchemaField;
@@ -64,7 +65,7 @@ public class InboxResourceImpl implements InboxResource {
 
         StringBuilder hql = new StringBuilder("status = :status");
         Map<String, Object> params = new HashMap<>();
-        params.put("status", "AwaitingInput");
+        params.put("status", HumanTaskStatuses.AWAITING_INPUT);
 
         if (filterLabels != null && !filterLabels.isBlank()) {
             List<String> labels = Arrays.stream(filterLabels.split(","))
@@ -111,7 +112,7 @@ public class InboxResourceImpl implements InboxResource {
      */
     @Override
     public InboxCount getInboxCount() {
-        long count = TaskEntity.count("status", "AwaitingInput");
+        long count = TaskEntity.count("status", HumanTaskStatuses.AWAITING_INPUT);
         InboxCount result = new InboxCount();
         result.setCount(count);
         return result;
@@ -176,7 +177,7 @@ public class InboxResourceImpl implements InboxResource {
         long tid = taskId.longValue();
         TaskEntity task = TaskEntity.findById(tid);
 
-        if (task == null || !"AwaitingInput".equals(task.status)) {
+        if (task == null || !HumanTaskStatuses.AWAITING_INPUT.equals(task.status)) {
             throw new WebApplicationException("Inbox item not found: " + tid, 404);
         }
 
@@ -193,7 +194,9 @@ public class InboxResourceImpl implements InboxResource {
         long tid = taskId.longValue();
         TaskEntity task = TaskEntity.findById(tid);
 
-        if (task == null || !"AwaitingInput".equals(task.status)) {
+        // A Cancelled task falls through so completeHumanTask can report the 409.
+        if (task == null || !(HumanTaskStatuses.AWAITING_INPUT.equals(task.status)
+                || HumanTaskStatuses.CANCELLED.equals(task.status))) {
             throw new WebApplicationException("Inbox item not found or not awaiting input: " + tid, 404);
         }
 
@@ -209,7 +212,8 @@ public class InboxResourceImpl implements InboxResource {
         // Serialize response to JSON and submit
         try {
             String responseJson = objectMapper.writeValueAsString(responseMap);
-            taskExecutionService.onTaskCompleted(tid, AgentResult.success(responseJson));
+            // Re-checks status and run state under a run lock: 404 / 409 if it lost a race.
+            taskExecutionService.completeHumanTask(tid, AgentResult.success(responseJson));
 
             LOG.infof("Inbox item %d completed with structured response", tid);
         } catch (WebApplicationException e) {
