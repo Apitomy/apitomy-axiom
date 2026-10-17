@@ -2159,7 +2159,7 @@ export interface EventProcessingEntry {
     nextAttemptAt?: string;
 }
 
-/** Makes a failed or exhausted processing entry due for retry (one more attempt if exhausted). */
+/** Makes a failed, exhausted or filter_error processing entry due for retry (one more attempt if exhausted). */
 export async function retryEventProcessing(eventId: string, ledgerId: number): Promise<EventProcessingEntry> {
     const response = await fetch(
         `${API}/stream/events/${encodeURIComponent(eventId)}/processing/${ledgerId}/retry`,

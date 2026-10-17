@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
+import io.apitomy.axiom.app.EventStreamOrchestrator;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.app.validation.ConfigProblem;
@@ -52,6 +53,9 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
+
+    @Inject
+    EventStreamOrchestrator orchestrator;
 
     @Inject
     ConfigItemValidationService validationService;
@@ -130,6 +134,12 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         EventSubscriptionEntity entity = findOrThrow(subscriptionId);
         applyFields(entity, data);
         entity.modifiedOn = Instant.now();
+        // The filter may have been fixed: re-evaluate events whose filter evaluation failed
+        int due = orchestrator.retryFilterErrors(subscriptionId);
+        if (due > 0) {
+            LOG.infof("Subscription %d updated; %d filter error(s) queued for re-evaluation",
+                    subscriptionId, due);
+        }
         return toBean(entity);
     }
 

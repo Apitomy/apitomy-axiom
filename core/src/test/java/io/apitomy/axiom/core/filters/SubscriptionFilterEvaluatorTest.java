@@ -140,4 +140,54 @@ class SubscriptionFilterEvaluatorTest {
     void isValidReturnsFalseForInvalidExpression() {
         assertFalse(evaluator.isValid("event.type ==== 'test'"));
     }
+
+    // --- Explicit evaluation results (#348) ---
+
+    @Test
+    void evaluateFilterReportsMatch() {
+        SubscriptionFilterResult result = evaluator.evaluateFilter("event.type == 'issue.created'",
+                makeEventMap("issue.created", "github-com"));
+        assertEquals(SubscriptionFilterResult.Outcome.MATCH, result.outcome());
+        assertTrue(result.matched());
+    }
+
+    @Test
+    void evaluateFilterReportsNoMatchForValidFalseExpression() {
+        SubscriptionFilterResult result = evaluator.evaluateFilter("event.type == 'issue.created'",
+                makeEventMap("pr.merged", "github-com"));
+        assertEquals(SubscriptionFilterResult.Outcome.NO_MATCH, result.outcome());
+        assertFalse(result.matched());
+        assertNull(result.errorMessage());
+    }
+
+    @Test
+    void evaluateFilterReportsMatchForBlankExpression() {
+        assertEquals(SubscriptionFilterResult.Outcome.MATCH,
+                evaluator.evaluateFilter(" ", makeEventMap("x", "y")).outcome());
+    }
+
+    @Test
+    void evaluateFilterReportsErrorForMalformedExpression() {
+        SubscriptionFilterResult result = evaluator.evaluateFilter("event.type ==== (",
+                makeEventMap("issue.created", "github-com"));
+        assertEquals(SubscriptionFilterResult.Outcome.ERROR, result.outcome());
+        assertFalse(result.matched());
+        assertNotNull(result.errorMessage());
+        assertFalse(result.errorMessage().isBlank());
+    }
+
+    @Test
+    void evaluateFilterReportsNoMatchForMissingPayloadField() {
+        SubscriptionFilterResult result = evaluator.evaluateFilter("event.payload.missing.deeper == 'x'",
+                makeEventMap("issue.created", "github-com"));
+        assertEquals(SubscriptionFilterResult.Outcome.NO_MATCH, result.outcome());
+    }
+
+    @Test
+    void evaluateFilterReportsErrorForRuntimeFailure() {
+        SubscriptionFilterResult result = evaluator.evaluateFilter("event.type.substring(100) == 'x'",
+                makeEventMap("issue.created", "github-com"));
+        assertEquals(SubscriptionFilterResult.Outcome.ERROR, result.outcome());
+        assertNotNull(result.errorMessage());
+    }
 }

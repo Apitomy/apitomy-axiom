@@ -239,8 +239,9 @@ public class WorkflowEventDispatcher {
                             + " EventSubscriptionEntity s"
                             + " where l.eventId = e.id and s.id = l.subscriptionId"
                             + " and e.type = :type and e.timestamp >= :from"
-                            // skipped = the subscription's filter did not match
-                            + " and l.status <> 'skipped' and s.routing like :routing"
+                            // skipped = the subscription's filter did not match;
+                            // filter_error = it could not be evaluated (fail closed)
+                            + " and l.status not in ('skipped', 'filter_error') and s.routing like :routing"
                             + " and not exists (select r.id from WorkflowRunResumeEntity r"
                             + "   where r.runId = :runId and r.eventId = e.id)"
                             + " group by e.id, e.timestamp, e.createdOn"

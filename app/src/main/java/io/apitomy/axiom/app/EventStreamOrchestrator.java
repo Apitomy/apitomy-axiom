@@ -13,6 +13,7 @@ import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.events.model.RoutingRule;
+import io.apitomy.axiom.core.filters.SubscriptionFilterResult;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.WorkspaceService;
@@ -38,7 +39,7 @@ import java.util.UUID;
 /**
  * Processes stream events against enabled subscriptions using a durable
  * processing ledger. The ledger tracks (event, subscription) pairs with
- * status (pending/completed/skipped/failed), surviving restarts and
+ * status (pending/completed/skipped/failed/exhausted/filter_error), surviving restarts and
  * enabling retry of failed routing.
  *
  * <p>On each tick:</p>
@@ -60,6 +61,11 @@ public class EventStreamOrchestrator {
      * rule (it is not a rule type, so it never matches a rule when skipping on retry).
      */
     static final String ROUTING_TYPE_PROCESSING = "processing";
+
+    /**
+     * Ledger status of an entry whose subscription filter could not be evaluated against the event.
+     */
+    public static final String FILTER_ERROR = "filter_error";
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
@@ -259,7 +265,15 @@ public class EventStreamOrchestrator {
         boolean matched;
         try {
             eventMap = buildEventMap(event, parsePayload(event));
-            matched = filterEvaluator.matches(sub.filterExpression, eventMap);
+            SubscriptionFilterResult result = filterEvaluator.evaluateFilter(sub.filterExpression, eventMap);
+            if (result.isError()) {
+                Long ledgerId = createLedgerEntry(event.id, sub.id, "pending");
+                if (ledgerId != null) {
+                    recordFilterError(ledgerId, event.id, sub, result.errorMessage());
+                }
+                return;
+            }
+            matched = result.matched();
         } catch (Exception e) {
             try {
                 Long ledgerId = createLedgerEntry(event.id, sub.id, "pending");
@@ -348,9 +362,16 @@ public class EventStreamOrchestrator {
             eventMap = buildEventMap(event, parsePayload(event));
             // An entry that never ran a routing rule may have failed before its filter
             // matched (a pre-ledger failure): evaluate the filter again.
-            if (!hasRuleOutcomes(entry.id) && !filterEvaluator.matches(sub.filterExpression, eventMap)) {
-                skipLedgerEntry(entry.id);
-                return;
+            if (!hasRuleOutcomes(entry.id)) {
+                SubscriptionFilterResult result = filterEvaluator.evaluateFilter(sub.filterExpression, eventMap);
+                if (result.isError()) {
+                    recordFilterError(entry.id, event.id, sub, result.errorMessage());
+                    return;
+                }
+                if (!result.matched()) {
+                    skipLedgerEntry(entry.id);
+                    return;
+                }
             }
         } catch (Exception e) {
             failProcessing(entry.id, attempt, e);
@@ -398,6 +419,42 @@ public class EventStreamOrchestrator {
             outcome.persist();
         });
         failLedgerEntry(ledgerId, error);
+    }
+
+    /**
+     * Marks a ledger entry {@code filter_error}: the subscription's filter could not be evaluated
+     * against the event. No route runs (fail closed). Filter errors are usually deterministic, so the
+     * entry is not retried automatically; a manual retry or an update of the subscription makes it
+     * due again.
+     */
+    private void recordFilterError(Long ledgerId, UUID eventId, SubscriptionWithFilters sub,
+                                   String errorMessage) {
+        String message = "Filter evaluation failed: "
+                + (errorMessage != null ? errorMessage : "Unknown error");
+        LOG.warnf("Filter of subscription %d ('%s') could not be evaluated for event %s: %s",
+                sub.id, sub.name, eventId, errorMessage);
+        QuarkusTransaction.requiringNew().run(() -> {
+            EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
+            if (entry != null) {
+                entry.status = FILTER_ERROR;
+                entry.errorMessage = truncate(message, 2000);
+                entry.nextAttemptAt = null;
+                entry.processedOn = Instant.now();
+            }
+        });
+    }
+
+    /**
+     * Makes every {@code filter_error} ledger entry of a subscription due for re-evaluation, e.g.
+     * after its filter was edited.
+     *
+     * @param subscriptionId the subscription
+     * @return the number of entries made due
+     */
+    public int retryFilterErrors(long subscriptionId) {
+        return EventProcessingLedgerEntity.update(
+                "status = 'failed', nextAttemptAt = ?1 where subscriptionId = ?2 and status = ?3",
+                Instant.now(), subscriptionId, FILTER_ERROR);
     }
 
     /**
@@ -512,7 +569,8 @@ public class EventStreamOrchestrator {
     }
 
     /**
-     * Makes a {@code failed} or {@code exhausted} ledger entry due immediately. An exhausted
+     * Makes a {@code failed}, {@code exhausted} or {@code filter_error} ledger entry due immediately
+     * (a {@code filter_error} entry re-evaluates the filter). An exhausted
      * entry gets exactly one more attempt: it is at the cap, so if that attempt fails it is
      * exhausted again. Attempt numbers keep increasing, so the history stays intact.
      *
@@ -526,12 +584,12 @@ public class EventStreamOrchestrator {
             // is never made due again nor has its attempt count rolled back.
             int updated = EventProcessingLedgerEntity.update(
                     "status = 'failed', nextAttemptAt = ?1 where id = ?2 "
-                    + "and status in ('failed', 'exhausted')", Instant.now(), ledgerId);
+                    + "and status in ('failed', 'exhausted', 'filter_error')", Instant.now(), ledgerId);
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             if (entry == null) return null;
             if (updated == 0) {
                 throw new IllegalStateException("Ledger entry " + ledgerId + " is "
-                        + entry.status + "; only failed or exhausted entries can be retried");
+                        + entry.status + "; only failed, exhausted or filter_error entries can be retried");
             }
             LOG.infof("Manual retry requested for event %s / subscription %d (after %d attempts)",
                     entry.eventId, entry.subscriptionId, entry.attemptCount);

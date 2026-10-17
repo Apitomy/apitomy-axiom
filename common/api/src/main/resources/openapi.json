@@ -4622,8 +4622,8 @@
         "tags": [
           "StreamEvents"
         ],
-        "summary": "Retry a failed or exhausted processing entry",
-        "description": "Makes the entry due immediately. An exhausted entry gets one more attempt; if it fails again it is exhausted again.",
+        "summary": "Retry a failed, exhausted or filter_error processing entry",
+        "description": "Makes the entry due immediately. An exhausted entry gets one more attempt; if it fails again it is exhausted again. A filter_error entry re-evaluates the subscription filter.",
         "operationId": "retryEventProcessing",
         "responses": {
           "200": {
@@ -4643,7 +4643,7 @@
             "description": "Event or processing entry not found"
           },
           "409": {
-            "description": "The entry is not failed or exhausted"
+            "description": "The entry is not failed, exhausted or filter_error"
           }
         }
       },
@@ -10612,7 +10612,7 @@
           },
           "status": {
             "type": "string",
-            "description": "pending (an attempt is in progress), completed, skipped, failed (the last attempt failed; retried at nextAttemptAt) or exhausted (the last allowed attempt failed; no more automatic retries)"
+            "description": "pending (an attempt is in progress), completed, skipped (the filter did not match), failed (the last attempt failed; retried at nextAttemptAt), exhausted (the last allowed attempt failed; no more automatic retries) or filter_error (the subscription filter could not be evaluated against the event; no routes ran, errorMessage has the cause; not retried automatically, but re-evaluated on manual retry or when the subscription is updated)"
           },
           "errorMessage": {
             "type": "string"
