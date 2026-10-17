@@ -1,8 +1,12 @@
 package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
@@ -17,6 +21,7 @@ import org.mockito.Mockito;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -109,6 +114,123 @@ class InterruptedTaskRecoveryTest {
         TaskEntity task = load(taskId);
         assertEquals("Failed", task.status);
         assertTrue(task.output.contains("launch exploded"), task.output);
+    }
+
+    @Test
+    void interruptedTaskOfCancelledRunIsFailed() {
+        long[] ids = createSubjectAndWaitingRun();
+        QuarkusTransaction.requiringNew().run(() -> workflowExecutionService.cancelWorkflowRun(ids[1]));
+        assertEquals("cancelled", loadRun(ids[1]).status);
+        Long taskId = createTask(ids[0], "InProgress", ids[1]);
+
+        taskExecutionService.failInterruptedTasks();
+
+        TaskEntity task = load(taskId);
+        assertEquals("Failed", task.status);
+        assertTrue(task.output.contains("Interrupted by a server restart"), task.output);
+        assertEquals("cancelled", loadRun(ids[1]).status);
+    }
+
+    @Test
+    void interruptedTaskOfFailedRunIsFailed() {
+        long[] ids = createSubjectAndWaitingRun();
+        QuarkusTransaction.requiringNew().run(() -> {
+            WorkflowRunEntity run = WorkflowRunEntity.findById(ids[1]);
+            run.status = "failed";
+            run.completedOn = Instant.now();
+        });
+        Long taskId = createTask(ids[0], "InProgress", ids[1]);
+
+        taskExecutionService.failInterruptedTasks();
+
+        TaskEntity task = load(taskId);
+        assertEquals("Failed", task.status);
+        assertTrue(task.output.contains("Interrupted by a server restart"), task.output);
+    }
+
+    @Test
+    void cancellingRunFailsAllActiveTasks() {
+        long[] ids = createSubjectAndWaitingRun();
+        Long inProgressId = createTask(ids[0], "InProgress", ids[1]);
+        Long pendingId = createTask(ids[0], "Pending", ids[1]);
+
+        QuarkusTransaction.requiringNew().run(() -> workflowExecutionService.cancelWorkflowRun(ids[1]));
+
+        for (Long taskId : List.of(inProgressId, pendingId)) {
+            TaskEntity task = load(taskId);
+            assertEquals("Failed", task.status, "task " + taskId);
+            assertNotNull(task.completedOn);
+        }
+    }
+
+    @Test
+    void interruptedScriptTaskIsFailed() {
+        Long subjectId = createSubject();
+        String actionType = "interrupted-script-" + UUID.randomUUID();
+        QuarkusTransaction.requiringNew().run(() -> {
+            ActionTypeEntity at = new ActionTypeEntity();
+            at.name = actionType;
+            at.executionMode = "script";
+            at.scriptTemplate = "#!/usr/bin/env bash\necho '{}'\n";
+            at.persist();
+        });
+        Long taskId = createTask(subjectId, "InProgress", null);
+        QuarkusTransaction.requiringNew().run(() -> {
+            TaskEntity task = TaskEntity.findById(taskId);
+            task.actionType = actionType;
+        });
+
+        taskExecutionService.failInterruptedTasks();
+
+        TaskEntity task = load(taskId);
+        assertEquals("Failed", task.status);
+        assertTrue(task.output.contains("Interrupted by a server restart"), task.output);
+    }
+
+    private static final String WAIT_CONTENT = """
+        {
+            "id": "interrupted-wait-wf",
+            "name": "Interrupted Wait WF",
+            "nodes": [
+                {"id": "s1", "type": "start", "name": "Start", "config": {}, "position": {"x": 0, "y": 0}},
+                {"id": "w1", "type": "wait", "name": "Wait", "config": {"duration": "PT5M"},
+                 "position": {"x": 0, "y": 100}},
+                {"id": "e1", "type": "end", "name": "End", "config": {}, "position": {"x": 0, "y": 200}}
+            ],
+            "edges": [
+                {"id": "edge1", "source": "s1", "target": "w1", "priority": 0, "isDefault": true},
+                {"id": "edge2", "source": "w1", "target": "e1", "priority": 0, "isDefault": true}
+            ]
+        }
+        """;
+
+    /** Creates a subject and a real workflow run parked on a wait node: {subjectId, runId}. */
+    private long[] createSubjectAndWaitingRun() {
+        Long subjectId = createSubject();
+        Long definitionId = QuarkusTransaction.requiringNew().call(() -> {
+            WorkflowDefinitionEntity def = new WorkflowDefinitionEntity();
+            def.name = "interrupted-wf-" + UUID.randomUUID();
+            def.content = WAIT_CONTENT;
+            def.currentVersion = 1;
+            def.createdOn = Instant.now();
+            def.updatedOn = Instant.now();
+            def.persist();
+            WorkflowDefinitionVersionEntity version = new WorkflowDefinitionVersionEntity();
+            version.definitionId = def.id;
+            version.version = 1;
+            version.content = WAIT_CONTENT;
+            version.createdOn = Instant.now();
+            version.persist();
+            return def.id;
+        });
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId));
+        assertEquals("waiting", run.status);
+        return new long[] { subjectId, run.id };
+    }
+
+    private WorkflowRunEntity loadRun(long runId) {
+        return QuarkusTransaction.requiringNew().call(() -> WorkflowRunEntity.<WorkflowRunEntity>findById(runId));
     }
 
     private TaskEntity load(Long taskId) {

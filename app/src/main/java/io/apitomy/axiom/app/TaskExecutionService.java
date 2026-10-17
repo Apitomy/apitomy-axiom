@@ -17,15 +17,15 @@ import io.apitomy.axiom.core.events.SseEvent;
 import io.apitomy.axiom.core.logging.LogContext;
 import io.apitomy.axiom.core.services.ActionTypeIoValidator;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
-import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.core.services.InputBindingResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceService;
-import jakarta.enterprise.context.ApplicationScoped;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.annotation.Priority;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.enterprise.event.Observes;
 import jakarta.interceptor.Interceptor;
@@ -36,8 +36,10 @@ import org.jboss.logging.Logger;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -98,6 +100,10 @@ public class TaskExecutionService {
      * Startup reconciliation (#343). Runs before the scheduler starts (which observes {@link StartupEvent}
      * at {@link Interceptor.Priority#PLATFORM_BEFORE}) so no task can be dispatched by this process first.
      * Flyway migration and ORM start during runtime init, before any {@link StartupEvent} observer.
+     * <p>
+     * Ordering note: quarkus-scheduler's {@code SimpleScheduler.start} observes {@link StartupEvent} at
+     * {@code @Priority(0)}, which equals {@link Interceptor.Priority#PLATFORM_BEFORE}; observers with a
+     * lower priority value run first, so {@code PLATFORM_BEFORE - 1} runs before the scheduler starts.
      *
      * @param event the Quarkus startup event
      */
@@ -120,11 +126,25 @@ public class TaskExecutionService {
         if (!interrupted.isEmpty()) {
             LOG.warnf("Failing %d task(s) interrupted by a server restart", interrupted.size());
         }
+        // Each task fails in its own transaction, without dispatching follow-on work inside it, so a
+        // failure elsewhere can never roll back an interrupted task's failure.
+        Set<Long> subjectIds = new LinkedHashSet<>();
         for (Long taskId : interrupted) {
             try {
-                failTask(taskId, INTERRUPTED_REASON);
+                Long subjectId = QuarkusTransaction.requiringNew().call(
+                        () -> failTaskWithoutDispatch(taskId, INTERRUPTED_REASON));
+                if (subjectId != null) {
+                    subjectIds.add(subjectId);
+                }
             } catch (Exception e) {
                 LOG.errorf(e, "Failed to mark interrupted task %d as failed", taskId);
+            }
+        }
+        for (Long subjectId : subjectIds) {
+            try {
+                QuarkusTransaction.requiringNew().run(() -> executeNextTask(subjectId));
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to dispatch the next task for subject %d after restart", subjectId);
             }
         }
     }
@@ -247,7 +267,11 @@ public class TaskExecutionService {
         } catch (Exception e) {
             releaseLease.run();
             LOG.errorf(e, "Task %d setup failed", task.id);
-            failTask(task.id, "Task setup failed: " + e.getMessage());
+            try {
+                failTask(task.id, "Task setup failed: " + e.getMessage());
+            } catch (Exception failError) {
+                LOG.errorf(failError, "Failed to mark task %d as failed after setup failure", task.id);
+            }
         }
     }
 
@@ -616,9 +640,25 @@ public class TaskExecutionService {
 
     @Transactional
     void failTask(Long taskId, String reason) {
+        doFailTask(taskId, reason, true);
+    }
+
+    /**
+     * Fails a task like {@link #failTask(Long, String)} but does not dispatch the subject's next pending
+     * task; the caller is responsible for that. Must run inside a transaction.
+     *
+     * @param taskId the task to fail
+     * @param reason the failure reason recorded as the task output
+     * @return the task's subject id, or {@code null} when the task does not exist
+     */
+    Long failTaskWithoutDispatch(Long taskId, String reason) {
+        return doFailTask(taskId, reason, false);
+    }
+
+    private Long doFailTask(Long taskId, String reason, boolean dispatchNext) {
         TaskEntity task = TaskEntity.findById(taskId);
         if (task == null) {
-            return;
+            return null;
         }
         try (LogContext ignored = taskLogContext(task)) {
             task.status = "Failed";
@@ -636,16 +676,21 @@ public class TaskExecutionService {
             taskTraceFinalizer.finalizeTaskTrace(task, "failed");
 
             mcpConfigGenerator.cleanupTempFiles(taskId);
-            afterTaskFinished(task.subjectId);
+            afterTaskFinished(task.subjectId, dispatchNext);
 
             // Advance workflow if this task is part of one
             if (task.workflowRunId != null) {
                 workflowExecutionService.onTaskCompleted(task.id);
             }
+            return task.subjectId;
         }
     }
 
     private void afterTaskFinished(Long subjectId) {
+        afterTaskFinished(subjectId, true);
+    }
+
+    private void afterTaskFinished(Long subjectId, boolean dispatchNext) {
         long activeTasks = TaskEntity.count(
                 "subjectId = ?1 and (status = 'InProgress' or status = 'AwaitingInput')",
                 subjectId);
@@ -659,7 +704,7 @@ public class TaskExecutionService {
         }
 
         // If there are pending tasks, trigger the next one
-        if (activeTasks == 0 && pendingTasks > 0) {
+        if (dispatchNext && activeTasks == 0 && pendingTasks > 0) {
             executeNextTask(subjectId);
         }
     }
