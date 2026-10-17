@@ -9,6 +9,7 @@ import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.agents.copilot.CopilotMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager.McpServerConfig;
+import io.apitomy.axiom.core.util.BoundedProcessRunner;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -51,6 +52,12 @@ import java.util.Map;
 public class McpConfigGenerator {
 
     private static final Logger LOG = Logger.getLogger(McpConfigGenerator.class);
+
+    /**
+     * Upper bound for {@code npm install} of a bundled MCP server (network fetches can be slow); shared with
+     * {@code AssistantSessionManager}.
+     */
+    public static final java.time.Duration NPM_INSTALL_TIMEOUT = java.time.Duration.ofMinutes(5);
 
     private static final String MCP_SERVER_DIR_NAME = "mcp-server";
     private static final String[] TEMPLATE_FILES = {
@@ -299,15 +306,19 @@ public class McpConfigGenerator {
             ProcessBuilder pb = new ProcessBuilder("npm", "install", "--production")
                     .directory(serverDir.toFile())
                     .redirectErrorStream(true);
-            Process process = pb.start();
-            String output = new String(process.getInputStream().readAllBytes());
-            int exitCode;
+            BoundedProcessRunner.Result result;
             try {
-                exitCode = process.waitFor();
+                result = BoundedProcessRunner.run(pb, NPM_INSTALL_TIMEOUT);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException("npm install interrupted", e);
             }
+            String output = result.stdout();
+            if (result.timedOut()) {
+                throw new IOException("npm install timed out after " + NPM_INSTALL_TIMEOUT.toMinutes()
+                        + " minutes: " + output);
+            }
+            int exitCode = result.exitCode();
 
             if (exitCode != 0) {
                 throw new IOException("npm install failed (exit code " + exitCode + "): " + output);

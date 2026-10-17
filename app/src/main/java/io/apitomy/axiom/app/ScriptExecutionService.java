@@ -15,6 +15,7 @@ import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ShellContext;
 import io.apitomy.axiom.core.tracing.TraceService;
+import io.apitomy.axiom.core.util.BoundedProcessRunner;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -32,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
@@ -159,16 +159,10 @@ public class ScriptExecutionService {
             // (see substitutePlaceholders / issue #267). Applied last so the reserved AXIOM_* names win.
             pb.environment().putAll(placeholderEnv);
             Instant startTime = Instant.now();
-            Process process = pb.start();
+            Process process = startScript(pb);
             CapturedOutput captured = capture(process, timeoutSeconds);
             long durationMs = java.time.Duration.between(startTime, Instant.now()).toMillis();
-            String stdout = captured.stdout();
-            if (!captured.finished()) {
-                stdout = stdout + "\n[Script timed out after " + timeoutSeconds + "s]";
-            }
-            // The output is the last JSON object the script printed to stdout; logs belong on stderr.
-            return new ActionRun(captured.exitCode(), stdout, captured.stderr(), extractScriptOutput(stdout),
-                    durationMs, captured.finished(), script);
+            return toActionRun(captured, "Script", timeoutSeconds, durationMs, script);
         } finally {
             Files.deleteIfExists(scriptFile);
             workDir.cleanUp();
@@ -205,17 +199,67 @@ public class ScriptExecutionService {
     /**
      * Separately captured result of a script process.
      *
-     * @param stdout   everything the script wrote to stdout
-     * @param stderr   everything the script wrote to stderr
-     * @param exitCode the exit code ({@code 1} when the script timed out)
-     * @param finished false when the script was killed after the timeout
+     * @param stdout          what the script wrote to stdout (head and tail when truncated)
+     * @param stderr          what the script wrote to stderr (head and tail when truncated)
+     * @param exitCode        the exit code ({@link BoundedProcessRunner#TIMEOUT_EXIT_CODE} when the script timed
+     *                        out)
+     * @param finished        false when the script was killed after the timeout
+     * @param stdoutTruncated true when stdout exceeded {@link BoundedProcessRunner#DEFAULT_MAX_OUTPUT_BYTES}
+     * @param stderrTruncated true when stderr exceeded {@link BoundedProcessRunner#DEFAULT_MAX_OUTPUT_BYTES}
      */
-    record CapturedOutput(String stdout, String stderr, int exitCode, boolean finished) {
+    record CapturedOutput(String stdout, String stderr, int exitCode, boolean finished,
+                          boolean stdoutTruncated, boolean stderrTruncated) {
+    }
+
+    /** Reported when a truncated stdout does not end with the script's JSON result. */
+    static final String TRUNCATED_WITHOUT_RESULT = "stdout exceeded 1 MiB and no JSON result was found at the end;"
+            + " write logs to stderr and print the JSON result last";
+
+    /**
+     * Starts a script process whose stdin Axiom does not feed; stdin is closed so the script cannot block on it.
+     *
+     * @param pb the process builder
+     * @return the started process
+     * @throws IOException if the process cannot be started
+     */
+    static Process startScript(ProcessBuilder pb) throws IOException {
+        return BoundedProcessRunner.start(pb);
+    }
+
+    /**
+     * Turns captured output into an action run: marks a timeout in stdout, extracts the JSON result, and fails the
+     * run when stdout was truncated and no JSON result survived at its end (otherwise ~1 MiB of logs would be
+     * reported as the output).
+     *
+     * @param captured       the captured output
+     * @param label          what ran, for the timeout message (e.g. "Script", "Node action")
+     * @param timeoutSeconds the timeout that applied
+     * @param durationMs     the run time
+     * @param resolvedScript the resolved script text, or null
+     * @return the action run
+     */
+    static ActionRun toActionRun(CapturedOutput captured, String label, long timeoutSeconds, long durationMs,
+                                 String resolvedScript) {
+        String stdout = captured.stdout();
+        String stderr = captured.stderr();
+        int exitCode = captured.exitCode();
+        if (!captured.finished()) {
+            stdout = stdout + "\n[" + label + " timed out after " + timeoutSeconds + "s]";
+        }
+        // The output is the last JSON object the script printed to stdout; logs belong on stderr.
+        String result = findScriptResult(stdout);
+        if (captured.finished() && captured.stdoutTruncated() && result == null) {
+            exitCode = exitCode == 0 ? 1 : exitCode;
+            stderr = (stderr == null || stderr.isEmpty() ? "" : stderr + "\n") + TRUNCATED_WITHOUT_RESULT;
+        }
+        return new ActionRun(exitCode, stdout, stderr, result != null ? result : stdout, durationMs,
+                captured.finished(), resolvedScript);
     }
 
     /**
      * Reads stdout and stderr concurrently (so neither pipe can fill up and block the script), waits up to the
-     * timeout, and kills the script and its child processes if it is still running.
+     * timeout, and kills the script and its child processes if it is still running. Each stream is capped at
+     * {@link BoundedProcessRunner#DEFAULT_MAX_OUTPUT_BYTES}.
      *
      * @param process        the started process
      * @param timeoutSeconds maximum run time
@@ -223,35 +267,11 @@ public class ScriptExecutionService {
      * @throws InterruptedException if interrupted while waiting
      */
     static CapturedOutput capture(Process process, long timeoutSeconds) throws InterruptedException {
-        java.util.concurrent.CompletableFuture<String> stdout = readAsync(process.getInputStream());
-        java.util.concurrent.CompletableFuture<String> stderr = readAsync(process.getErrorStream());
-        boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
-        if (!finished) {
-            process.descendants().forEach(ProcessHandle::destroyForcibly);
-            process.destroyForcibly();
-            process.waitFor(5, TimeUnit.SECONDS);
-        }
-        int exitCode = finished ? process.exitValue() : 1;
-        return new CapturedOutput(join(stdout), join(stderr), exitCode, finished);
-    }
-
-    private static java.util.concurrent.CompletableFuture<String> readAsync(java.io.InputStream in) {
-        return java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-            try {
-                return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                return "";
-            }
-        });
-    }
-
-    private static String join(java.util.concurrent.CompletableFuture<String> future) {
-        try {
-            return future.get(5, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            future.cancel(true);
-            return "";
-        }
+        BoundedProcessRunner.Result result = BoundedProcessRunner.await(process,
+                java.time.Duration.ofSeconds(timeoutSeconds), BoundedProcessRunner.DEFAULT_MAX_OUTPUT_BYTES);
+        int exitCode = result.timedOut() ? BoundedProcessRunner.TIMEOUT_EXIT_CODE : result.exitCode();
+        return new CapturedOutput(result.stdout(), result.stderr(), exitCode, !result.timedOut(),
+                result.stdoutTruncated(), result.stderrTruncated());
     }
 
     /**
@@ -266,9 +286,23 @@ public class ScriptExecutionService {
         if (stdout == null) {
             return "";
         }
+        String result = findScriptResult(stdout);
+        return result != null ? result : stdout;
+    }
+
+    /**
+     * Finds the last JSON object at the end of stdout (see {@link #extractScriptOutput(String)}).
+     *
+     * @param stdout the script's stdout
+     * @return the JSON object text, or null when stdout does not end with one
+     */
+    static String findScriptResult(String stdout) {
+        if (stdout == null) {
+            return null;
+        }
         String trimmed = stdout.strip();
         if (!trimmed.endsWith("}")) {
-            return stdout;
+            return null;
         }
         for (int start = trimmed.lastIndexOf('{'); start >= 0; start = trimmed.lastIndexOf('{', start - 1)) {
             if (!startsLine(trimmed, start)) {
@@ -286,7 +320,7 @@ public class ScriptExecutionService {
                 break;
             }
         }
-        return stdout;
+        return null;
     }
 
     private static boolean startsLine(String text, int index) {
