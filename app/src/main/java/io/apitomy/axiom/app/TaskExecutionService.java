@@ -23,7 +23,12 @@ import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.tracing.TraceService;
 import jakarta.enterprise.context.ApplicationScoped;
+import io.quarkus.narayana.jta.QuarkusTransaction;
+import io.quarkus.runtime.StartupEvent;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.Observes;
+import jakarta.interceptor.Interceptor;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
@@ -34,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Orchestrates task execution. Resolves the appropriate Agent implementation
@@ -84,6 +90,44 @@ public class TaskExecutionService {
 
     @Inject
     ObjectMapper objectMapper;
+
+    /** The failure reason recorded on tasks that were running when the previous process stopped. */
+    static final String INTERRUPTED_REASON = "Interrupted by a server restart; the task was not resumed.";
+
+    /**
+     * Startup reconciliation (#343). Runs before the scheduler starts (which observes {@link StartupEvent}
+     * at {@link Interceptor.Priority#PLATFORM_BEFORE}) so no task can be dispatched by this process first.
+     * Flyway migration and ORM start during runtime init, before any {@link StartupEvent} observer.
+     *
+     * @param event the Quarkus startup event
+     */
+    void onStartup(@Observes @Priority(Interceptor.Priority.PLATFORM_BEFORE - 1) StartupEvent event) {
+        failInterruptedTasks();
+    }
+
+    /**
+     * Releases agent leases left by a previous process, then fails every task it left {@code InProgress}
+     * (no execution callback exists for them any more) and notifies their workflow runs through the
+     * normal task-failure path. {@code AwaitingInput} human tasks are left untouched: they legitimately
+     * survive restarts.
+     */
+    public void failInterruptedTasks() {
+        // Leases first: failing a task may dispatch the subject's next task, which acquires a new lease.
+        agentPool.releaseOrphanedLeases();
+        List<Long> interrupted = QuarkusTransaction.requiringNew().call(() ->
+                TaskEntity.find("select t.id from TaskEntity t where t.status = 'InProgress' order by t.id")
+                        .project(Long.class).list());
+        if (!interrupted.isEmpty()) {
+            LOG.warnf("Failing %d task(s) interrupted by a server restart", interrupted.size());
+        }
+        for (Long taskId : interrupted) {
+            try {
+                failTask(taskId, INTERRUPTED_REASON);
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to mark interrupted task %d as failed", taskId);
+            }
+        }
+    }
 
     /**
      * Attempts to execute the next pending task for the given subject.
@@ -191,6 +235,29 @@ public class TaskExecutionService {
             return;
         }
 
+        // From here on the lease is held: any failure must release it (exactly once) and fail the task.
+        AtomicBoolean released = new AtomicBoolean(false);
+        Runnable releaseLease = () -> {
+            if (released.compareAndSet(false, true)) {
+                agentPool.release(lease);
+            }
+        };
+        try {
+            launchAgentTask(task, actionTypeEntity, lease, releaseLease);
+        } catch (Exception e) {
+            releaseLease.run();
+            LOG.errorf(e, "Task %d setup failed", task.id);
+            failTask(task.id, "Task setup failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Marks the task in progress, prepares its workspace, environment and MCP config, and launches the
+     * agent. Expected setup problems fail the task here; unexpected exceptions propagate to the caller,
+     * which releases the lease and fails the task.
+     */
+    private void launchAgentTask(TaskEntity task, ActionTypeEntity actionTypeEntity, AgentLease lease,
+                                 Runnable releaseLease) {
         String agentName = lease.agentEntityName();
         Long agentEntityId = lease.agentEntityId();
 
@@ -206,7 +273,7 @@ public class TaskExecutionService {
         try {
             workspace = workspaceService.ensureWorkspace(subject);
         } catch (WorkspaceService.WorkspaceException e) {
-            agentPool.release(lease);
+            releaseLease.run();
             LOG.errorf(e, "Failed to prepare workspace for task %d", task.id);
             failTask(task.id, "Failed to prepare workspace: " + e.getMessage());
             return;
@@ -215,7 +282,7 @@ public class TaskExecutionService {
         try {
             env = buildEnvironment(actionTypeEntity != null ? actionTypeEntity.environment : null);
         } catch (MissingSecretException e) {
-            agentPool.release(lease);
+            releaseLease.run();
             LOG.errorf("Task %d cannot start: %s", task.id, e.getMessage());
             failTask(task.id, e.getMessage());
             return;
@@ -268,11 +335,11 @@ public class TaskExecutionService {
         // ForkJoinPool worker), so the logging context is captured here and re-applied there.
         lease.agent().execute(request)
                 .thenAccept(LogContext.wrap((AgentResult result) -> {
-                    agentPool.release(lease);
+                    releaseLease.run();
                     onTaskCompleted(task.id, result);
                 }))
                 .exceptionally(LogContext.wrap((Throwable throwable) -> {
-                    agentPool.release(lease);
+                    releaseLease.run();
                     LOG.errorf(throwable, "Task %d execution failed unexpectedly", task.id);
                     failTask(task.id, "Unexpected error: " + throwable.getMessage());
                     return null;
