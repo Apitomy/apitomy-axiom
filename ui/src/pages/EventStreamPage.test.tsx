@@ -39,4 +39,21 @@ describe("EventStreamPage", () => {
         await userEvent.click(screen.getByRole("button", { name: "Event Type" }));
         expect(await screen.findByRole("option", { name: "Actor" })).toBeInTheDocument();
     });
+
+    it("flags failed matches in the match indicator", async () => {
+        vi.mocked(api.fetchStreamEvents).mockResolvedValue({
+            items: [{ ...event, matchedSubscriptions: 3,
+                processingStates: { completed: 1, pending: 1, failed: 1, exhausted: 0, skipped: 2 } }],
+            totalCount: 1,
+        } as never);
+        renderWithRouter(<EventStreamPage />);
+        expect(await screen.findByRole("img",
+            { name: "Matched 3 subscription(s): 1 completed, 1 pending, 1 failed" })).toBeInTheDocument();
+    });
+
+    it("shows no match indicator when nothing matched", async () => {
+        renderWithRouter(<EventStreamPage />);
+        await screen.findByText("jsenko");
+        expect(screen.queryByRole("img", { name: /^Matched/ })).not.toBeInTheDocument();
+    });
 });

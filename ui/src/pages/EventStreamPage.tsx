@@ -15,6 +15,8 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import InProgressIcon from "@patternfly/react-icons/dist/esm/icons/in-progress-icon";
 import {
     type ChipFilterCriteria,
     type ChipFilterType,
@@ -210,12 +212,7 @@ export function EventStreamPage() {
                                 <Tr key={event.id} isClickable
                                     onRowClick={() => navigate(`/events/stream/${event.id}`)}>
                                     <Td>
-                                        {(event.matchedSubscriptions ?? 0) > 0 && (
-                                            <CheckCircleIcon
-                                                color="var(--pf-v6-global--success-color--200, #3e8635)"
-                                                title={`Matched ${event.matchedSubscriptions} subscription(s)`}
-                                            />
-                                        )}
+                                        <MatchIndicator event={event} />
                                     </Td>
                                     <Td style={{ whiteSpace: "nowrap" }}>
                                         {new Date(event.timestamp).toLocaleString()}
@@ -268,4 +265,33 @@ export function EventStreamPage() {
 
         </PageSection>
     );
+}
+
+/**
+ * Summarises how many subscriptions matched an event and how their processing went: red when any
+ * matched subscription failed, an in-progress icon while any is pending, green when all completed.
+ * Nothing is shown when no subscription matched.
+ */
+function MatchIndicator({ event }: { event: StreamEvent }) {
+    const matched = event.matchedSubscriptions ?? 0;
+    if (matched <= 0) {
+        return null;
+    }
+    const states = event.processingStates ?? {};
+    const failed = (states.failed ?? 0) + (states.exhausted ?? 0);
+    const pending = states.pending ?? 0;
+    const completed = states.completed ?? 0;
+    const parts = [`${completed} completed`];
+    if (pending > 0) parts.push(`${pending} pending`);
+    if (failed > 0) parts.push(`${failed} failed`);
+    const label = `Matched ${matched} subscription(s): ${parts.join(", ")}`;
+    let icon;
+    if (failed > 0) {
+        icon = <ExclamationCircleIcon color="var(--pf-t--global--icon--color--status--danger--default, #c9190b)" />;
+    } else if (pending > 0) {
+        icon = <InProgressIcon color="var(--pf-t--global--icon--color--status--info--default, #2b9af3)" />;
+    } else {
+        icon = <CheckCircleIcon color="var(--pf-v6-global--success-color--200, #3e8635)" />;
+    }
+    return <span role="img" aria-label={label} title={label}>{icon}</span>;
 }

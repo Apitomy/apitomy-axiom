@@ -13,6 +13,7 @@ import io.apitomy.axiom.api.beans.EventProcessingSearchResults;
 import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.SourceData;
 import io.apitomy.axiom.api.beans.StreamEvent;
+import io.apitomy.axiom.api.beans.StreamEventProcessingStates;
 import io.apitomy.axiom.api.beans.StreamEventSearchResults;
 import io.apitomy.axiom.api.beans.StreamEventWorkflowSuggestion;
 import io.apitomy.axiom.api.beans.TriggerWorkflow;
@@ -52,6 +53,12 @@ import java.util.UUID;
 public class StreamEventsResourceImpl implements StreamResource {
 
     private static final Logger LOG = Logger.getLogger(StreamEventsResourceImpl.class);
+
+    private static final String STATUS_PENDING = "pending";
+    private static final String STATUS_COMPLETED = "completed";
+    private static final String STATUS_FAILED = "failed";
+    private static final String STATUS_EXHAUSTED = "exhausted";
+    private static final String STATUS_SKIPPED = "skipped";
 
     @Inject
     ObjectMapper objectMapper;
@@ -110,22 +117,16 @@ public class StreamEventsResourceImpl implements StreamResource {
                 .page(Page.of(pageNum - 1, pageSize))
                 .list();
 
-        // Batch-load matched subscription counts from the processing ledger
+        // Batch-load per-state ledger counts with a single grouped query (no N+1)
         List<UUID> eventIds = entities.stream().map(e -> e.id).toList();
-        Map<UUID, Integer> matchCounts = new HashMap<>();
-        if (!eventIds.isEmpty()) {
-            // Count completed ledger entries per event
-            List<EventProcessingLedgerEntity> completedEntries = EventProcessingLedgerEntity
-                    .find("eventId IN ?1 AND status = 'completed'", eventIds).list();
-            for (EventProcessingLedgerEntity entry : completedEntries) {
-                matchCounts.merge(entry.eventId, 1, Integer::sum);
-            }
-        }
+        Map<UUID, StreamEventProcessingStates> statesByEvent = loadProcessingStates(eventIds);
 
         List<StreamEvent> items = entities.stream()
                 .map(e -> {
                     StreamEvent bean = toBean(e);
-                    bean.setMatchedSubscriptions(matchCounts.getOrDefault(e.id, 0));
+                    StreamEventProcessingStates states = statesByEvent.get(e.id);
+                    bean.setMatchedSubscriptions(matchedCount(states));
+                    bean.setProcessingStates(states);
                     return bean;
                 })
                 .toList();
@@ -136,6 +137,57 @@ public class StreamEventsResourceImpl implements StreamResource {
         results.setPage(pageNum);
         results.setLimit(pageSize);
         return results;
+    }
+
+    /**
+     * Counts the processing ledger entries of the given events by status, in one grouped query.
+     * Events without ledger entries are absent from the returned map.
+     *
+     * @param eventIds the IDs of the events to load the counts of
+     * @return the per-state counts, keyed by event ID
+     */
+    static Map<UUID, StreamEventProcessingStates> loadProcessingStates(List<UUID> eventIds) {
+        Map<UUID, StreamEventProcessingStates> statesByEvent = new HashMap<>();
+        if (eventIds.isEmpty()) {
+            return statesByEvent;
+        }
+        List<Object[]> rows = EventProcessingLedgerEntity.getEntityManager().createQuery(
+                        "SELECT l.eventId, l.status, COUNT(l) FROM EventProcessingLedgerEntity l "
+                                + "WHERE l.eventId IN :ids GROUP BY l.eventId, l.status", Object[].class)
+                .setParameter("ids", eventIds)
+                .getResultList();
+        for (Object[] row : rows) {
+            StreamEventProcessingStates states = statesByEvent.computeIfAbsent((UUID) row[0],
+                    id -> emptyStates());
+            int count = ((Number) row[2]).intValue();
+            switch (String.valueOf(row[1])) {
+                case STATUS_PENDING -> states.setPending(states.getPending() + count);
+                case STATUS_COMPLETED -> states.setCompleted(states.getCompleted() + count);
+                case STATUS_FAILED -> states.setFailed(states.getFailed() + count);
+                case STATUS_EXHAUSTED -> states.setExhausted(states.getExhausted() + count);
+                case STATUS_SKIPPED -> states.setSkipped(states.getSkipped() + count);
+                default -> LOG.debugf("Ignoring unknown ledger status '%s'", row[1]);
+            }
+        }
+        return statesByEvent;
+    }
+
+    private static StreamEventProcessingStates emptyStates() {
+        StreamEventProcessingStates states = new StreamEventProcessingStates();
+        states.setPending(0);
+        states.setCompleted(0);
+        states.setFailed(0);
+        states.setExhausted(0);
+        states.setSkipped(0);
+        return states;
+    }
+
+    /** Number of matched subscriptions: every ledger state except {@code skipped}. */
+    private static int matchedCount(StreamEventProcessingStates states) {
+        if (states == null) {
+            return 0;
+        }
+        return states.getPending() + states.getCompleted() + states.getFailed() + states.getExhausted();
     }
 
     @Override
@@ -225,7 +277,7 @@ public class StreamEventsResourceImpl implements StreamResource {
     public List<StreamEventWorkflowSuggestion> listStreamEventWorkflowSuggestions(String eventId) {
         StreamEventEntity event = findEventOrThrow(eventId);
         List<EventProcessingLedgerEntity> entries = EventProcessingLedgerEntity
-                .find("eventId = ?1 AND status = 'completed' ORDER BY createdOn ASC", event.id).list();
+                .find("eventId = ?1 AND status <> ?2 ORDER BY createdOn ASC", event.id, STATUS_SKIPPED).list();
         Map<String, StreamEventWorkflowSuggestion> suggestions = new LinkedHashMap<>();
         Map<Long, WorkflowDefinitionEntity> definitions = new HashMap<>();
         for (EventProcessingLedgerEntity entry : entries) {

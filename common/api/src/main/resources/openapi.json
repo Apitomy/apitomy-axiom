@@ -10569,7 +10569,42 @@
           "matchedSubscriptions": {
             "format": "int32",
             "type": "integer",
-            "description": "Number of subscriptions that matched this event (completed status in the processing ledger)"
+            "description": "Number of subscriptions whose filter matched this event, counted as event/subscription pairs in the processing ledger in any state except 'skipped' (pending, completed, failed or exhausted). Zero when no subscription matched or the event has not been evaluated yet; see processingStates to tell them apart. Populated by the list endpoint only."
+          },
+          "processingStates": {
+            "$ref": "#/components/schemas/StreamEventProcessingStates",
+            "description": "Per-state counts of this event's event/subscription pairs in the processing ledger. Absent when the event has no ledger entries (no eligible subscriptions, or not evaluated yet). Populated by the list endpoint only."
+          }
+        }
+      },
+      "StreamEventProcessingStates": {
+        "type": "object",
+        "description": "Counts of event/subscription pairs in the processing ledger for one event, by processing state. Each count is a number of subscriptions, not events.",
+        "properties": {
+          "pending": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Matched pairs with a routing attempt in progress"
+          },
+          "completed": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Matched pairs whose routing succeeded"
+          },
+          "failed": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Matched pairs whose last attempt failed and that will be retried"
+          },
+          "exhausted": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Matched pairs that failed and have no retries left"
+          },
+          "skipped": {
+            "format": "int32",
+            "type": "integer",
+            "description": "Evaluated pairs whose subscription filter did not match (not counted in matchedSubscriptions)"
           }
         }
       },
