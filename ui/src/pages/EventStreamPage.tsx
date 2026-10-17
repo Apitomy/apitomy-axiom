@@ -8,6 +8,7 @@ import {
     PageSection,
     Pagination,
     Title,
+    Tooltip,
     Toolbar,
     ToolbarContent,
     ToolbarItem,
@@ -267,31 +268,59 @@ export function EventStreamPage() {
     );
 }
 
+/** Formats a count with a singular or plural noun. */
+function plural(count: number, singular: string, pluralForm: string): string {
+    return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
 /**
  * Summarises how many subscriptions matched an event and how their processing went: red when any
- * matched subscription failed, an in-progress icon while any is pending, green when all completed.
- * Nothing is shown when no subscription matched.
+ * matched subscription failed or any filter errored, an in-progress icon while any is pending, green
+ * when all completed. Nothing is shown when no subscription matched and no filter errored.
  */
-function MatchIndicator({ event }: { event: StreamEvent }) {
+export function MatchIndicator({ event }: { event: StreamEvent }) {
     const matched = event.matchedSubscriptions ?? 0;
-    if (matched <= 0) {
+    const states = event.processingStates;
+    const filterErrors = states?.filterError ?? 0;
+    if (matched <= 0 && filterErrors <= 0) {
         return null;
     }
-    const states = event.processingStates ?? {};
-    const failed = (states.failed ?? 0) + (states.exhausted ?? 0);
-    const pending = states.pending ?? 0;
-    const completed = states.completed ?? 0;
-    const parts = [`${completed} completed`];
-    if (pending > 0) parts.push(`${pending} pending`);
-    if (failed > 0) parts.push(`${failed} failed`);
-    const label = `Matched ${matched} subscription(s): ${parts.join(", ")}`;
-    let icon;
-    if (failed > 0) {
-        icon = <ExclamationCircleIcon color="var(--pf-t--global--icon--color--status--danger--default, #c9190b)" />;
-    } else if (pending > 0) {
-        icon = <InProgressIcon color="var(--pf-t--global--icon--color--status--info--default, #2b9af3)" />;
-    } else {
-        icon = <CheckCircleIcon color="var(--pf-v6-global--success-color--200, #3e8635)" />;
+    const failedMatches = (states?.failed ?? 0) + (states?.exhausted ?? 0);
+    const failures = failedMatches + filterErrors;
+    const pending = states?.pending ?? 0;
+    const completed = states?.completed ?? 0;
+    const phrases: string[] = [];
+    if (matched > 0) {
+        const parts: string[] = [];
+        if (completed > 0) parts.push(`${completed} completed`);
+        if (pending > 0) parts.push(`${pending} pending`);
+        if (failedMatches > 0) parts.push(`${failedMatches} failed`);
+        const head = `Matched ${plural(matched, "subscription", "subscriptions")}`;
+        phrases.push(parts.length > 0 ? `${head}: ${parts.join(", ")}` : head);
     }
-    return <span role="img" aria-label={label} title={label}>{icon}</span>;
+    if (filterErrors > 0) {
+        phrases.push(plural(filterErrors, "filter error", "filter errors"));
+    }
+    const label = phrases.join("; ");
+    let state: "danger" | "in-progress" | "success";
+    let icon;
+    if (failures > 0) {
+        state = "danger";
+        icon = <ExclamationCircleIcon aria-hidden="true"
+            color="var(--pf-t--global--icon--color--status--danger--default)" />;
+    } else if (pending > 0) {
+        state = "in-progress";
+        icon = <InProgressIcon aria-hidden="true"
+            color="var(--pf-t--global--icon--color--status--info--default)" />;
+    } else {
+        state = "success";
+        icon = <CheckCircleIcon aria-hidden="true"
+            color="var(--pf-t--global--icon--color--status--success--default)" />;
+    }
+    return (
+        <Tooltip content={label}>
+            <span role="img" aria-label={label} data-state={state} tabIndex={0}>{icon}</span>
+        </Tooltip>
+    );
 }
+

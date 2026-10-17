@@ -15,6 +15,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
 /**
@@ -63,46 +64,117 @@ class StreamEventsResourceTest {
     }
 
     /**
-     * Every non-skipped ledger entry counts as a matched subscription, regardless of routing completion,
-     * and the per-state breakdown is reported for each listed event.
+     * Every ledger entry except skipped and filter-error counts as a matched subscription, regardless of
+     * routing completion, and the per-state breakdown is reported.
      */
     @Test
-    void countsEveryMatchedSubscriptionAndReportsProcessingStates() {
-        UUID mixed = event("{\"login\":\"match-mixed\"}");
-        UUID skippedOnly = event("{\"login\":\"match-skipped\"}");
-        UUID none = event("{\"login\":\"match-none\"}");
-        UUID completedOnly = event("{\"login\":\"match-completed\"}");
-        ledger(mixed, 9001L, "completed");
-        ledger(mixed, 9002L, "pending");
-        ledger(mixed, 9003L, "failed");
-        ledger(mixed, 9004L, "exhausted");
-        ledger(mixed, 9005L, "skipped");
-        ledger(skippedOnly, 9001L, "skipped");
-        // A completed subscription without routes is still a match.
-        ledger(completedOnly, 9006L, "completed");
+    void mixedEventCountsMatchesAndReportsEveryState() {
+        String source = uniqueSource();
+        UUID mixed = event(source, "{\"login\":\"match-mixed\"}");
+        ledger(mixed, 9001L, EventProcessingLedgerEntity.COMPLETED);
+        ledger(mixed, 9002L, EventProcessingLedgerEntity.PENDING);
+        ledger(mixed, 9003L, EventProcessingLedgerEntity.FAILED);
+        ledger(mixed, 9004L, EventProcessingLedgerEntity.EXHAUSTED);
+        ledger(mixed, 9005L, EventProcessingLedgerEntity.SKIPPED);
+        ledger(mixed, 9006L, EventProcessingLedgerEntity.FILTER_ERROR);
         try {
-            String base = "items.find { it.id == '%s' }.";
-            given().queryParam("filterEventSourceId", "conn-actor").queryParam("limit", 100)
+            given().queryParam("filterEventSourceId", source)
                     .get("/api/v1/stream/events").then().statusCode(200)
-                    .body(String.format(base, mixed) + "matchedSubscriptions", is(4))
-                    .body(String.format(base, mixed) + "processingStates.completed", is(1))
-                    .body(String.format(base, mixed) + "processingStates.pending", is(1))
-                    .body(String.format(base, mixed) + "processingStates.failed", is(1))
-                    .body(String.format(base, mixed) + "processingStates.exhausted", is(1))
-                    .body(String.format(base, mixed) + "processingStates.skipped", is(1))
-                    .body(String.format(base, skippedOnly) + "matchedSubscriptions", is(0))
-                    .body(String.format(base, skippedOnly) + "processingStates.skipped", is(1))
-                    .body(String.format(base, none) + "matchedSubscriptions", is(0))
-                    .body(String.format(base, none) + "processingStates", nullValue())
-                    .body(String.format(base, completedOnly) + "matchedSubscriptions", is(1))
-                    .body(String.format(base, completedOnly) + "processingStates.completed", is(1));
+                    .body("items[0].matchedSubscriptions", is(4))
+                    .body("items[0].processingStates.completed", is(1))
+                    .body("items[0].processingStates.pending", is(1))
+                    .body("items[0].processingStates.failed", is(1))
+                    .body("items[0].processingStates.exhausted", is(1))
+                    .body("items[0].processingStates.skipped", is(1))
+                    .body("items[0].processingStates.filterError", is(1));
         } finally {
-            QuarkusTransaction.requiringNew().run(() -> {
-                List<UUID> ids = List.of(mixed, skippedOnly, none, completedOnly);
-                EventProcessingLedgerEntity.delete("eventId in ?1", ids);
-                StreamEventEntity.delete("id in ?1", ids);
-            });
+            cleanup(mixed);
         }
+    }
+
+    /** An event whose only ledger entry is skipped has no matches but reports its states. */
+    @Test
+    void skippedOnlyEventHasNoMatches() {
+        String source = uniqueSource();
+        UUID id = event(source, "{\"login\":\"match-skipped\"}");
+        ledger(id, 9001L, EventProcessingLedgerEntity.SKIPPED);
+        try {
+            given().queryParam("filterEventSourceId", source)
+                    .get("/api/v1/stream/events").then().statusCode(200)
+                    .body("items[0].matchedSubscriptions", is(0))
+                    .body("items[0].processingStates.skipped", is(1))
+                    .body("items[0].processingStates.filterError", is(0));
+        } finally {
+            cleanup(id);
+        }
+    }
+
+    /** An event whose only ledger entry is a filter error has no matches but reports the error. */
+    @Test
+    void filterErrorOnlyEventHasNoMatchesButReportsTheError() {
+        String source = uniqueSource();
+        UUID id = event(source, "{\"login\":\"match-filter-error\"}");
+        ledger(id, 9001L, EventProcessingLedgerEntity.FILTER_ERROR);
+        try {
+            given().queryParam("filterEventSourceId", source)
+                    .get("/api/v1/stream/events").then().statusCode(200)
+                    .body("items[0].matchedSubscriptions", is(0))
+                    .body("items[0].processingStates", notNullValue())
+                    .body("items[0].processingStates.filterError", is(1))
+                    .body("items[0].processingStates.completed", is(0));
+        } finally {
+            cleanup(id);
+        }
+    }
+
+    /** An event without ledger entries has no matches and no processing states. */
+    @Test
+    void eventWithoutLedgerEntriesHasNoProcessingStates() {
+        String source = uniqueSource();
+        UUID id = event(source, "{\"login\":\"match-none\"}");
+        try {
+            given().queryParam("filterEventSourceId", source)
+                    .get("/api/v1/stream/events").then().statusCode(200)
+                    .body("items[0].matchedSubscriptions", is(0))
+                    .body("items[0].processingStates", nullValue());
+        } finally {
+            cleanup(id);
+        }
+    }
+
+    /** A completed subscription without routes is still a match. */
+    @Test
+    void completedOnlyEventIsAMatch() {
+        String source = uniqueSource();
+        UUID id = event(source, "{\"login\":\"match-completed\"}");
+        ledger(id, 9006L, EventProcessingLedgerEntity.COMPLETED);
+        try {
+            given().queryParam("filterEventSourceId", source)
+                    .get("/api/v1/stream/events").then().statusCode(200)
+                    .body("items[0].matchedSubscriptions", is(1))
+                    .body("items[0].processingStates.completed", is(1));
+        } finally {
+            cleanup(id);
+        }
+    }
+
+    /** Page sizes above the maximum are clamped. */
+    @Test
+    void pageSizeIsClamped() {
+        given().queryParam("limit", 100000)
+                .get("/api/v1/stream/events").then().statusCode(200)
+                .body("limit", is(500));
+    }
+
+    private static String uniqueSource() {
+        return "conn-match-" + UUID.randomUUID();
+    }
+
+    private static void cleanup(UUID id) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            EventProcessingLedgerEntity.delete("eventId", id);
+            StreamEventEntity.delete("id", id);
+        });
     }
 
     private static void ledger(UUID eventId, long subscriptionId, String status) {
@@ -117,13 +189,17 @@ class StreamEventsResourceTest {
     }
 
     private static UUID event(String actorJson) {
+        return event("conn-actor", actorJson);
+    }
+
+    private static UUID event(String eventSourceId, String actorJson) {
         UUID id = UUID.randomUUID();
         QuarkusTransaction.requiringNew().run(() -> {
             StreamEventEntity e = new StreamEventEntity();
             e.id = id;
             e.sourceEventId = "actor-" + id;
             e.source = "github";
-            e.eventSourceId = "conn-actor";
+            e.eventSourceId = eventSourceId;
             e.type = "issue.created";
             e.ref = "https://github.com/o/r/issues/1";
             e.timestamp = Instant.now();

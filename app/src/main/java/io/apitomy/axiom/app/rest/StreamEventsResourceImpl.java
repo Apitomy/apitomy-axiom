@@ -54,11 +54,8 @@ public class StreamEventsResourceImpl implements StreamResource {
 
     private static final Logger LOG = Logger.getLogger(StreamEventsResourceImpl.class);
 
-    private static final String STATUS_PENDING = "pending";
-    private static final String STATUS_COMPLETED = "completed";
-    private static final String STATUS_FAILED = "failed";
-    private static final String STATUS_EXHAUSTED = "exhausted";
-    private static final String STATUS_SKIPPED = "skipped";
+    /** Upper bound on the page size, which also bounds the IN list of the ledger count query. */
+    static final int MAX_PAGE_SIZE = 500;
 
     @Inject
     ObjectMapper objectMapper;
@@ -88,7 +85,7 @@ public class StreamEventsResourceImpl implements StreamResource {
                                                      String filterType, String filterEventSourceId,
                                                      String filterRef, String filterActor) {
         int pageNum = page != null ? page.intValue() : 1;
-        int pageSize = limit != null ? limit.intValue() : 20;
+        int pageSize = Math.max(1, Math.min(limit != null ? limit.intValue() : 20, MAX_PAGE_SIZE));
 
         StringBuilder hql = new StringBuilder("1=1");
         Map<String, Object> params = new HashMap<>();
@@ -161,12 +158,14 @@ public class StreamEventsResourceImpl implements StreamResource {
                     id -> emptyStates());
             int count = ((Number) row[2]).intValue();
             switch (String.valueOf(row[1])) {
-                case STATUS_PENDING -> states.setPending(states.getPending() + count);
-                case STATUS_COMPLETED -> states.setCompleted(states.getCompleted() + count);
-                case STATUS_FAILED -> states.setFailed(states.getFailed() + count);
-                case STATUS_EXHAUSTED -> states.setExhausted(states.getExhausted() + count);
-                case STATUS_SKIPPED -> states.setSkipped(states.getSkipped() + count);
-                default -> LOG.debugf("Ignoring unknown ledger status '%s'", row[1]);
+                case EventProcessingLedgerEntity.PENDING -> states.setPending(states.getPending() + count);
+                case EventProcessingLedgerEntity.COMPLETED -> states.setCompleted(states.getCompleted() + count);
+                case EventProcessingLedgerEntity.FAILED -> states.setFailed(states.getFailed() + count);
+                case EventProcessingLedgerEntity.EXHAUSTED -> states.setExhausted(states.getExhausted() + count);
+                case EventProcessingLedgerEntity.SKIPPED -> states.setSkipped(states.getSkipped() + count);
+                case EventProcessingLedgerEntity.FILTER_ERROR ->
+                        states.setFilterError(states.getFilterError() + count);
+                default -> LOG.warnf("Ignoring unknown ledger status '%s'", row[1]);
             }
         }
         return statesByEvent;
@@ -179,10 +178,11 @@ public class StreamEventsResourceImpl implements StreamResource {
         states.setFailed(0);
         states.setExhausted(0);
         states.setSkipped(0);
+        states.setFilterError(0);
         return states;
     }
 
-    /** Number of matched subscriptions: every ledger state except {@code skipped}. */
+    /** Number of matched subscriptions: every ledger state except {@code skipped} and {@code filter_error}. */
     private static int matchedCount(StreamEventProcessingStates states) {
         if (states == null) {
             return 0;
@@ -277,7 +277,9 @@ public class StreamEventsResourceImpl implements StreamResource {
     public List<StreamEventWorkflowSuggestion> listStreamEventWorkflowSuggestions(String eventId) {
         StreamEventEntity event = findEventOrThrow(eventId);
         List<EventProcessingLedgerEntity> entries = EventProcessingLedgerEntity
-                .find("eventId = ?1 AND status <> ?2 ORDER BY createdOn ASC", event.id, STATUS_SKIPPED).list();
+                .find("eventId = ?1 AND status NOT IN ?2 ORDER BY createdOn ASC", event.id,
+                        List.of(EventProcessingLedgerEntity.SKIPPED, EventProcessingLedgerEntity.FILTER_ERROR))
+                .list();
         Map<String, StreamEventWorkflowSuggestion> suggestions = new LinkedHashMap<>();
         Map<Long, WorkflowDefinitionEntity> definitions = new HashMap<>();
         for (EventProcessingLedgerEntity entry : entries) {
