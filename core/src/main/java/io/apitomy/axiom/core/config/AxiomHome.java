@@ -21,7 +21,8 @@ public final class AxiomHome {
     /**
      * Returns the Axiom home directory.
      *
-     * @return the configured {@code axiom.home}, or {@code ~/.axiom}
+     * @return the configured {@code axiom.home}, or {@code ~/.axiom}, as an absolute, normalized path (a
+     *         relative {@code axiom.home} is resolved against the working directory)
      */
     public static Path path() {
         String configured = System.getProperty(PROPERTY);
@@ -32,10 +33,21 @@ public final class AxiomHome {
                 configured = null;
             }
         }
+        return of(configured);
+    }
+
+    /**
+     * Turns a configured {@code axiom.home} value into the home directory. Used where the configuration is not
+     * yet available through {@link ConfigProvider}, such as while building the configuration itself.
+     *
+     * @param configured the configured value; {@code null} or blank means the default {@code ~/.axiom}
+     * @return the home directory as an absolute, normalized path
+     */
+    public static Path of(String configured) {
         if (configured == null || configured.isBlank()) {
-            return Path.of(System.getProperty("user.home"), ".axiom");
+            return Path.of(System.getProperty("user.home"), ".axiom").toAbsolutePath().normalize();
         }
-        return Path.of(configured);
+        return Path.of(configured).toAbsolutePath().normalize();
     }
 
     /**

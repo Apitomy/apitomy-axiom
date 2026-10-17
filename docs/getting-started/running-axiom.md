@@ -39,7 +39,8 @@ cd apitomy-axiom
 The script will:
 
 1. Query GitHub for the latest Apitomy Axiom release
-2. Download the application JAR (cached in `~/.axiom/releases/` for future runs)
+2. Download the application JAR (cached in `$AXIOM_HOME/releases/`, default `~/.axiom/releases/`, for future
+   runs)
 3. Start the application on **http://localhost:9191** with the `prod` profile (file-based H2 database
    in `~/.axiom/data/`, or `<axiom.home>/data/` if `axiom.home` is set)
 

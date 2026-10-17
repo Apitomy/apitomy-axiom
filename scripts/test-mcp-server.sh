@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-MCP_SERVER_DIR="${HOME}/.axiom/mcp-server"
+MCP_SERVER_DIR="${AXIOM_HOME:-${HOME}/.axiom}/mcp-server"
 SERVER_JS="${MCP_SERVER_DIR}/server.js"
 TOOLS_FILE=$(mktemp /tmp/axiom-test-tools-XXXXXX.json)
 

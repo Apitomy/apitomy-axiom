@@ -2,14 +2,13 @@ package io.apitomy.axiom.app;
 
 import io.quarkus.flyway.FlywayConfigurationCustomizer;
 import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.config.ConfigProvider;
+import io.apitomy.axiom.core.config.AxiomHome;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.callback.Callback;
 import org.flywaydb.core.api.callback.Context;
 import org.flywaydb.core.api.callback.Event;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 
-import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -49,14 +48,7 @@ public class LegacyDatabaseGuard implements Callback, FlywayConfigurationCustomi
      * @return {@link #MESSAGE} followed by instructions naming the actual data directory
      */
     public static String fullMessage() {
-        String dataDir;
-        try {
-            dataDir = ConfigProvider.getConfig().getOptionalValue("axiom.home", String.class)
-                    .map(home -> Path.of(home, "data").toString())
-                    .orElse("~/.axiom/data");
-        } catch (RuntimeException e) {
-            dataDir = "~/.axiom/data";
-        }
+        String dataDir = AxiomHome.resolve("data").toString();
         return MESSAGE + " Back up and then delete the data directory (" + dataDir + "), then start Axiom again "
                 + "to create a new database. See the 3.0.0 release notes.";
     }

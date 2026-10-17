@@ -56,10 +56,10 @@ every location below moves with it, including the database:
 
 | Item | Location | Notes |
 |------|----------|-------|
-| Database | `~/.axiom/data/axiom.mv.db` (and related H2 files) | Only meaningful with `persist` or `prod` profiles, which use a file-based database |
-| Encryption key | `~/.axiom/secret.key` | Generated automatically on first startup. Secret values in the database are encrypted with this key — **without it, encrypted secrets cannot be decrypted, even by restoring the database.** |
-| Subject workspaces | `~/.axiom/workspaces/` (or `axiom.workspace.root` if overridden) | Working directories (`subject-<id>`) backing each subject |
-| Assistant session directories (optional) | `~/.axiom/assistant/sessions/` | Running agent processes do not survive a restart. Workbench composition session directories are kept and hold the conversation history that the workbench restores after a restart; other stale session directories are removed at startup |
+| Database | `<axiom.home>/data/axiom.mv.db` (and related H2 files) | Only meaningful with `persist` or `prod` profiles, which use a file-based database |
+| Encryption key | `<axiom.home>/secret.key` | Generated automatically on first startup. Secret values in the database are encrypted with this key — **without it, encrypted secrets cannot be decrypted, even by restoring the database.** |
+| Subject workspaces | `<axiom.home>/workspaces/` (or `axiom.workspace.root` if overridden) | Working directories (`subject-<id>`) backing each subject |
+| Assistant session directories (optional) | `<axiom.home>/assistant/sessions/` | Running agent processes do not survive a restart. Workbench composition session directories are kept and hold the conversation history that the workbench restores after a restart; other stale session directories are removed at startup |
 
 Stop the Axiom process before copying the database files to ensure a consistent
 snapshot (H2 does not support online hot backups of the file store used here).

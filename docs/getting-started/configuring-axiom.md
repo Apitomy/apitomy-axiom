@@ -173,7 +173,7 @@ Axiom uses H2 with different profiles for different environments:
 |---------|----------|-------|
 | `dev` (default) | H2 in-memory | Development — schema recreated on restart |
 | `persist` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Persistent dev — Flyway migrations |
-| `prod` | H2 file | Production — release JAR with Flyway |
+| `prod` | H2 file (`<axiom.home>/data/axiom`, default `~/.axiom/data/axiom`) | Production — release JAR with Flyway |
 
 When running from the release JAR, the `prod` profile is active automatically. For
 development with persistent data, activate the `persist` profile:
