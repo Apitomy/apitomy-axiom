@@ -68,7 +68,7 @@ class LegacyDatabaseGuardTest {
                         + "\"execution_time\" INT, \"success\" BOOLEAN)",
                 "INSERT INTO \"flyway_schema_history\" VALUES (1, '1', 'baseline', 'SQL', 'V1__baseline.sql', 1, "
                         + "'sa', CURRENT_TIMESTAMP, 1, TRUE)",
-                "INSERT INTO \"flyway_schema_history\" VALUES (2, '22', 'add environment', 'SQL', 'V22__x.sql', 1, "
+                "INSERT INTO \"flyway_schema_history\" VALUES (2, '22', 'create tracing tables', 'SQL', 'V22__create_tracing_tables.sql', 1, "
                         + "'sa', CURRENT_TIMESTAMP, 1, TRUE)");
         assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
         FlywayException e = assertThrows(FlywayException.class, () -> flyway(url).migrate());
@@ -78,9 +78,8 @@ class LegacyDatabaseGuardTest {
     @Test
     void aBaselinedHistoryIsIncompatible() throws SQLException {
         String url = newUrl();
-        exec(url, "CREATE TABLE \"flyway_schema_history\" (\"installed_rank\" INT, \"version\" VARCHAR(50), "
-                        + "\"type\" VARCHAR(20), \"success\" BOOLEAN)",
-                "INSERT INTO \"flyway_schema_history\" VALUES (1, '1', 'BASELINE', TRUE)");
+        exec(url, HISTORY_DDL, "INSERT INTO \"flyway_schema_history\" VALUES (1, '1', '<< Flyway Baseline >>', "
+                + "'BASELINE', '<< Flyway Baseline >>', NULL, 'sa', CURRENT_TIMESTAMP, 0, TRUE)");
         assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
     }
 
@@ -88,6 +87,41 @@ class LegacyDatabaseGuardTest {
     void tablesWithoutMigrationHistoryAreIncompatible() throws SQLException {
         String url = newUrl();
         exec(url, "CREATE TABLE subject (id BIGINT)");
+        assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
+    }
+
+    private static final String HISTORY_DDL = "CREATE TABLE \"flyway_schema_history\" (\"installed_rank\" INT, "
+            + "\"version\" VARCHAR(50), \"description\" VARCHAR(200), \"type\" VARCHAR(20), "
+            + "\"script\" VARCHAR(1000), \"checksum\" INT, \"installed_by\" VARCHAR(100), "
+            + "\"installed_on\" TIMESTAMP, \"execution_time\" INT, \"success\" BOOLEAN)";
+
+    private static String historyRow(int rank, String version, String description, String script) {
+        return "INSERT INTO \"flyway_schema_history\" VALUES (" + rank + ", '" + version + "', '" + description
+                + "', 'SQL', '" + script + "', 1, 'sa', CURRENT_TIMESTAMP, 1, TRUE)";
+    }
+
+    @Test
+    void a3xDatabaseWithLaterMigrationsIsCompatible() throws SQLException {
+        String url = newUrl();
+        flyway(url).migrate();
+        exec(url, historyRow(2, "2", "add widget", "V2__add_widget.sql"),
+                historyRow(3, "3", "add gadget", "V3__add_gadget.sql"));
+        assertTrue(check(url).isEmpty());
+    }
+
+    @Test
+    void a2xDatabaseAtItsBaselineIsIncompatible() throws SQLException {
+        String url = newUrl();
+        exec(url, HISTORY_DDL, historyRow(1, "1", "baseline", "V1__baseline.sql"),
+                "CREATE TABLE project (id BIGINT)", "CREATE TABLE actor (id BIGINT)");
+        assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
+    }
+
+    @Test
+    void a2xMigrationScriptIsIncompatibleEvenWithoutLegacyTables() throws SQLException {
+        String url = newUrl();
+        exec(url, HISTORY_DDL, historyRow(1, "1", "baseline", "V1__baseline.sql"),
+                historyRow(2, "2", "add manager triggerable", "V2__add_manager_triggerable.sql"));
         assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
     }
 }
