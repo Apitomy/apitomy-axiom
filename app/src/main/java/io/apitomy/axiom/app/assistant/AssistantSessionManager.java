@@ -20,9 +20,9 @@ import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
-import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
+import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import jakarta.enterprise.event.Event;
 import io.quarkus.runtime.ShutdownEvent;
@@ -104,6 +104,9 @@ public class AssistantSessionManager {
 
     @Inject
     McpConfigGenerator mcpConfigGenerator;
+
+    @Inject
+    ToolsetResolver toolsetResolver;
 
     @Inject
     Event<io.apitomy.axiom.core.events.SseEvent> sseEventEmitter;
@@ -1175,35 +1178,15 @@ public class AssistantSessionManager {
         }
     }
 
-    private List<String> resolveAllowedTools(
-            SessionTemplateService.SessionTemplate template) {
-        List<String> resolved = new ArrayList<>();
-
-        // Process allowed tools, expanding @ToolsetName references
-        for (String entry : template.allowedTools()) {
-            if (entry.startsWith("@")) {
-                expandToolset(entry.substring(1), resolved);
-            } else {
-                resolved.add(entry);
-            }
-        }
-
-        return resolved;
-    }
-
-    private void expandToolset(String toolsetName, List<String> target) {
-        ToolsetEntity toolset = ToolsetEntity.find("name", toolsetName).firstResult();
-        if (toolset != null && toolset.tools != null) {
-            String[] tools = toolset.tools.split(",");
-            for (String tool : tools) {
-                String trimmed = tool.trim();
-                if (!trimmed.isEmpty()) {
-                    target.add(trimmed);
-                }
-            }
-        } else {
-            LOG.warnf("Toolset not found: %s", toolsetName);
-        }
+    /**
+     * Resolves a session template's allowed tools, expanding {@code @ToolsetName}
+     * references via the shared {@link ToolsetResolver}.
+     *
+     * @param template the session template
+     * @return the flat, deduplicated list of allowed tools
+     */
+    List<String> resolveAllowedTools(SessionTemplateService.SessionTemplate template) {
+        return toolsetResolver.resolve(template.allowedTools());
     }
 
     /**
