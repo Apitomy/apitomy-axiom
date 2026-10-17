@@ -2,16 +2,25 @@ package io.apitomy.axiom.app;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
+import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.Test;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -20,6 +29,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * failing inside Flyway or silently baselining it.
  */
 class LegacyDatabaseGuardTest {
+
+    private static final String HISTORY_DDL = "CREATE TABLE \"flyway_schema_history\" (\"installed_rank\" INT, "
+            + "\"version\" VARCHAR(50), \"description\" VARCHAR(200), \"type\" VARCHAR(20), "
+            + "\"script\" VARCHAR(1000), \"checksum\" INT, \"installed_by\" VARCHAR(100), "
+            + "\"installed_on\" TIMESTAMP, \"execution_time\" INT, \"success\" BOOLEAN)";
+
+    private static String historyRow(int rank, String version, String description, String script) {
+        return "INSERT INTO \"flyway_schema_history\" VALUES (" + rank + ", '" + version + "', '" + description
+                + "', 'SQL', '" + script + "', 1, 'sa', CURRENT_TIMESTAMP, 1, TRUE)";
+    }
 
     private static String newUrl() {
         return "jdbc:h2:mem:guard-" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1";
@@ -59,17 +78,42 @@ class LegacyDatabaseGuardTest {
         flyway(url).migrate();   // starting again is fine
     }
 
+    /**
+     * Runs every current 3.x migration and checks that none of them collides with the 2.x detection markers;
+     * a collision would make every 3.x database refuse to start.
+     */
+    @Test
+    void current3xMigrationsDoNotCollideWithLegacyMarkers() throws SQLException {
+        String url = newUrl();
+        Flyway flyway = flyway(url);
+        flyway.migrate();
+        try (Connection c = DriverManager.getConnection(url)) {
+            Set<String> tables = new HashSet<>();
+            try (ResultSet rs = c.getMetaData().getTables(null, c.getSchema(), "%", new String[] {"TABLE"})) {
+                while (rs.next()) {
+                    tables.add(rs.getString("TABLE_NAME").toLowerCase(Locale.ROOT));
+                }
+            }
+            Set<String> tableCollisions = new HashSet<>(tables);
+            tableCollisions.retainAll(LegacyDatabaseGuard.LEGACY_TABLES);
+            assertTrue(tableCollisions.isEmpty(), "3.x migrations create 2.x marker tables: " + tableCollisions);
+        }
+        List<String> scripts = Arrays.stream(flyway.info().applied())
+                .map(MigrationInfo::getScript)
+                .collect(Collectors.toList());
+        assertFalse(scripts.isEmpty(), "no 3.x migrations were applied");
+        List<String> scriptCollisions = scripts.stream()
+                .filter(LegacyDatabaseGuard.LEGACY_SCRIPTS::contains)
+                .collect(Collectors.toList());
+        assertTrue(scriptCollisions.isEmpty(), "3.x migrations reuse 2.x script names: " + scriptCollisions);
+        assertTrue(check(url).isEmpty());
+    }
+
     @Test
     void a2xMigrationHistoryIsIncompatible() throws SQLException {
         String url = newUrl();
-        exec(url, "CREATE TABLE \"flyway_schema_history\" (\"installed_rank\" INT, \"version\" VARCHAR(50), "
-                        + "\"description\" VARCHAR(200), \"type\" VARCHAR(20), \"script\" VARCHAR(1000), "
-                        + "\"checksum\" INT, \"installed_by\" VARCHAR(100), \"installed_on\" TIMESTAMP, "
-                        + "\"execution_time\" INT, \"success\" BOOLEAN)",
-                "INSERT INTO \"flyway_schema_history\" VALUES (1, '1', 'baseline', 'SQL', 'V1__baseline.sql', 1, "
-                        + "'sa', CURRENT_TIMESTAMP, 1, TRUE)",
-                "INSERT INTO \"flyway_schema_history\" VALUES (2, '22', 'create tracing tables', 'SQL', 'V22__create_tracing_tables.sql', 1, "
-                        + "'sa', CURRENT_TIMESTAMP, 1, TRUE)");
+        exec(url, HISTORY_DDL, historyRow(1, "1", "baseline", "V1__baseline.sql"),
+                historyRow(2, "22", "create tracing tables", "V22__create_tracing_tables.sql"));
         assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
         FlywayException e = assertThrows(FlywayException.class, () -> flyway(url).migrate());
         assertTrue(e.getMessage().contains(LegacyDatabaseGuard.MESSAGE), e.getMessage());
@@ -88,16 +132,6 @@ class LegacyDatabaseGuardTest {
         String url = newUrl();
         exec(url, "CREATE TABLE subject (id BIGINT)");
         assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
-    }
-
-    private static final String HISTORY_DDL = "CREATE TABLE \"flyway_schema_history\" (\"installed_rank\" INT, "
-            + "\"version\" VARCHAR(50), \"description\" VARCHAR(200), \"type\" VARCHAR(20), "
-            + "\"script\" VARCHAR(1000), \"checksum\" INT, \"installed_by\" VARCHAR(100), "
-            + "\"installed_on\" TIMESTAMP, \"execution_time\" INT, \"success\" BOOLEAN)";
-
-    private static String historyRow(int rank, String version, String description, String script) {
-        return "INSERT INTO \"flyway_schema_history\" VALUES (" + rank + ", '" + version + "', '" + description
-                + "', 'SQL', '" + script + "', 1, 'sa', CURRENT_TIMESTAMP, 1, TRUE)";
     }
 
     @Test

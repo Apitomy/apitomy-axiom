@@ -68,9 +68,22 @@ public class LegacyDatabaseGuard implements Callback, FlywayConfigurationCustomi
             "V21__add_title_template_to_report_definition.sql",
             "V22__create_tracing_tables.sql");
 
-    /** Tables created by the Axiom 2.x baseline that Axiom 3 does not have (lower case). */
+    /**
+     * Tables created by the Axiom 2.x baseline that Axiom 3 does not have (lower case).
+     *
+     * <p><strong>Warning:</strong> a 3.x migration must never create a table with one of these names (nor ship
+     * a script named like one of {@link #LEGACY_SCRIPTS}), or every 3.x database would be reported as a 2.x
+     * database and Axiom would refuse to start. {@code LegacyDatabaseGuardTest} runs all current migrations
+     * and fails the build if that happens; pick another name or remove the marker here.</p>
+     */
     static final Set<String> LEGACY_TABLES = Set.of(
             "project", "actor", "report", "report_definition", "manager_config", "event_queue");
+
+    /** The quoted, comma-separated {@link #LEGACY_SCRIPTS}, for use in an SQL {@code IN} list. */
+    private static final String LEGACY_SCRIPTS_IN_LIST = LEGACY_SCRIPTS.stream()
+            .sorted()
+            .map(script -> "'" + script + "'")
+            .collect(Collectors.joining(", "));
 
     /**
      * {@inheritDoc}
@@ -152,10 +165,8 @@ public class LegacyDatabaseGuard implements Callback, FlywayConfigurationCustomi
         if (!legacyTables.isEmpty()) {
             return Optional.of(MESSAGE);
         }
-        String scripts = LEGACY_SCRIPTS.stream().map(script -> "'" + script + "'")
-                .collect(Collectors.joining(", "));
         String sql = "SELECT COUNT(*) FROM \"" + historyTable + "\" WHERE \"type\" = 'BASELINE' "
-                + "OR \"script\" IN (" + scripts + ")";
+                + "OR \"script\" IN (" + LEGACY_SCRIPTS_IN_LIST + ")";
         try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
             rows.next();
             return rows.getLong(1) > 0 ? Optional.of(MESSAGE) : Optional.empty();
