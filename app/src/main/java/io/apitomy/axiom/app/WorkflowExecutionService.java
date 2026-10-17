@@ -279,10 +279,6 @@ public class WorkflowExecutionService {
         }
     }
 
-    private static boolean isTerminalRunStatus(String status) {
-        return "completed".equals(status) || "failed".equals(status) || "cancelled".equals(status);
-    }
-
     private void advanceAfterTask(TaskEntity task) {
         long taskId = task.id;
 
@@ -293,17 +289,11 @@ public class WorkflowExecutionService {
                     task.workflowRunId, taskId);
             return;
         }
+        // A run that already ended (e.g. cancelled or failed) cannot accept node results: the engine
+        // would throw and mark the caller's transaction rollback-only (#343).
         if (isTerminal(entity)) {
             LOG.infof("Workflow run %d is already %s; not advancing it for task %d",
                     entity.id, entity.status, taskId);
-            return;
-        }
-
-        // A run that already ended (e.g. cancelled or failed) cannot accept node results: the engine
-        // would throw and mark the caller's transaction rollback-only (#343).
-        if (isTerminalRunStatus(entity.status)) {
-            LOG.debugf("Workflow run %d is %s; ignoring completion of task %d",
-                    entity.id, entity.status, Long.valueOf(taskId));
             return;
         }
 
