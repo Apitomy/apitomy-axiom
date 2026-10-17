@@ -21,7 +21,7 @@
     "mcp__axiom__axiom_validate_item",
     "mcp__axiom__axiom_list_secrets",
     "mcp__axiom__axiom_list_subjects",
-    "mcp__axiom__axiom_list_actors",
+    "mcp__axiom__axiom_list_agents",
     "mcp__axiom__axiom_list_tools",
     "mcp__axiom__axiom_get_tool",
     "mcp__axiom__axiom_list_action_types",

@@ -96,7 +96,7 @@ const HANDLERS = {
         return await axiomApi("GET", `/action-types?${params}`);
     },
     axiom_list_agents: async () => {
-        return await axiomApi("GET", "/actors");
+        return await axiomApi("GET", "/agents");
     },
     axiom_update_subject: async (args) => {
         const payload = {};

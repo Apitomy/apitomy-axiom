@@ -41,6 +41,7 @@ class AssistantConfigToolResourcesTest {
         List<String> allowedTools = new ArrayList<>();
         template.path("allowedTools").forEach(t -> allowedTools.add(t.asText()));
         assertTrue(allowedTools.contains("mcp__axiom__axiom_validate_item"), allowedTools.toString());
-        assertFalse(text.contains("axiom_list_agents"));
+        assertTrue(allowedTools.contains("mcp__axiom__axiom_list_agents"), allowedTools.toString());
+        assertFalse(text.contains("axiom_list_actors"));
     }
 }

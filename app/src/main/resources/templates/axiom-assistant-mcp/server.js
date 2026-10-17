@@ -330,17 +330,19 @@ const TOOLS = [
         },
     },
     {
-        name: "axiom_list_actors",
-        description: "List all configured actors in Axiom. Returns names, types (human/ai-agent), and descriptions.",
+        name: "axiom_list_agents",
+        description: "List all configured agents in Axiom. Returns ids, names, agent types, enabled flags, capabilities, and descriptions.",
         parameters: [],
         handler: async () => {
-            const items = JSON.parse(await axiomApi("GET", "/actors"));
-            if (items.length === 0) return "No actors configured.";
+            const items = JSON.parse(await axiomApi("GET", "/agents"));
+            if (items.length === 0) return "No agents configured.";
             return JSON.stringify(items.map(a => ({
                 id: a.id,
                 name: a.name,
                 description: a.description || "",
-                type: a.type,
+                agentType: a.agentType,
+                enabled: a.enabled,
+                capabilities: a.capabilities || [],
             })), null, 2);
         },
     },
