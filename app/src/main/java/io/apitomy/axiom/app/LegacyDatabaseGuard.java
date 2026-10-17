@@ -2,12 +2,14 @@ package io.apitomy.axiom.app;
 
 import io.quarkus.flyway.FlywayConfigurationCustomizer;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.callback.Callback;
 import org.flywaydb.core.api.callback.Context;
 import org.flywaydb.core.api.callback.Event;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
 
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
@@ -39,8 +41,25 @@ public class LegacyDatabaseGuard implements Callback, FlywayConfigurationCustomi
 
     /** Shown when the database was created by an earlier major version. */
     public static final String MESSAGE = "This database was created by an earlier major version of Axiom (2.x or "
-            + "older), which Axiom 3 cannot use. Back up and then delete the data directory (by default "
-            + "~/.axiom/data), then start Axiom again to create a new database. See the 3.0.0 release notes.";
+            + "older), which Axiom 3 cannot use.";
+
+    /**
+     * Builds the full error message, naming the data directory resolved from {@code axiom.home}.
+     *
+     * @return {@link #MESSAGE} followed by instructions naming the actual data directory
+     */
+    public static String fullMessage() {
+        String dataDir;
+        try {
+            dataDir = ConfigProvider.getConfig().getOptionalValue("axiom.home", String.class)
+                    .map(home -> Path.of(home, "data").toString())
+                    .orElse("~/.axiom/data");
+        } catch (RuntimeException e) {
+            dataDir = "~/.axiom/data";
+        }
+        return MESSAGE + " Back up and then delete the data directory (" + dataDir + "), then start Axiom again "
+                + "to create a new database. See the 3.0.0 release notes.";
+    }
 
     private static final String HISTORY_TABLE = "flyway_schema_history";
 
@@ -137,7 +156,7 @@ public class LegacyDatabaseGuard implements Callback, FlywayConfigurationCustomi
      * Checks whether a database was created by an earlier major version of Axiom.
      *
      * @param connection a connection to the database
-     * @return {@link #MESSAGE} when the database is incompatible, otherwise empty
+     * @return {@link #fullMessage()} when the database is incompatible, otherwise empty
      * @throws SQLException when the database cannot be inspected
      */
     public static Optional<String> incompatibility(Connection connection) throws SQLException {
@@ -160,16 +179,16 @@ public class LegacyDatabaseGuard implements Callback, FlywayConfigurationCustomi
             }
         }
         if (historyTable == null) {
-            return otherTables ? Optional.of(MESSAGE) : Optional.empty();
+            return otherTables ? Optional.of(fullMessage()) : Optional.empty();
         }
         if (!legacyTables.isEmpty()) {
-            return Optional.of(MESSAGE);
+            return Optional.of(fullMessage());
         }
         String sql = "SELECT COUNT(*) FROM \"" + historyTable + "\" WHERE \"type\" = 'BASELINE' "
                 + "OR \"script\" IN (" + LEGACY_SCRIPTS_IN_LIST + ")";
         try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
             rows.next();
-            return rows.getLong(1) > 0 ? Optional.of(MESSAGE) : Optional.empty();
+            return rows.getLong(1) > 0 ? Optional.of(fullMessage()) : Optional.empty();
         }
     }
 }

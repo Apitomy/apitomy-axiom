@@ -114,7 +114,7 @@ class LegacyDatabaseGuardTest {
         String url = newUrl();
         exec(url, HISTORY_DDL, historyRow(1, "1", "baseline", "V1__baseline.sql"),
                 historyRow(2, "22", "create tracing tables", "V22__create_tracing_tables.sql"));
-        assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
+        assertEquals(Optional.of(LegacyDatabaseGuard.fullMessage()), check(url));
         FlywayException e = assertThrows(FlywayException.class, () -> flyway(url).migrate());
         assertTrue(e.getMessage().contains(LegacyDatabaseGuard.MESSAGE), e.getMessage());
     }
@@ -124,14 +124,26 @@ class LegacyDatabaseGuardTest {
         String url = newUrl();
         exec(url, HISTORY_DDL, "INSERT INTO \"flyway_schema_history\" VALUES (1, '1', '<< Flyway Baseline >>', "
                 + "'BASELINE', '<< Flyway Baseline >>', NULL, 'sa', CURRENT_TIMESTAMP, 0, TRUE)");
-        assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
+        assertEquals(Optional.of(LegacyDatabaseGuard.fullMessage()), check(url));
     }
 
     @Test
     void tablesWithoutMigrationHistoryAreIncompatible() throws SQLException {
         String url = newUrl();
         exec(url, "CREATE TABLE subject (id BIGINT)");
-        assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
+        assertEquals(Optional.of(LegacyDatabaseGuard.fullMessage()), check(url));
+    }
+
+    /**
+     * The message names the data directory under the configured Axiom home, not a hardcoded path.
+     */
+    @Test
+    void theMessageNamesTheConfiguredDataDirectory() {
+        String home = org.eclipse.microprofile.config.ConfigProvider.getConfig()
+                .getValue("axiom.home", String.class);
+        String expected = java.nio.file.Path.of(home, "data").toString();
+        assertTrue(LegacyDatabaseGuard.fullMessage().contains("(" + expected + ")"),
+                LegacyDatabaseGuard.fullMessage());
     }
 
     @Test
@@ -148,7 +160,7 @@ class LegacyDatabaseGuardTest {
         String url = newUrl();
         exec(url, HISTORY_DDL, historyRow(1, "1", "baseline", "V1__baseline.sql"),
                 "CREATE TABLE project (id BIGINT)", "CREATE TABLE actor (id BIGINT)");
-        assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
+        assertEquals(Optional.of(LegacyDatabaseGuard.fullMessage()), check(url));
     }
 
     @Test
@@ -156,6 +168,6 @@ class LegacyDatabaseGuardTest {
         String url = newUrl();
         exec(url, HISTORY_DDL, historyRow(1, "1", "baseline", "V1__baseline.sql"),
                 historyRow(2, "2", "add manager triggerable", "V2__add_manager_triggerable.sql"));
-        assertEquals(Optional.of(LegacyDatabaseGuard.MESSAGE), check(url));
+        assertEquals(Optional.of(LegacyDatabaseGuard.fullMessage()), check(url));
     }
 }
