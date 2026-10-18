@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { ChartBar, ChartGroup, ChartVoronoiContainer, Chart, ChartAxis } from "@patternfly/react-charts/victory";
 import { fetchDiskUsage, formatBytes } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
@@ -34,7 +35,11 @@ function DiskUsageWidget({ config }: WidgetProps) {
     if (error) return <WidgetError />;
 
     if (data.length === 0) {
-        return <p style={{ padding: "16px", textAlign: "center" }}>No disk usage data.</p>;
+        return (
+            <p style={{ padding: "16px", textAlign: "center" }}>
+                No disk usage data. <Link to="/metrics/disk-usage">Disk usage</Link>
+            </p>
+        );
     }
 
     const chartData = data.map(d => ({
@@ -47,7 +52,8 @@ function DiskUsageWidget({ config }: WidgetProps) {
     return (
         <div style={{ height: "100%", minHeight: "150px" }}>
             <div style={{ textAlign: "center", padding: "4px 0", fontSize: "0.85rem" }}>
-                Total: {formatBytes(totalBytes)}
+                Total: {formatBytes(totalBytes)}{" "}
+                <Link to="/metrics/disk-usage">View details</Link>
             </div>
             <Chart
                 containerComponent={
@@ -72,7 +78,7 @@ function DiskUsageWidget({ config }: WidgetProps) {
 registerWidget({
     type: "disk-usage",
     name: "Disk Usage Breakdown",
-    description: "Storage consumption broken down by subject, shown as a bar chart.",
+    description: "Subjects using the most disk space, shown as a bar chart. Covers all subjects (not filtered by dashboard labels).",
     category: "System",
     scope: "global",
     defaultSize: { w: 4, h: 3 },

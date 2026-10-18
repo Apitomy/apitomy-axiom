@@ -1,9 +1,30 @@
 import { useState, useEffect } from "react";
 import { Label } from "@patternfly/react-core";
+import { Link } from "react-router-dom";
 import { type ActivityLogEntry, fetchActivityLog } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
+import { SSE_EVENTS } from "../../../config/sseEvents";
 import { activityTypePresentation } from "../../../config/activityTypes";
+
+const linkStyle = { marginLeft: "8px", fontSize: "0.8em" };
+
+/** Links from an activity entry to its subject, trace and event when those ids are present. */
+function EntryLinks({ entry }: { entry: ActivityLogEntry }) {
+    return (
+        <>
+            {entry.subjectId != null && (
+                <Link to={`/subjects/${entry.subjectId}`} style={linkStyle}>subject</Link>
+            )}
+            {entry.traceId && (
+                <Link to={`/logs/traces/${entry.traceId}`} style={linkStyle}>trace</Link>
+            )}
+            {entry.eventId && (
+                <Link to={`/events/stream/${entry.eventId}`} style={linkStyle}>event</Link>
+            )}
+        </>
+    );
+}
 
 function RecentActivityWidget({ config, labels, refreshToken }: WidgetProps) {
     const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
@@ -44,6 +65,7 @@ function RecentActivityWidget({ config, labels, refreshToken }: WidgetProps) {
                         {activityTypePresentation(entry.entryType).label}
                     </Label>
                     <span>{entry.summary}</span>
+                    <EntryLinks entry={entry} />
                     <span style={{ float: "right", color: "var(--pf-t--global--color--200)",
                                    fontSize: "0.8em" }}>
                         {formatTime(entry.createdOn)}
@@ -60,10 +82,10 @@ function RecentActivityWidget({ config, labels, refreshToken }: WidgetProps) {
 registerWidget({
     type: "recent-activity",
     name: "Recent Activity",
-    description: "Time-ordered feed of activity log entries with type badges.",
+    description: "Latest workflow, task and subject activity with links to the subject, trace and event.",
     category: "Runs",
     scope: "subject-labels",
-    liveEvents: ["activity"],
+    liveEvents: [SSE_EVENTS.activity],
     defaultSize: { w: 4, h: 4 },
     minSize: { w: 3, h: 2 },
     configSchema: [
