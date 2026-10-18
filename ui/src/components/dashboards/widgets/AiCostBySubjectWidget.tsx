@@ -14,7 +14,7 @@ interface SubjectCost {
     cost: number;
 }
 
-function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
+function AiCostBySubjectWidget({ config, labels, refreshToken }: WidgetProps) {
     const [data, setData] = useState<SubjectCost[]>([]);
     const [excluded, setExcluded] = useState<number | undefined>(undefined);
     const [error, setError] = useState(false);
@@ -36,7 +36,7 @@ function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [labels, timeWindow, maxSubjects]);
+    }, [labels, timeWindow, maxSubjects, refreshToken]);
 
     if (error) return <WidgetError />;
 

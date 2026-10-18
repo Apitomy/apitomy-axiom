@@ -342,10 +342,16 @@ public class ImportExportService {
                 }
             }
         }
+        Set<String> dashboardNames = new HashSet<>();
         for (JsonNode item : pack.path("dashboards")) {
-            List<ConfigProblem> errors = validateDashboard(item);
+            List<ConfigProblem> errors = new ArrayList<>(validateDashboard(item));
+            String trimmedName = item.path("name").asText("").trim();
+            if (!trimmedName.isEmpty() && !dashboardNames.add(trimmedName)) {
+                errors.add(ConfigProblem.error("name", "duplicate-dashboard-name",
+                        "Duplicate dashboard name in pack: '" + trimmedName + "'"));
+            }
             if (!errors.isEmpty()) {
-                problemsByItem.computeIfAbsent("dashboard/" + itemName(item), k -> new ArrayList<>())
+                problemsByItem.computeIfAbsent("dashboard/" + itemName(item).trim(), k -> new ArrayList<>())
                         .addAll(errors);
             }
         }
@@ -457,6 +463,10 @@ public class ImportExportService {
         for (JsonNode item : items) {
             String name = item.path(nameField).asText(null);
             if (name == null) continue;
+            // Dashboards are upserted by trimmed name, so conflicts must be checked the same way.
+            if ("dashboard".equals(type)) {
+                name = name.trim();
+            }
             boolean exists = switch (type) {
                 case "tool" -> ToolDefinitionEntity.count("name", name) > 0;
                 case "toolset" -> ToolsetEntity.count("name", name) > 0;

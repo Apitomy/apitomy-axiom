@@ -31,6 +31,7 @@ import jakarta.ws.rs.core.Response;
 import jakarta.transaction.Transactional;
 import java.io.InputStream;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -45,6 +46,8 @@ import java.util.Map;
 @ApplicationScoped
 @RunOnVirtualThread
 public class SystemResourceImpl implements SystemResource {
+
+    private static final Logger LOG = Logger.getLogger(SystemResourceImpl.class);
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0-SNAPSHOT")
     String applicationVersion;
@@ -117,7 +120,8 @@ public class SystemResourceImpl implements SystemResource {
             entityManager.createNativeQuery("SELECT 1").getSingleResult();
             return check(DATABASE_CHECK, HealthCheck.Status.UP, null);
         } catch (RuntimeException e) {
-            return check(DATABASE_CHECK, HealthCheck.Status.DOWN, "Database query failed: " + e.getMessage());
+            LOG.error("Health check: database query failed", e);
+            return check(DATABASE_CHECK, HealthCheck.Status.DOWN, "Database check failed; see server log");
         }
     }
 
@@ -133,8 +137,9 @@ public class SystemResourceImpl implements SystemResource {
             return check(EVENT_SOURCES_CHECK, HealthCheck.Status.DEGRADED,
                     failing.size() + " event source(s) failing: " + String.join(", ", failing));
         } catch (RuntimeException e) {
+            LOG.error("Health check: could not read event source health", e);
             return check(EVENT_SOURCES_CHECK, HealthCheck.Status.DOWN,
-                    "Could not read event source health: " + e.getMessage());
+                    "Event source check failed; see server log");
         }
     }
 

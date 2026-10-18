@@ -47,6 +47,8 @@ public class EventSourcesResourceImpl implements EventResource {
     private static final int SLUG_MAX_LENGTH = 63;
     private static final String INVALID_ID_MESSAGE =
             "Invalid event source id: must be 1-63 lowercase letters, numbers, or dashes";
+    /** Ids that would be shadowed by fixed sub-paths of the event sources API. */
+    private static final String RESERVED_ID_HEALTH = "health";
 
     @Inject
     ObjectMapper objectMapper;
@@ -105,6 +107,10 @@ public class EventSourcesResourceImpl implements EventResource {
         String slug = data.getId();
         if (slug != null && slug.length() > SLUG_MAX_LENGTH) {
             throw new WebApplicationException(INVALID_ID_MESSAGE, 400);
+        }
+        if (slug != null && RESERVED_ID_HEALTH.equalsIgnoreCase(slug.trim())) {
+            throw new WebApplicationException(
+                    "Invalid event source id: 'health' is reserved (it is used by /event-sources/health)", 400);
         }
         validate(data, slug);
 

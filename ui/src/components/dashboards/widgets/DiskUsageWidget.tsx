@@ -10,7 +10,7 @@ interface SubjectDisk {
     bytes: number;
 }
 
-function DiskUsageWidget({ config }: WidgetProps) {
+function DiskUsageWidget({ config, refreshToken }: WidgetProps) {
     const [data, setData] = useState<SubjectDisk[]>([]);
     const [totalBytes, setTotalBytes] = useState(0);
     const [error, setError] = useState(false);
@@ -27,10 +27,11 @@ function DiskUsageWidget({ config }: WidgetProps) {
                     .filter(p => p.bytes > 0);
                 setData(items);
                 setTotalBytes(result.totalDiskUsageBytes);
+                setError(false);
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [maxSubjects]);
+    }, [maxSubjects, refreshToken]);
 
     if (error) return <WidgetError />;
 

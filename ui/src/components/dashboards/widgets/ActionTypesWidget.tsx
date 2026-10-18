@@ -7,7 +7,7 @@ import { registerWidget, type WidgetProps } from "../widget-registry";
 import { executionModeColor } from "../../executionModeColor";
 import { WidgetError } from "../WidgetError";
 
-function ActionTypesWidget({ config }: WidgetProps) {
+function ActionTypesWidget({ config, refreshToken }: WidgetProps) {
     const navigate = useNavigate();
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -22,10 +22,11 @@ function ActionTypesWidget({ config }: WidgetProps) {
                 if (cancelled) return;
                 setActionTypes(results.items);
                 setTotalCount(results.totalCount);
+                setError(false);
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [maxRows]);
+    }, [maxRows, refreshToken]);
 
     if (error) return <WidgetError />;
 

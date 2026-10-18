@@ -222,4 +222,27 @@ class EventSourcesResourceTest {
             .then()
                 .statusCode(200);
     }
+
+    /** The id "health" (any case) is reserved because GET /event-sources/health would shadow it. */
+    @Test
+    void testCreateWithReservedHealthIdIsRejected() {
+        for (String id : new String[] {"health", "Health"}) {
+            given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "%s",
+                        "name": "Health Source",
+                        "sourceType": "github",
+                        "enabled": false,
+                        "baseUrl": "https://api.github.com",
+                        "configuration": { "repositories": ["a/b"] }
+                    }
+                    """.formatted(id))
+                .when()
+                    .post(EVENT_SOURCES_PATH)
+                .then()
+                    .statusCode(400);
+        }
+    }
 }

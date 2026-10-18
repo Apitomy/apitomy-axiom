@@ -134,6 +134,34 @@ class DashboardValidationResourceTest {
                 .body("problems.'dashboard/" + name + "'[0].message", containsString("tabs[0].name"));
     }
 
+    /** A pack dashboard whose name differs only by surrounding whitespace conflicts with the existing one. */
+    @Test
+    void packDashboardNameConflictIgnoresWhitespace() {
+        String name = "trim-dash-" + UUID.randomUUID();
+        create(name);
+        given().contentType(ContentType.JSON)
+                .body("{\"dashboards\": [{\"name\": \" " + name + " \", \"tabs\": " + VALID_TABS + "}]}")
+                .when().post("/api/v1/system/packs/import")
+                .then().statusCode(409)
+                .body("conflicts[0].type", equalTo("dashboard"))
+                .body("conflicts[0].name", equalTo(name));
+    }
+
+    /** A pack with two dashboards of the same (trimmed) name is rejected. */
+    @Test
+    void duplicatePackDashboardNamesAreRejected() {
+        String name = "dup-dash-" + UUID.randomUUID();
+        String item = "{\"name\": \"%s\", \"tabs\": " + VALID_TABS + "}";
+        given().contentType(ContentType.JSON)
+                .body("{\"dashboards\": [" + item.formatted(name) + ", " + item.formatted(" " + name) + "]}")
+                .when().post("/api/v1/system/packs/import")
+                .then().statusCode(400)
+                .body("problems.'dashboard/" + name + "'[0].message",
+                        containsString("Duplicate dashboard name"));
+        given().when().get(DASHBOARDS).then().statusCode(200)
+                .body("findAll { it.name == '" + name + "' }", hasSize(0));
+    }
+
     private static long create(String name) {
         return given().contentType(ContentType.JSON).body(body(name, VALID_TABS))
                 .when().post(DASHBOARDS)

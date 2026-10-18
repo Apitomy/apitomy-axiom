@@ -5,6 +5,7 @@ import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import { fetchSystemHealth, type HealthStatus, type SystemHealth } from "../../../config/api";
+import { usePolling } from "../../../hooks/usePolling";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 
 /** How often the widget re-fetches application health. */
@@ -35,9 +36,11 @@ function statusColor(status: HealthStatus): "green" | "orange" | "red" {
     return "red";
 }
 
-function SystemStatusWidget(_props: WidgetProps) {
+function SystemStatusWidget({ refreshToken }: WidgetProps) {
     const [health, setHealth] = useState<SystemHealth | null>(null);
     const [error, setError] = useState(false);
+    const [pollTick, setPollTick] = useState(0);
+    usePolling(() => setPollTick(t => t + 1), HEALTH_POLL_MS);
 
     useEffect(() => {
         let cancelled = false;
@@ -47,9 +50,8 @@ function SystemStatusWidget(_props: WidgetProps) {
                 .catch(() => { if (!cancelled) setError(true); });
         };
         load();
-        const timer = setInterval(load, HEALTH_POLL_MS);
-        return () => { cancelled = true; clearInterval(timer); };
-    }, []);
+        return () => { cancelled = true; };
+    }, [refreshToken, pollTick]);
 
     if (!health && !error) {
         return <div style={{ padding: "12px", textAlign: "center" }}><Spinner size="md" aria-label="Loading health" /></div>;

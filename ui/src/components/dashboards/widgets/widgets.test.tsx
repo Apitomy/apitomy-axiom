@@ -241,3 +241,34 @@ describe("DiskUsageWidget", () => {
         expect(getWidget("disk-usage")?.scope).toBe("global");
     });
 });
+
+describe("refreshToken refetch", () => {
+    async function expectRefetch(type: string, mock: ReturnType<typeof vi.fn>): Promise<void> {
+        const entry = getWidget(type)!;
+        const Component = entry.component;
+        const props = (refreshToken: number): WidgetProps =>
+            ({ config: {}, labels: [], onConfigChange: () => {}, refreshToken });
+        const { rerender } = render(<MemoryRouter><Component {...props(0)} /></MemoryRouter>);
+        await act(async () => {});
+        expect(mock).toHaveBeenCalledTimes(1);
+        rerender(<MemoryRouter><Component {...props(1)} /></MemoryRouter>);
+        await act(async () => {});
+        expect(mock).toHaveBeenCalledTimes(2);
+    }
+
+    it("ai-cost-by-subject refetches on refreshToken change", async () => {
+        vi.mocked(api.fetchAiUsageSummary).mockResolvedValue({ rows: [] } as unknown as api.AiUsageSummary);
+        await expectRefetch("ai-cost-by-subject", vi.mocked(api.fetchAiUsageSummary));
+    });
+
+    it("action-types refetches on refreshToken change", async () => {
+        vi.mocked(api.fetchActionTypes).mockResolvedValue(page([]));
+        await expectRefetch("action-types", vi.mocked(api.fetchActionTypes));
+    });
+
+    it("disk-usage refetches on refreshToken change", async () => {
+        vi.mocked(api.fetchDiskUsage).mockResolvedValue(
+            { items: [], totalCount: 0, totalDiskUsageBytes: 0 } as unknown as Awaited<ReturnType<typeof api.fetchDiskUsage>>);
+        await expectRefetch("disk-usage", vi.mocked(api.fetchDiskUsage));
+    });
+});

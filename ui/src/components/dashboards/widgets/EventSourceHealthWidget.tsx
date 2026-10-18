@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Label } from "@patternfly/react-core";
 import { fetchEventSourceHealth, type EventSourceHealth } from "../../../config/api";
+import { usePolling } from "../../../hooks/usePolling";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 import { cellStyle, formatAge, WidgetEmpty, WidgetLoading } from "./widgetUtils";
@@ -21,6 +22,8 @@ const STATE_ORDER: Record<string, number> = {
 function EventSourceHealthWidget({ refreshToken }: WidgetProps) {
     const [sources, setSources] = useState<EventSourceHealth[] | null>(null);
     const [error, setError] = useState(false);
+    const [pollTick, setPollTick] = useState(0);
+    usePolling(() => setPollTick(t => t + 1), EVENT_SOURCE_HEALTH_POLL_MS);
 
     useEffect(() => {
         let cancelled = false;
@@ -30,9 +33,8 @@ function EventSourceHealthWidget({ refreshToken }: WidgetProps) {
                 .catch(() => { if (!cancelled) setError(true); });
         };
         load();
-        const timer = setInterval(load, EVENT_SOURCE_HEALTH_POLL_MS);
-        return () => { cancelled = true; clearInterval(timer); };
-    }, [refreshToken]);
+        return () => { cancelled = true; };
+    }, [refreshToken, pollTick]);
 
     if (error) return <WidgetError />;
     if (!sources) return <WidgetLoading label="Loading event source health" />;

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Chart, ChartAxis, ChartBar, ChartVoronoiContainer } from "@patternfly/react-charts/victory";
 import { fetchEventVolumeHistogram, type EventVolumeBucket } from "../../../config/api";
+import { usePolling } from "../../../hooks/usePolling";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 import { SINCE_WINDOWS, sinceField, sinceIso, WidgetEmpty, WidgetLoading } from "./widgetUtils";
@@ -22,6 +23,8 @@ export const EVENT_VOLUME_POLL_MS = 5 * 60 * 1000;
 function EventVolumeWidget({ config, refreshToken }: WidgetProps) {
     const [buckets, setBuckets] = useState<EventVolumeBucket[] | null>(null);
     const [error, setError] = useState(false);
+    const [pollTick, setPollTick] = useState(0);
+    usePolling(() => setPollTick(t => t + 1), EVENT_VOLUME_POLL_MS);
     const since = String(config.since || "24h");
     const eventSourceId = typeof config.eventSourceId === "string" && config.eventSourceId
         ? config.eventSourceId : undefined;
@@ -35,9 +38,8 @@ function EventVolumeWidget({ config, refreshToken }: WidgetProps) {
                 .catch(() => { if (!cancelled) setError(true); });
         };
         load();
-        const timer = setInterval(load, EVENT_VOLUME_POLL_MS);
-        return () => { cancelled = true; clearInterval(timer); };
-    }, [since, bucket, eventSourceId, refreshToken]);
+        return () => { cancelled = true; };
+    }, [since, bucket, eventSourceId, refreshToken, pollTick]);
 
     if (error) return <WidgetError />;
     if (!buckets) return <WidgetLoading label="Loading event volume" />;
