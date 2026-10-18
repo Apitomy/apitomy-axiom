@@ -70,9 +70,10 @@ to the cache with a warning: the newest cached JAR when no version is pinned, or
 Before starting Axiom 3.x it checks whether `$AXIOM_HOME/data/axiom.mv.db` exists and appears to come from
 Axiom 2.x (the recorded version is 2.x, or there is no record but a 2.x JAR is cached). If so, it explains
 that Axiom 3 cannot use a 2.x database and that you can either back up and delete `$AXIOM_HOME/data` or pin
-`AXIOM_VERSION=2.1.2`, and links to the [3.0.0 release notes](https://github.com/Apitomy/apitomy-axiom/releases/tag/v3.0.0).
-In an interactive terminal it asks for confirmation; otherwise it continues and Axiom itself refuses to start
-on the old database. This check is a heuristic and can miss databases created outside the script.
+`AXIOM_VERSION=2.1.2`, and links to the
+[3.0.0 release notes](https://github.com/Apitomy/apitomy-axiom/releases/tag/v3.0.0). In an interactive
+terminal it asks for confirmation; otherwise it continues and Axiom itself refuses to start on the old
+database. This check is a heuristic and can miss databases created outside the script.
 
 ### Running a Release JAR Directly
 
