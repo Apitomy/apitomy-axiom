@@ -36,7 +36,8 @@ class SystemResourceTest {
             .then()
                 .statusCode(200)
                 .contentType("application/json")
-                .body("status", equalTo("UP"))
+                .body("status", notNullValue())
+                .body("checks.find { it.name == 'database' }.status", equalTo("UP"))
                 .body("version", notNullValue())
                 .body("timestamp", notNullValue());
     }
@@ -99,13 +100,19 @@ class SystemResourceTest {
     }
 
     @Test
-    void testHealthStatusIsUp() {
-        given()
+    void testHealthStatusIsWorstCheck() {
+        // Overall status is the worst check; the test environment may legitimately be DEGRADED
+        // (e.g. engine CLIs missing), so assert consistency rather than a fixed value.
+        io.restassured.path.json.JsonPath body = given()
             .when()
                 .get("/api/v1/system/health")
             .then()
                 .statusCode(200)
-                .body("status", equalTo("UP"));
+                .extract().jsonPath();
+        java.util.List<String> statuses = body.getList("checks.status");
+        String expected = statuses.contains("DOWN") ? "DOWN"
+                : statuses.contains("DEGRADED") ? "DEGRADED" : "UP";
+        org.junit.jupiter.api.Assertions.assertEquals(expected, body.getString("status"));
     }
 
     @Test

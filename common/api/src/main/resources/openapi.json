@@ -35,7 +35,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Overall status is the worst of the individual checks (database, eventSources, engines, scheduler)."
       }
     },
     "/system/config": {
@@ -6527,6 +6528,141 @@
           }
         }
       ]
+    },
+    "/workflow/runs/summary": {
+      "get": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Workflow run counts per status and recent failures",
+        "description": "Counts of workflow runs per status plus the most recent failed runs. Running and waiting counts are always current; the since filter applies to completed, failed and cancelled counts (by completion time) and to recentFailed.",
+        "operationId": "getWorkflowRunStatusSummary",
+        "parameters": [
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of subject labels to filter by (AND logic)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO-8601 date-time (e.g. 2026-01-15T00:00:00Z); only count terminal runs (completed, failed, cancelled) that finished at or after this time",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "failedLimit",
+            "in": "query",
+            "description": "Maximum number of recent failed runs to return",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow run status summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunStatusSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/runs/waiting": {
+      "get": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "List what waiting workflow runs are waiting for",
+        "description": "One entry per wait point of a waiting run (wait node, receive-event node or human task), longest waiting first.",
+        "operationId": "listWaitingWorkflowRuns",
+        "parameters": [
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of subject labels to filter by (AND logic)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of entries to return",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Waiting workflow runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WaitingWorkflowRun"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/schedules": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "List schedule triggers across all workflow definitions",
+        "description": "Ordered by next fire time ascending; disabled triggers last.",
+        "operationId": "listWorkflowSchedules",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of schedules to return",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule triggers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowScheduleSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6949,9 +7085,11 @@
           "status": {
             "enum": [
               "UP",
+              "DEGRADED",
               "DOWN"
             ],
-            "type": "string"
+            "type": "string",
+            "description": "Overall status: the worst status among checks"
           },
           "version": {
             "type": "string"
@@ -6959,6 +7097,12 @@
           "timestamp": {
             "format": "date-time",
             "type": "string"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            }
           }
         }
       },
@@ -11787,6 +11931,202 @@
             "type": "string",
             "maxLength": 500,
             "description": "The new title; absent or blank clears it"
+          }
+        }
+      },
+      "WorkflowRunStatusCounts": {
+        "type": "object",
+        "required": [
+          "running",
+          "waiting",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "properties": {
+          "running": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "cancelled": {
+            "type": "integer"
+          }
+        }
+      },
+      "WorkflowRunStatusSummary": {
+        "type": "object",
+        "required": [
+          "counts",
+          "recentFailed"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/WorkflowRunStatusCounts"
+          },
+          "recentFailed": {
+            "type": "array",
+            "description": "Most recent failed runs, newest first",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunSummary"
+            }
+          }
+        }
+      },
+      "WaitingWorkflowRun": {
+        "type": "object",
+        "required": [
+          "runId",
+          "workflowDefinitionId",
+          "workflowName",
+          "nodeId",
+          "waitKind",
+          "waitingSince"
+        ],
+        "properties": {
+          "runId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "runTitle": {
+            "type": "string"
+          },
+          "workflowDefinitionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workflowName": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "waitKind": {
+            "type": "string",
+            "enum": [
+              "wait",
+              "receive-event",
+              "human-task"
+            ]
+          },
+          "waitingSince": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the run started waiting at this node"
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the wait resumes (wait) or times out (receive-event)"
+          },
+          "eventType": {
+            "type": "string",
+            "description": "Awaited event type (receive-event)"
+          },
+          "correlationKey": {
+            "type": "string",
+            "description": "Correlation key of the awaited event (receive-event)"
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Human task awaiting input (human-task)"
+          }
+        }
+      },
+      "WorkflowScheduleSummary": {
+        "type": "object",
+        "required": [
+          "triggerId",
+          "workflowDefinitionId",
+          "workflowName",
+          "cron",
+          "enabled"
+        ],
+        "properties": {
+          "triggerId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workflowDefinitionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workflowName": {
+            "type": "string"
+          },
+          "cron": {
+            "type": "string",
+            "description": "Unix (5-field) cron expression, evaluated in UTC"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Fixed subject the trigger attaches runs to; absent until the first firing creates it"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "nextFireAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastFiredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastOutcome": {
+            "type": "string",
+            "enum": [
+              "started",
+              "skipped-duplicate",
+              "failed"
+            ]
+          },
+          "lastRunId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Most recent run started by this trigger, when it can be identified"
+          }
+        }
+      },
+      "HealthCheck": {
+        "type": "object",
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DEGRADED",
+              "DOWN"
+            ]
+          },
+          "message": {
+            "type": "string"
           }
         }
       }
