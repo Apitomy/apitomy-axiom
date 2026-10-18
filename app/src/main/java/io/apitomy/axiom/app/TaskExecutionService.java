@@ -555,6 +555,10 @@ public class TaskExecutionService {
             return;
         }
         try (LogContext ignored = taskLogContext(task)) {
+            if (!TaskFinishGuard.lockRunAndCheckUnfinished(task)) {
+                releaseFinishedTaskResources(task, true);
+                return;
+            }
             recordTaskCompletion(task, result);
         }
     }
@@ -705,6 +709,10 @@ public class TaskExecutionService {
             return null;
         }
         try (LogContext ignored = taskLogContext(task)) {
+            if (!TaskFinishGuard.lockRunAndCheckUnfinished(task)) {
+                releaseFinishedTaskResources(task, dispatchNext);
+                return task.subjectId;
+            }
             task.status = "Failed";
             task.output = reason;
             task.completedOn = Instant.now();
@@ -728,6 +736,15 @@ public class TaskExecutionService {
             }
             return task.subjectId;
         }
+    }
+
+    /**
+     * Cleans up after a task whose late result was discarded because it had already finished (e.g. its
+     * run was cancelled): removes its temporary files and lets the subject's next pending task start.
+     */
+    private void releaseFinishedTaskResources(TaskEntity task, boolean dispatchNext) {
+        mcpConfigGenerator.cleanupTempFiles(task.id);
+        afterTaskFinished(task.subjectId, dispatchNext);
     }
 
     private void afterTaskFinished(Long subjectId) {
