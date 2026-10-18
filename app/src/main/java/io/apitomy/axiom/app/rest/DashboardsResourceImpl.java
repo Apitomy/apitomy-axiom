@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.DashboardsResource;
+import io.apitomy.axiom.app.DashboardValidator;
 import io.apitomy.axiom.api.beans.Dashboard;
 import io.apitomy.axiom.api.beans.DashboardTab;
 import io.apitomy.axiom.api.beans.NewDashboard;
@@ -13,6 +14,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
@@ -109,7 +112,14 @@ public class DashboardsResourceImpl implements DashboardsResource {
      * @param data the API bean with new values
      */
     private void applyFields(DashboardEntity entity, NewDashboard data) {
-        entity.name = data.getName();
+        if (data == null) {
+            throw badRequest("Dashboard body is required");
+        }
+        List<String> problems = DashboardValidator.validate(data.getName(), data.getTabs());
+        if (!problems.isEmpty()) {
+            throw badRequest("Invalid dashboard: " + String.join("; ", problems));
+        }
+        entity.name = data.getName().trim();
         entity.description = data.getDescription();
         entity.isDefault = data.getIsDefault() != null ? data.getIsDefault() : false;
         entity.tabs = serializeTabs(data.getTabs());
@@ -117,6 +127,13 @@ public class DashboardsResourceImpl implements DashboardsResource {
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
         }
+    }
+
+    private static WebApplicationException badRequest(String message) {
+        return new WebApplicationException(Response.status(400)
+                .type(MediaType.TEXT_PLAIN_TYPE)
+                .entity(message)
+                .build());
     }
 
     private DashboardEntity findOrThrow(long id) {
@@ -151,15 +168,20 @@ public class DashboardsResourceImpl implements DashboardsResource {
         }
     }
 
+    /**
+     * Parses stored tabs JSON. Malformed JSON (or JSON that is not a list of tabs) never fails the request:
+     * it is logged and treated as an empty tab list.
+     */
     private List<DashboardTab> deserializeTabs(String json) {
         if (json == null || json.isBlank()) {
             return new ArrayList<>();
         }
         try {
-            return objectMapper.readValue(json, TAB_LIST_TYPE);
+            List<DashboardTab> tabs = objectMapper.readValue(json, TAB_LIST_TYPE);
+            return tabs != null ? tabs : new ArrayList<>();
         } catch (JsonProcessingException e) {
-            LOG.warnf("Failed to deserialize tabs JSON: %s", e.getMessage());
-            throw new WebApplicationException("Failed to deserialize dashboard tabs", 500);
+            LOG.warnf("Ignoring malformed stored tabs JSON for a dashboard: %s", e.getMessage());
+            return new ArrayList<>();
         }
     }
 }

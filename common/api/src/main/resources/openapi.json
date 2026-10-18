@@ -3422,6 +3422,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid dashboard (blank name or malformed tabs/widgets)"
           }
         }
       }
@@ -3478,6 +3481,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "400": {
+            "description": "Invalid dashboard (blank name or malformed tabs/widgets)"
           }
         }
       },
@@ -6832,6 +6838,76 @@
           }
         }
       }
+    },
+    "/usage/ai/summary": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "summary": "Summarize AI usage cost grouped by a dimension",
+        "description": "Aggregates AI usage cost, tokens and invocation counts grouped by subject, workflow definition, engine, model or action type. Rows are ordered by cost descending.",
+        "operationId": "getAiUsageSummary",
+        "parameters": [
+          {
+            "name": "groupBy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "subject",
+                "workflow",
+                "engine",
+                "model",
+                "actionType"
+              ]
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO-8601 date-time; only include usage recorded at or after this time",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of subject labels to filter by (AND logic). Usage without a subject is excluded and reported in excludedUnscopedCostUsd.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of rows",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI usage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiUsageSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid groupBy or since"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8088,6 +8164,16 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "workflowRunId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Workflow run whose task produced this usage (null when not part of a workflow run)"
+          },
+          "workflowDefinitionId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Workflow definition of the run that produced this usage (null when not part of a workflow run)"
           }
         }
       },
@@ -8631,6 +8717,14 @@
               "format": "int64",
               "type": "integer"
             }
+          },
+          "dashboardIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Dashboard IDs to include"
           }
         }
       },
@@ -8659,6 +8753,9 @@
             "type": "integer"
           },
           "workflowDefinitions": {
+            "type": "integer"
+          },
+          "dashboards": {
             "type": "integer"
           }
         }
@@ -10941,7 +11038,14 @@
             "description": "Pairs whose subscription filter failed to evaluate (not counted in matchedSubscriptions)"
           }
         },
-        "required": ["pending", "completed", "failed", "exhausted", "skipped", "filterError"]
+        "required": [
+          "pending",
+          "completed",
+          "failed",
+          "exhausted",
+          "skipped",
+          "filterError"
+        ]
       },
       "StreamEventSearchResults": {
         "type": "object",
@@ -12536,6 +12640,81 @@
           "bucketStart",
           "count"
         ]
+      },
+      "AiUsageSummaryRow": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "costUsd",
+          "inputTokens",
+          "outputTokens",
+          "invocations"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Group key (subject id, workflow definition id, engine, model or action type); empty string when the value is not set"
+          },
+          "label": {
+            "type": "string",
+            "description": "Display label for the group; \"(none)\" when the key is empty"
+          },
+          "costUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "inputTokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "outputTokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invocations": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of AI usage records in the group"
+          }
+        }
+      },
+      "AiUsageSummary": {
+        "type": "object",
+        "required": [
+          "groupBy",
+          "rows",
+          "totalCostUsd"
+        ],
+        "properties": {
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "subject",
+              "workflow",
+              "engine",
+              "model",
+              "actionType"
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiUsageSummaryRow"
+            },
+            "description": "Top groups ordered by cost descending"
+          },
+          "totalCostUsd": {
+            "type": "number",
+            "format": "double",
+            "description": "Total cost across all matching records (not only the returned rows)"
+          },
+          "excludedUnscopedCostUsd": {
+            "type": "number",
+            "format": "double",
+            "description": "Only set when filterLabels is given: cost of records in the window that have no subject and were therefore excluded"
+          }
+        }
       }
     },
     "responses": {

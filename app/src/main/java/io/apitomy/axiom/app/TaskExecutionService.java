@@ -635,7 +635,7 @@ public class TaskExecutionService {
         recordAiUsage("task", taskId, task.eventId, task.subjectId,
                 task.assignedAgent, task.actionType, engine, model,
                 result.costUsd(), result.inputTokens(), result.outputTokens(),
-                task.traceId);
+                task.traceId, task.workflowRunId);
 
         // Log to activity
         logActivity(task.subjectId, taskId, task.eventId, "task-" + statusText,
@@ -800,8 +800,13 @@ public class TaskExecutionService {
                                 Long subjectId, Long agentId, String actionType,
                                 String engine, String model,
                                 Double costUsd, Long inputTokens, Long outputTokens,
-                                UUID traceId) {
+                                UUID traceId, Long workflowRunId) {
         AiUsageEntity usage = new AiUsageEntity();
+        usage.workflowRunId = workflowRunId;
+        if (workflowRunId != null) {
+            WorkflowRunEntity run = WorkflowRunEntity.findById(workflowRunId);
+            usage.workflowDefinitionId = run != null ? run.definitionId : null;
+        }
         usage.invocationType = invocationType;
         usage.taskId = taskId;
         usage.eventId = eventId;

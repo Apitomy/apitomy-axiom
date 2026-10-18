@@ -3,6 +3,8 @@ package io.apitomy.axiom.app.rest;
 import io.apitomy.axiom.api.UsageResource;
 import io.apitomy.axiom.api.beans.AiUsage;
 import io.apitomy.axiom.api.beans.AiUsageSearchResults;
+import io.apitomy.axiom.api.beans.AiUsageSummary;
+import io.apitomy.axiom.api.beans.AiUsageSummaryRow;
 import io.apitomy.axiom.api.beans.DiskUsageSubject;
 import io.apitomy.axiom.api.beans.DiskUsageSearchResults;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
@@ -15,12 +17,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
+import jakarta.ws.rs.WebApplicationException;
 
 import java.math.BigInteger;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
@@ -142,6 +146,128 @@ public class UsageResourceImpl implements UsageResource {
         return results;
     }
 
+    /** Maps each supported {@code groupBy} value to the entity attribute it groups on. */
+    private static final Map<String, String> SUMMARY_GROUP_ATTRIBUTES = Map.of(
+            "subject", "subjectId",
+            "workflow", "workflowDefinitionId",
+            "engine", "engine",
+            "model", "model",
+            "actionType", "actionType");
+
+    /** Label used for rows whose group key is not set. */
+    static final String NONE_LABEL = "(none)";
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public AiUsageSummary getAiUsageSummary(String groupBy, Date since, String filterLabels, BigInteger limit) {
+        String attribute = groupBy != null ? SUMMARY_GROUP_ATTRIBUTES.get(groupBy) : null;
+        if (attribute == null) {
+            throw new WebApplicationException("Invalid groupBy '" + groupBy
+                    + "'; expected one of subject, workflow, engine, model, actionType", 400);
+        }
+        int maxRows = clampLimit(limit, 10, 100);
+
+        StringBuilder where = new StringBuilder("1=1");
+        Map<String, Object> params = new HashMap<>();
+        if (since != null) {
+            where.append(" and u.createdOn >= :since");
+            params.put("since", since.toInstant());
+        }
+        List<String> labels = filterLabels == null ? List.of() : Arrays.stream(filterLabels.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).distinct().toList();
+        Double excludedUnscoped = null;
+        if (!labels.isEmpty()) {
+            Query excludedQuery = entityManager.createQuery("SELECT COALESCE(SUM(u.costUsd), 0) "
+                    + "FROM AiUsageEntity u WHERE " + where + " and u.subjectId is null");
+            params.forEach(excludedQuery::setParameter);
+            excludedUnscoped = ((Number) excludedQuery.getSingleResult()).doubleValue();
+
+            where.append(" and u.subjectId in (SELECT p.id FROM SubjectEntity p"
+                    + " JOIN p.labels pl WHERE pl IN :labels"
+                    + " GROUP BY p.id HAVING COUNT(DISTINCT pl) = :labelCount)");
+            params.put("labels", labels);
+            params.put("labelCount", (long) labels.size());
+        }
+
+        Query totalQuery = entityManager.createQuery("SELECT COALESCE(SUM(u.costUsd), 0) "
+                + "FROM AiUsageEntity u WHERE " + where);
+        params.forEach(totalQuery::setParameter);
+        double totalCost = ((Number) totalQuery.getSingleResult()).doubleValue();
+
+        Query rowsQuery = entityManager.createQuery("SELECT u." + attribute
+                + ", COALESCE(SUM(u.costUsd), 0), COALESCE(SUM(u.inputTokens), 0),"
+                + " COALESCE(SUM(u.outputTokens), 0), COUNT(u)"
+                + " FROM AiUsageEntity u WHERE " + where
+                + " GROUP BY u." + attribute
+                + " ORDER BY COALESCE(SUM(u.costUsd), 0) DESC, COUNT(u) DESC");
+        params.forEach(rowsQuery::setParameter);
+        rowsQuery.setMaxResults(maxRows);
+        @SuppressWarnings("unchecked")
+        List<Object[]> results = rowsQuery.getResultList();
+
+        Map<Long, String> names = resolveGroupNames(groupBy, results);
+        List<AiUsageSummaryRow> rows = new ArrayList<>();
+        for (Object[] r : results) {
+            AiUsageSummaryRow row = new AiUsageSummaryRow();
+            String key = r[0] == null ? "" : r[0].toString();
+            row.setKey(key);
+            String label;
+            if (key.isEmpty()) {
+                label = NONE_LABEL;
+            } else if (r[0] instanceof Long id) {
+                label = names.getOrDefault(id, "#" + id);
+            } else {
+                label = key;
+            }
+            row.setLabel(label);
+            row.setCostUsd(((Number) r[1]).doubleValue());
+            row.setInputTokens(((Number) r[2]).longValue());
+            row.setOutputTokens(((Number) r[3]).longValue());
+            row.setInvocations(((Number) r[4]).longValue());
+            rows.add(row);
+        }
+
+        AiUsageSummary summary = new AiUsageSummary();
+        summary.setGroupBy(AiUsageSummary.GroupBy.fromValue(groupBy));
+        summary.setRows(rows);
+        summary.setTotalCostUsd(totalCost);
+        summary.setExcludedUnscopedCostUsd(excludedUnscoped);
+        return summary;
+    }
+
+    /**
+     * Looks up display names for id-keyed groups (subject names or workflow definition names).
+     */
+    private Map<Long, String> resolveGroupNames(String groupBy, List<Object[]> results) {
+        List<Long> ids = results.stream()
+                .map(r -> r[0])
+                .filter(Long.class::isInstance)
+                .map(Long.class::cast)
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        String entity = "subject".equals(groupBy) ? "SubjectEntity" : "WorkflowDefinitionEntity";
+        List<Object[]> pairs = entityManager.createQuery(
+                        "SELECT e.id, e.name FROM " + entity + " e WHERE e.id IN :ids", Object[].class)
+                .setParameter("ids", ids)
+                .getResultList();
+        Map<Long, String> names = new HashMap<>();
+        for (Object[] pair : pairs) {
+            names.put((Long) pair[0], (String) pair[1]);
+        }
+        return names;
+    }
+
+    private static int clampLimit(BigInteger value, int defaultValue, int max) {
+        if (value == null) {
+            return defaultValue;
+        }
+        return (int) Math.max(1, Math.min(max, value.longValue()));
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -235,6 +361,8 @@ public class UsageResourceImpl implements UsageResource {
         usage.setInputTokens(entity.inputTokens);
         usage.setOutputTokens(entity.outputTokens);
         usage.setDurationMs(entity.durationMs);
+        usage.setWorkflowRunId(entity.workflowRunId);
+        usage.setWorkflowDefinitionId(entity.workflowDefinitionId);
         usage.setCreatedOn(Date.from(entity.createdOn));
         return usage;
     }
