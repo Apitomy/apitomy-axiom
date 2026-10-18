@@ -651,7 +651,9 @@ public class ScriptExecutionService {
     @Transactional
     void completeTask(Long taskId, String output, boolean success, String executionLog) {
         TaskEntity task = TaskEntity.findById(taskId);
-        if (task == null) return;
+        if (task == null || !TaskFinishGuard.lockRunAndCheckUnfinished(task)) {
+            return;
+        }
 
         task.status = success ? "Completed" : "Failed";
         task.output = output;
