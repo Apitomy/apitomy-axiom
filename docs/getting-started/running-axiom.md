@@ -38,14 +38,42 @@ cd apitomy-axiom
 
 The script will:
 
-1. Query GitHub for the latest Apitomy Axiom release
+1. Query GitHub for the latest Apitomy Axiom release (or the release pinned with `AXIOM_VERSION`)
 2. Download the application JAR (cached in `$AXIOM_HOME/releases/`, default `~/.axiom/releases/`, for future
-   runs)
-3. Start the application on **http://localhost:9191** with the `prod` profile (file-based H2 database
-   in `~/.axiom/data/`, or `<axiom.home>/data/` if `axiom.home` is set)
+   runs). The JAR is downloaded to a temporary `.part` file and only moved into place once complete.
+3. Check for Java 25+, `curl`, `jq` and Node.js (`node` is required for Axiom 3.x; for older versions a
+   missing `node` only produces a warning)
+4. Start the application on **http://localhost:9191** with the `prod` profile (file-based H2 database
+   in `$AXIOM_HOME/data/`, default `~/.axiom/data/`)
 
 Open **http://localhost:9191** in your browser to access the Axiom UI. The REST API is served under
 `http://localhost:9191/api/v1`. Arguments passed to the script are passed on to `java -jar`.
+
+The script reads these environment variables:
+
+| Variable | Effect |
+|----------|--------|
+| `AXIOM_VERSION` | Release to run, without the leading `v` (for example `AXIOM_VERSION=2.1.2`). Default: the latest release |
+| `AXIOM_HOME` | Axiom home directory holding the JAR cache (`releases/`) and the database (`data/`). Default: `~/.axiom` |
+
+For example, to stay on Axiom 2.1.2:
+
+```bash
+AXIOM_VERSION=2.1.2 ./scripts/run-axiom.sh
+```
+
+**Offline use.** If GitHub cannot be reached (no network, API rate limit, HTTP error), the script falls back
+to the cache with a warning: the newest cached JAR when no version is pinned, or the cached JAR of the pinned
+`AXIOM_VERSION`. It fails only if no suitable JAR is cached.
+
+**Upgrade warning.** The script records the last version it ran in `$AXIOM_HOME/releases/last-run-version`.
+Before starting Axiom 3.x it checks whether `$AXIOM_HOME/data/axiom.mv.db` exists and appears to come from
+Axiom 2.x (the recorded version is 2.x, or there is no record but a 2.x JAR is cached). If so, it explains
+that Axiom 3 cannot use a 2.x database and that you can either back up and delete `$AXIOM_HOME/data` or pin
+`AXIOM_VERSION=2.1.2`, and links to the
+[3.0.0 release notes](https://github.com/Apitomy/apitomy-axiom/releases/tag/v3.0.0). In an interactive
+terminal it asks for confirmation; otherwise it continues and Axiom itself refuses to start on the old
+database. This check is a heuristic and can miss databases created outside the script.
 
 ### Running a Release JAR Directly
 
