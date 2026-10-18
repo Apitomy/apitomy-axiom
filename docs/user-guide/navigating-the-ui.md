@@ -21,56 +21,40 @@ The masthead runs across the top of every page. It contains:
 
 ## Dashboards
 
-Rather than a single fixed view, Axiom supports multiple **user-configurable dashboards**, each populated with
-widgets chosen from a built-in catalog.
+Axiom supports multiple **user-configurable dashboards**, each with tabs of widgets chosen from a built-in
+catalog. **Dashboards** in the sidebar (`/dashboards`) opens the default dashboard, or the dashboards list
+when no dashboard is the default. See [Dashboards](dashboards.md) for every widget and its settings.
 
 ### Dashboard List
 
-The **Dashboards** page shows all dashboards with their name, description, labels, and
-creation date. From here you can:
+The dashboards list (`/dashboards/all`) shows all dashboards with their name, labels, number of widgets and
+last update. From here you can:
 
-- **Create** a new dashboard with a name, description, and optional labels
-- **Set as default** — click the star icon to designate a dashboard as the default
-  landing page (only one dashboard can be default at a time)
-- **Delete** — remove a dashboard with a confirmation prompt
+- **Create Dashboard**: create an empty dashboard with a name, description and optional labels
+- **Create from Template**: create a dashboard from the Operations, Event Operations or AI Usage template
+- **Set as default**: click the star icon (only one dashboard can be the default)
+- **Delete**: remove a dashboard after confirming
 
-Click any dashboard to open its view page.
+When there are no dashboards, the list offers the templates directly. Click a dashboard to open it.
 
 ### Dashboard View
 
-Each dashboard displays its widgets on a responsive grid. The view page has two modes:
+Each dashboard shows its widgets on a responsive grid. **All dashboards** returns to the list and
+**Refresh** reloads every widget. The view has two modes:
 
-- **Normal mode** (default) — widgets are displayed read-only; the layout is locked
-- **Edit mode** — click **Edit** in the toolbar to enable drag-and-drop repositioning,
-  widget resizing, per-widget configuration (gear icon), and widget removal (X icon).
-  You can also edit the dashboard's name, description, and labels inline.
+- **Normal mode** (default): widgets are read-only and the layout is locked
+- **Edit mode**: click **Edit** to drag and resize widgets, change a widget's settings (gear icon), remove
+  widgets (X icon), manage tabs, and edit the dashboard's name, description and labels
 
-Click **Add Widget** in edit mode to open the widget catalog, which lets you browse and
-search widgets organized by category.
+In edit mode, **Add Widget** opens the widget catalog, grouped by category (Runs, Inbox, Events, AI & Cost,
+System and Subjects).
 
 ### Dashboard Labels
 
-Dashboards support labels for organization. Dashboard labels also serve as **data
-filters** — when a dashboard has labels, its widgets filter their data to show only
-items matching those labels. For example, a dashboard labeled `"team-a"` would show
-only subjects, events, and activity associated with that label.
-
-### Widget Catalog
-
-Axiom ships with built-in widget types across several categories:
-
-| Category | Widgets |
-|----------|---------|
-| **Subjects** | Active Subjects, Subject Spotlight |
-| **Operations** | Recent Activity, Inbox, Recent Events |
-| **AI & Cost** | AI Cost Summary, AI Cost by Subject |
-| **System** | System Status, Action Types, Disk Usage Breakdown |
-
-Each widget has a default size but can be resized on the grid. Many widgets support
-per-widget configuration — for example, the Active Subjects widget has a configurable
-maximum row count, and the AI Cost Summary widget lets you choose a time window
-(24 hours, 7 days, 30 days, or 90 days). Click the gear icon on a widget in edit mode
-to adjust its settings.
+Dashboard labels are **subject labels**. Widgets that show subject-related data (runs, tasks, activity,
+subjects and AI usage) only include subjects with those labels. Widgets for event sources, subscriptions,
+schedules and system health are global and ignore them. When a dashboard has labels, each widget shows a
+**Filtered** or **Global** badge.
 
 ---
 

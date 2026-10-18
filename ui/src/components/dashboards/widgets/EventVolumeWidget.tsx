@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Chart, ChartAxis, ChartBar, ChartVoronoiContainer } from "@patternfly/react-charts/victory";
 import { fetchEventVolumeHistogram, type EventVolumeBucket } from "../../../config/api";
-import { SSE_EVENTS } from "../../../config/sseEvents";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 import { SINCE_WINDOWS, sinceField, sinceIso, WidgetEmpty, WidgetLoading } from "./widgetUtils";
@@ -17,6 +16,9 @@ export function bucketFor(window: string): "hour" | "day" {
     return (SINCE_WINDOWS[window] ?? 1) <= 7 ? "hour" : "day";
 }
 
+/** How often the event volume chart is reloaded (5 minutes). */
+export const EVENT_VOLUME_POLL_MS = 5 * 60 * 1000;
+
 function EventVolumeWidget({ config, refreshToken }: WidgetProps) {
     const [buckets, setBuckets] = useState<EventVolumeBucket[] | null>(null);
     const [error, setError] = useState(false);
@@ -27,10 +29,14 @@ function EventVolumeWidget({ config, refreshToken }: WidgetProps) {
 
     useEffect(() => {
         let cancelled = false;
-        fetchEventVolumeHistogram(sinceIso(since), bucket, eventSourceId)
-            .then(b => { if (!cancelled) { setBuckets(b); setError(false); } })
-            .catch(() => { if (!cancelled) setError(true); });
-        return () => { cancelled = true; };
+        const load = () => {
+            fetchEventVolumeHistogram(sinceIso(since), bucket, eventSourceId)
+                .then(b => { if (!cancelled) { setBuckets(b); setError(false); } })
+                .catch(() => { if (!cancelled) setError(true); });
+        };
+        load();
+        const timer = setInterval(load, EVENT_VOLUME_POLL_MS);
+        return () => { cancelled = true; clearInterval(timer); };
     }, [since, bucket, eventSourceId, refreshToken]);
 
     if (error) return <WidgetError />;
@@ -72,10 +78,9 @@ registerWidget({
     type: "event-volume",
     name: "Event Volume",
     description: "Number of stream events received over time (hourly up to 7 days, daily beyond), optionally "
-        + "for one event source. Not filtered by dashboard labels.",
+        + "for one event source. Reloads every 5 minutes. Not filtered by dashboard labels.",
     category: "Events",
     scope: "global",
-    liveEvents: [SSE_EVENTS.streamEvent],
     defaultSize: { w: 6, h: 3 },
     minSize: { w: 4, h: 3 },
     configSchema: [

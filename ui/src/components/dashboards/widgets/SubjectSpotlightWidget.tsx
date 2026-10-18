@@ -52,6 +52,12 @@ function SubjectSpotlightWidget({ config, refreshToken }: WidgetProps) {
     const [state, setState] = useState<"loading" | "ok" | "not-found" | "error">("loading");
     const subjectId = toSubjectId(config.subjectId);
 
+    // Show the loading state (not the previous subject) when a different subject is chosen.
+    useEffect(() => {
+        setData(null);
+        setState("loading");
+    }, [subjectId]);
+
     useEffect(() => {
         if (subjectId == null) return;
         let cancelled = false;

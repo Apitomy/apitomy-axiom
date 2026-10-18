@@ -48,6 +48,7 @@ nav:
   - User Guide:
     - Concepts: user-guide/concepts.md
     - Navigating the UI: user-guide/navigating-the-ui.md
+    - Dashboards: user-guide/dashboards.md
     - Usage Examples: user-guide/usage-examples.md
     - Workflows: user-guide/workflows.md
     - Workflow Workbench: user-guide/workbench.md

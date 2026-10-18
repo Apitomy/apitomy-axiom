@@ -32,6 +32,7 @@ function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
                     .filter(r => r.costUsd > 0)
                     .map(r => ({ name: r.label, cost: r.costUsd })));
                 setExcluded(summary.excludedUnscopedCostUsd);
+                setError(false);
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };

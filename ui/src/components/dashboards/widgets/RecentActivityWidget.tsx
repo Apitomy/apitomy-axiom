@@ -6,6 +6,7 @@ import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 import { SSE_EVENTS } from "../../../config/sseEvents";
 import { activityTypePresentation } from "../../../config/activityTypes";
+import { formatAge } from "./widgetUtils";
 
 const linkStyle = { marginLeft: "8px", fontSize: "0.8em" };
 
@@ -42,17 +43,6 @@ function RecentActivityWidget({ config, labels, refreshToken }: WidgetProps) {
 
     if (error) return <WidgetError />;
 
-    const formatTime = (dateStr: string) => {
-        const d = new Date(dateStr);
-        const now = new Date();
-        const diffMs = now.getTime() - d.getTime();
-        const diffMin = Math.floor(diffMs / 60000);
-        if (diffMin < 60) return `${diffMin}m ago`;
-        const diffHr = Math.floor(diffMin / 60);
-        if (diffHr < 24) return `${diffHr}h ago`;
-        return `${Math.floor(diffHr / 24)}d ago`;
-    };
-
     return (
         <div style={{ overflow: "auto", maxHeight: "100%" }}>
             {entries.map(entry => (
@@ -68,7 +58,7 @@ function RecentActivityWidget({ config, labels, refreshToken }: WidgetProps) {
                     <EntryLinks entry={entry} />
                     <span style={{ float: "right", color: "var(--pf-t--global--color--200)",
                                    fontSize: "0.8em" }}>
-                        {formatTime(entry.createdOn)}
+                        {formatAge(entry.createdOn)}
                     </span>
                 </div>
             ))}

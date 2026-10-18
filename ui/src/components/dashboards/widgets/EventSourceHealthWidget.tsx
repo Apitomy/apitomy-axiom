@@ -73,7 +73,7 @@ function EventSourceHealthWidget({ refreshToken }: WidgetProps) {
                             )}
                         </td>
                         <td style={cellStyle} title={s.lastSuccessAt}>
-                            {s.lastSuccessAt ? `${formatAge(s.lastSuccessAt)} ago` : "-"}
+                            {formatAge(s.lastSuccessAt)}
                         </td>
                         <td style={cellStyle}>{s.eventsLast24h}</td>
                     </tr>

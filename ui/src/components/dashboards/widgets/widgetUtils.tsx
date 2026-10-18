@@ -38,7 +38,7 @@ export function sinceIso(window: unknown, now: number = Date.now()): string {
 }
 
 /**
- * Formats the time elapsed since a date as a compact age ("5m", "3h", "2d").
+ * Formats the time elapsed since a date as a compact relative age ("5m ago", "3h ago", "2d ago").
  *
  * @param iso the ISO-8601 date-time
  * @param now the current time in ms
@@ -49,10 +49,10 @@ export function formatAge(iso: string | undefined, now: number = Date.now()): st
     const ms = now - new Date(iso).getTime();
     if (Number.isNaN(ms)) return "-";
     const minutes = Math.max(0, Math.floor(ms / 60000));
-    if (minutes < 60) return `${minutes}m`;
+    if (minutes < 60) return `${minutes}m ago`;
     const hours = Math.floor(minutes / 60);
-    if (hours < 48) return `${hours}h`;
-    return `${Math.floor(hours / 24)}d`;
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
 }
 
 /**

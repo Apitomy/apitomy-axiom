@@ -61,7 +61,7 @@ function SubscriptionProcessingWidget({ config, refreshToken }: WidgetProps) {
                                 {!s.enabled && <> <Label isCompact color="grey">Disabled</Label></>}
                                 {s.lastError && (
                                     <div style={{ fontSize: "0.75rem" }} title={s.lastError}>
-                                        Last error {formatAge(s.lastErrorAt)} ago
+                                        Last error {formatAge(s.lastErrorAt)}
                                     </div>
                                 )}
                             </td>

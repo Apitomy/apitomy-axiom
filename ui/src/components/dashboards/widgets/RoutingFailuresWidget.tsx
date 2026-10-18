@@ -62,7 +62,7 @@ function RoutingFailuresWidget({ config, refreshToken }: WidgetProps) {
                         {failures.map(f => (
                             <tr key={f.ledgerId}>
                                 <td style={cellStyle}>
-                                    <Link to={`/events/stream/${f.eventId}`}>{f.eventType}</Link>
+                                    <Link to={`/events/stream/${encodeURIComponent(f.eventId)}`}>{f.eventType}</Link>
                                     {f.errorMessage && (
                                         <div style={{ fontSize: "0.75rem" }} title={f.errorMessage}>
                                             {f.errorMessage.length > 80 ? `${f.errorMessage.slice(0, 80)}...` : f.errorMessage}
@@ -70,7 +70,7 @@ function RoutingFailuresWidget({ config, refreshToken }: WidgetProps) {
                                     )}
                                 </td>
                                 <td style={cellStyle}>
-                                    <Link to={`/events/subscriptions/${f.subscriptionId}`}>
+                                    <Link to={`/events/subscriptions/${encodeURIComponent(f.subscriptionId)}`}>
                                         {f.subscriptionName || `#${f.subscriptionId}`}
                                     </Link>
                                 </td>

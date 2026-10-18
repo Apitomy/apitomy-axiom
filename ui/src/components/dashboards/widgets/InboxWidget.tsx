@@ -7,15 +7,7 @@ import {
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 import { SSE_EVENTS } from "../../../config/sseEvents";
-
-/** Formats the age of a task as minutes, hours or days. */
-function formatAge(dateStr: string): string {
-    const diffMin = Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000));
-    if (diffMin < 60) return `${diffMin}m`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr}h`;
-    return `${Math.floor(diffHr / 24)}d`;
-}
+import { formatAge } from "./widgetUtils";
 
 function InboxWidget({ config, labels, refreshToken }: WidgetProps) {
     const navigate = useNavigate();

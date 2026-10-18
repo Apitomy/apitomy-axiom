@@ -108,7 +108,7 @@ function WorkflowsWidget({ config, refreshToken }: WidgetProps) {
                                         <Label isCompact color={RUN_STATUS_COLORS[lastRun.status] ?? "grey"}>
                                             {lastRun.status}
                                         </Label>{" "}
-                                        {formatAge(lastRun.startedOn)} ago
+                                        {formatAge(lastRun.startedOn)}
                                     </Link>
                                 ) : <span title={`Not among the ${RECENT_RUNS_SCAN} most recent runs`}>-</span>}
                             </td>

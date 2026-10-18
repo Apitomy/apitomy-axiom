@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../../config/api";
 import { getWidget, type WidgetProps } from "../widget-registry";
 import "./index";
-import { bucketFor } from "./EventVolumeWidget";
+import { bucketFor, EVENT_VOLUME_POLL_MS } from "./EventVolumeWidget";
 import { EVENT_SOURCE_HEALTH_POLL_MS } from "./EventSourceHealthWidget";
 import { rowLink } from "./AiUsageBreakdownWidget";
 import { buildWorkflowRows } from "./WorkflowsWidget";
@@ -70,7 +70,7 @@ describe("new widget registry entries", () => {
         expect(getWidget("waiting-runs")?.liveEvents).toEqual(["workflow-updated", "inbox-updated"]);
         expect(getWidget("routing-failures")?.liveEvents).toEqual(["stream-processing"]);
         expect(getWidget("subscription-processing")?.liveEvents).toEqual(["stream-processing"]);
-        expect(getWidget("event-volume")?.liveEvents).toEqual(["stream-event"]);
+        expect(getWidget("event-volume")?.liveEvents).toBeUndefined();
         expect(getWidget("event-source-health")?.liveEvents).toBeUndefined();
     });
 });
@@ -78,9 +78,9 @@ describe("new widget registry entries", () => {
 describe("helpers", () => {
     it("formats ages", () => {
         const now = Date.parse("2026-01-03T00:00:00Z");
-        expect(formatAge("2026-01-02T23:55:00Z", now)).toBe("5m");
-        expect(formatAge("2026-01-02T21:00:00Z", now)).toBe("3h");
-        expect(formatAge("2025-12-30T00:00:00Z", now)).toBe("4d");
+        expect(formatAge("2026-01-02T23:55:00Z", now)).toBe("5m ago");
+        expect(formatAge("2026-01-02T21:00:00Z", now)).toBe("3h ago");
+        expect(formatAge("2025-12-30T00:00:00Z", now)).toBe("4d ago");
         expect(formatAge(undefined, now)).toBe("-");
     });
     it("keeps histogram buckets under the cap", () => {
@@ -118,6 +118,13 @@ describe("WorkflowRunsSummaryWidget", () => {
         expect(api.fetchWorkflowRunStatusSummary).toHaveBeenCalledWith(
             expect.objectContaining({ labels: ["team=a"], since: expect.any(String) }));
     });
+    it("shows zero counts when there are no runs", async () => {
+        vi.mocked(api.fetchWorkflowRunStatusSummary).mockResolvedValue({
+            counts: { running: 0, waiting: 0, completed: 0, failed: 0, cancelled: 0 }, recentFailed: [] });
+        renderWidget("workflow-runs-summary");
+        expect(await screen.findByTestId("runs-running")).toHaveTextContent("0");
+        expect(screen.getByTestId("runs-failed")).toHaveTextContent("0");
+    });
     it("shows an error", async () => {
         vi.mocked(api.fetchWorkflowRunStatusSummary).mockRejectedValue(new Error("x"));
         renderWidget("workflow-runs-summary");
@@ -126,7 +133,7 @@ describe("WorkflowRunsSummaryWidget", () => {
 });
 
 describe("FailedRunsWidget", () => {
-    it("shows the empty state", async () => {
+    it("shows the empty state when there are no failed runs", async () => {
         vi.mocked(api.fetchWorkflowRunStatusSummary).mockResolvedValue({ counts, recentFailed: [] });
         renderWidget("failed-runs");
         expect(await screen.findByText("No failed runs in this window.")).toBeInTheDocument();
@@ -298,6 +305,18 @@ describe("EventVolumeWidget", () => {
         renderWidget("event-volume", { since: "30d", eventSourceId: "src-1" });
         expect(await screen.findByTestId("event-volume-total")).toHaveTextContent("7 events (daily)");
         expect(api.fetchEventVolumeHistogram).toHaveBeenCalledWith(expect.any(String), "day", "src-1");
+    });
+    it("polls every 5 minutes and stops on unmount", async () => {
+        vi.useFakeTimers();
+        vi.mocked(api.fetchEventVolumeHistogram).mockResolvedValue([]);
+        const { unmount } = renderWidget("event-volume");
+        await act(async () => { await Promise.resolve(); });
+        expect(api.fetchEventVolumeHistogram).toHaveBeenCalledTimes(1);
+        await act(async () => { vi.advanceTimersByTime(EVENT_VOLUME_POLL_MS); });
+        expect(api.fetchEventVolumeHistogram).toHaveBeenCalledTimes(2);
+        unmount();
+        await act(async () => { vi.advanceTimersByTime(EVENT_VOLUME_POLL_MS * 3); });
+        expect(api.fetchEventVolumeHistogram).toHaveBeenCalledTimes(2);
     });
     it("shows the empty state for all-zero buckets", async () => {
         vi.mocked(api.fetchEventVolumeHistogram).mockResolvedValue([{ bucketStart: "2026-01-01T00:00:00Z", count: 0 }]);
