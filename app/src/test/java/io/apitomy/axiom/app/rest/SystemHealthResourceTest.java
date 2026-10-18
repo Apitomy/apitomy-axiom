@@ -99,6 +99,7 @@ class SystemHealthResourceTest {
         assertEquals(EventSourceHealthService.FAILING, failingHealth.state());
         assertEquals("second", failingHealth.lastError());
         assertEquals(2, failingHealth.consecutiveFailures());
+        assertEquals(0L, failingHealth.eventsLast24h());
 
         QuarkusTransaction.requiringNew().run(() -> List.of(never, baseline, recovered, failing).forEach(id -> {
             EventSourceEntity source = EventSourceEntity.findById(id);
@@ -107,8 +108,8 @@ class SystemHealthResourceTest {
     }
 
     private EventSourceHealthService.Health health(String sourceId) {
-        return QuarkusTransaction.requiringNew().call(
-                () -> eventSourceHealthService.compute(EventSourceEntity.findById(sourceId)));
+        return QuarkusTransaction.requiringNew().call(() -> eventSourceHealthService.computeAll(true).stream()
+                .filter(h -> h.id().equals(sourceId)).findFirst().orElseThrow());
     }
 
     private static HealthCheck check(HealthCheck.Status status) {

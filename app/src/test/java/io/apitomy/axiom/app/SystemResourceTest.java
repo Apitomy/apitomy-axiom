@@ -2,12 +2,16 @@ package io.apitomy.axiom.app;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import io.restassured.path.json.JsonPath;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for the System REST API endpoints.
@@ -103,16 +107,17 @@ class SystemResourceTest {
     void testHealthStatusIsWorstCheck() {
         // Overall status is the worst check; the test environment may legitimately be DEGRADED
         // (e.g. engine CLIs missing), so assert consistency rather than a fixed value.
-        io.restassured.path.json.JsonPath body = given()
+        JsonPath body = given()
             .when()
                 .get("/api/v1/system/health")
             .then()
                 .statusCode(200)
                 .extract().jsonPath();
-        java.util.List<String> statuses = body.getList("checks.status");
+        List<String> statuses = body.getList("checks.status");
+        assertTrue(List.of("UP", "DEGRADED", "DOWN").contains(body.getString("status")));
         String expected = statuses.contains("DOWN") ? "DOWN"
                 : statuses.contains("DEGRADED") ? "DEGRADED" : "UP";
-        org.junit.jupiter.api.Assertions.assertEquals(expected, body.getString("status"));
+        assertEquals(expected, body.getString("status"));
     }
 
     @Test

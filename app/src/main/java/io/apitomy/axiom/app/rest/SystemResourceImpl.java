@@ -123,7 +123,7 @@ public class SystemResourceImpl implements SystemResource {
 
     private HealthCheck eventSourcesCheck() {
         try {
-            List<String> failing = eventSourceHealthService.computeAll().stream()
+            List<String> failing = eventSourceHealthService.computeAll(false).stream()
                     .filter(h -> h.enabled() && EventSourceHealthService.FAILING.equals(h.state()))
                     .map(EventSourceHealthService.Health::name)
                     .toList();

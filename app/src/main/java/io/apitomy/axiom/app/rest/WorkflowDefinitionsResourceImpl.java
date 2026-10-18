@@ -11,6 +11,9 @@ import io.apitomy.axiom.api.beans.UpdateWorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
+import io.apitomy.axiom.api.beans.WaitingWorkflowRun;
+import io.apitomy.axiom.api.beans.WorkflowRunStatusSummary;
+import io.apitomy.axiom.api.beans.WorkflowScheduleSummary;
 import io.apitomy.axiom.app.CronSchedules;
 import io.apitomy.axiom.app.WorkflowDashboardService;
 import io.apitomy.axiom.app.WorkflowExecutionService;
@@ -38,6 +41,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
@@ -436,27 +440,17 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      * {@inheritDoc}
      */
     @Override
-    public io.apitomy.axiom.api.beans.WorkflowRunStatusSummary getWorkflowRunStatusSummary(
-            String filterLabels, String since, java.math.BigInteger failedLimit) {
-        Instant sinceInstant = null;
-        if (since != null && !since.isBlank()) {
-            try {
-                sinceInstant = java.time.OffsetDateTime.parse(since.trim()).toInstant();
-            } catch (java.time.format.DateTimeParseException e) {
-                throw new WebApplicationException("Invalid since (expected ISO-8601 date-time): " + since,
-                        Response.Status.BAD_REQUEST);
-            }
-        }
-        return dashboardService.summarize(WorkflowDashboardService.parseLabels(filterLabels), sinceInstant,
-                clamp(failedLimit, 10, 50));
+    public WorkflowRunStatusSummary getWorkflowRunStatusSummary(String filterLabels, Date since,
+                                                                BigInteger failedLimit) {
+        return dashboardService.summarize(WorkflowDashboardService.parseLabels(filterLabels),
+                since != null ? since.toInstant() : null, clamp(failedLimit, 10, 50));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public List<io.apitomy.axiom.api.beans.WaitingWorkflowRun> listWaitingWorkflowRuns(
-            String filterLabels, java.math.BigInteger limit) {
+    public List<WaitingWorkflowRun> listWaitingWorkflowRuns(String filterLabels, BigInteger limit) {
         return dashboardService.listWaiting(WorkflowDashboardService.parseLabels(filterLabels),
                 clamp(limit, 20, 200));
     }
@@ -465,12 +459,11 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      * {@inheritDoc}
      */
     @Override
-    public List<io.apitomy.axiom.api.beans.WorkflowScheduleSummary> listWorkflowSchedules(
-            java.math.BigInteger limit) {
+    public List<WorkflowScheduleSummary> listWorkflowSchedules(BigInteger limit) {
         return dashboardService.listSchedules(clamp(limit, 50, 500));
     }
 
-    private static int clamp(java.math.BigInteger value, int defaultValue, int max) {
+    private static int clamp(BigInteger value, int defaultValue, int max) {
         if (value == null) {
             return defaultValue;
         }

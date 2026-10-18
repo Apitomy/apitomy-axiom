@@ -153,12 +153,12 @@ public class WorkflowDashboardService {
      */
     public List<WorkflowScheduleSummary> listSchedules(int limit) {
         List<WorkflowScheduleTriggerEntity> triggers = WorkflowScheduleTriggerEntity
-                .<WorkflowScheduleTriggerEntity>listAll().stream()
-                .sorted(Comparator.comparing((WorkflowScheduleTriggerEntity t) -> !t.enabled)
-                        .thenComparing(t -> t.nextRunAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                        .thenComparing(t -> t.id))
-                .limit(limit)
-                .toList();
+                .<WorkflowScheduleTriggerEntity>findAll(Sort.descending("enabled")
+                        .and("nextRunAt", Sort.Direction.Ascending, Sort.NullPrecedence.NULLS_LAST)
+                        .and("id"))
+                .page(Page.ofSize(limit))
+                .list();
+        Map<Long, Long> lastRunIds = lastStartedRunIds(triggers);
         Map<Long, String> definitionNames = namesById(WorkflowDefinitionEntity.class,
                 triggers.stream().map(t -> t.definitionId).collect(Collectors.toSet()),
                 (WorkflowDefinitionEntity d) -> d.id, d -> d.name);
@@ -182,19 +182,37 @@ public class WorkflowDashboardService {
             SubjectEntity subject = subjectsByRef.get(SubjectEntity.SCHEDULE_REF_PREFIX + t.subjectName);
             if (subject != null) {
                 bean.setSubjectId(subject.id);
-                if (t.lastRunAt != null
-                        && bean.getLastOutcome() == WorkflowScheduleSummary.LastOutcome.STARTED) {
-                    WorkflowRunEntity run = WorkflowRunEntity.<WorkflowRunEntity>find(
-                                    "subjectId = ?1 and definitionId = ?2 and startedOn >= ?3",
-                                    Sort.ascending("startedOn", "id"), subject.id, t.definitionId, t.lastRunAt)
-                            .firstResult();
-                    if (run != null) {
-                        bean.setLastRunId(run.id);
-                    }
-                }
+            }
+            if (bean.getLastOutcome() == WorkflowScheduleSummary.LastOutcome.STARTED) {
+                bean.setLastRunId(lastRunIds.get(t.id));
             }
             return bean;
         }).toList();
+    }
+
+    /**
+     * Finds, in one query, the run each trigger started at its last firing: the earliest run (lowest id) of
+     * the trigger's definition on its schedule subject started at or after the trigger's last run time.
+     *
+     * @param triggers the triggers
+     * @return run id per trigger id, for the triggers where one exists
+     */
+    private static Map<Long, Long> lastStartedRunIds(List<WorkflowScheduleTriggerEntity> triggers) {
+        List<Long> ids = triggers.stream().filter(t -> t.lastRunAt != null).map(t -> t.id).toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Long> result = new HashMap<>();
+        WorkflowRunEntity.getEntityManager()
+                .createQuery("select t.id, min(r.id) from WorkflowScheduleTriggerEntity t, SubjectEntity s,"
+                        + " WorkflowRunEntity r where t.id in :ids and s.ref = concat(:prefix, t.subjectName)"
+                        + " and r.subjectId = s.id and r.definitionId = t.definitionId"
+                        + " and r.startedOn >= t.lastRunAt group by t.id", Object[].class)
+                .setParameter("ids", ids)
+                .setParameter("prefix", SubjectEntity.SCHEDULE_REF_PREFIX)
+                .getResultList()
+                .forEach(row -> result.put((Long) row[0], (Long) row[1]));
+        return result;
     }
 
     /**

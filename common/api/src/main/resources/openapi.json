@@ -6551,7 +6551,8 @@
             "in": "query",
             "description": "ISO-8601 date-time (e.g. 2026-01-15T00:00:00Z); only count terminal runs (completed, failed, cancelled) that finished at or after this time",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "date-time"
             }
           },
           {

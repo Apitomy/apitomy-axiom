@@ -2,24 +2,30 @@ package io.apitomy.axiom.app;
 
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
-import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Computes the health of event sources from their poll logs. Shared by the system health check and the
  * event source health endpoint.
  * <p>
+ * All sources are computed together with a fixed number of grouped queries (independent of the number of
+ * sources), so the system health check stays cheap.
+ * <p>
  * State rules, evaluated in order:
  * <ol>
  *     <li>{@code disabled} — the source is disabled.</li>
  *     <li>{@code never-polled} — no poll has been recorded.</li>
- *     <li>{@code failing} — the most recent poll failed.</li>
- *     <li>{@code baseline} — the most recent poll succeeded but only set the baseline (first poll).</li>
+ *     <li>{@code failing} — the latest failed poll is more recent than the latest successful poll.</li>
+ *     <li>{@code baseline} — the latest successful poll only established the baseline (first poll).</li>
  *     <li>{@code healthy} — otherwise.</li>
  * </ol>
  */
@@ -37,9 +43,8 @@ public class EventSourceHealthService {
     /** Source is enabled but has never been polled. */
     public static final String NEVER_POLLED = "never-polled";
 
-    static final String POLL_SUCCESS = "success";
-    static final String POLL_ERROR = "error";
-    private static final String BASELINE_MESSAGE_PREFIX = "Baseline";
+    @Inject
+    EntityManager entityManager;
 
     /**
      * Health of one event source.
@@ -55,82 +60,137 @@ public class EventSourceHealthService {
      * @param lastError           message of the latest failed poll, only when it is after the latest success
      *                            (nullable)
      * @param consecutiveFailures number of failed polls since the latest success
-     * @param eventsLast24h       number of events ingested from the source in the last 24 hours
+     * @param eventsLast24h       events ingested from the source in the last 24 hours; null when not
+     *                            requested
      */
     public record Health(String id, String name, String type, boolean enabled, String state,
                          Instant lastAttemptAt, Instant lastSuccessAt, Instant lastErrorAt, String lastError,
-                         long consecutiveFailures, long eventsLast24h) {
+                         long consecutiveFailures, Long eventsLast24h) {
+    }
+
+    /** Aggregated poll log facts of one source. */
+    private static final class PollFacts {
+        private Instant lastAttemptAt;
+        private Instant lastSuccessAt;
+        private Instant lastErrorAt;
+        private String lastSuccessMessage;
+        private String lastErrorMessage;
+        private long errorsAfterSuccess;
     }
 
     /**
      * Computes the health of every event source, ordered by name.
      *
+     * @param includeEventCounts whether to also count the events ingested per source in the last 24 hours
+     *                           (one extra grouped query); when false {@code eventsLast24h} is null
      * @return the health of each source
      */
-    public List<Health> computeAll() {
-        return EventSourceEntity.<EventSourceEntity>listAll(Sort.ascending("name")).stream()
-                .map(this::compute)
+    public List<Health> computeAll(boolean includeEventCounts) {
+        List<EventSourceEntity> sources = EventSourceEntity.listAll(Sort.ascending("name"));
+        if (sources.isEmpty()) {
+            return List.of();
+        }
+        Map<String, PollFacts> facts = loadPollFacts();
+        Map<String, Long> eventCounts = includeEventCounts ? loadEventCounts() : Map.of();
+        return sources.stream()
+                .map(source -> toHealth(source, facts.get(source.id),
+                        includeEventCounts ? eventCounts.getOrDefault(source.id, 0L) : null))
                 .toList();
     }
 
-    /**
-     * Computes the health of one event source.
-     *
-     * @param source the event source
-     * @return its health
-     */
-    public Health compute(EventSourceEntity source) {
-        EventSourcePollLogEntity latest = latestLog(source.id, null);
-        EventSourcePollLogEntity latestSuccess = latestLog(source.id, POLL_SUCCESS);
-        EventSourcePollLogEntity latestError = latestLog(source.id, POLL_ERROR);
+    private Map<String, PollFacts> loadPollFacts() {
+        Map<String, PollFacts> facts = new HashMap<>();
+        entityManager.createQuery("select l.eventSourceId, max(l.createdOn),"
+                        + " max(case when l.status = :success then l.createdOn end),"
+                        + " max(case when l.status = :error then l.createdOn end)"
+                        + " from EventSourcePollLogEntity l group by l.eventSourceId", Object[].class)
+                .setParameter("success", EventSourcePollLogEntity.STATUS_SUCCESS)
+                .setParameter("error", EventSourcePollLogEntity.STATUS_ERROR)
+                .getResultList()
+                .forEach(row -> {
+                    PollFacts f = facts.computeIfAbsent((String) row[0], k -> new PollFacts());
+                    f.lastAttemptAt = (Instant) row[1];
+                    f.lastSuccessAt = (Instant) row[2];
+                    f.lastErrorAt = (Instant) row[3];
+                });
 
-        Instant lastSuccessAt = latestSuccess != null ? latestSuccess.createdOn : null;
-        Instant lastErrorAt = latestError != null ? latestError.createdOn : null;
-        String lastError = latestError != null
-                && (lastSuccessAt == null || latestError.createdOn.isAfter(lastSuccessAt))
-                ? latestError.message : null;
-        long consecutiveFailures = lastSuccessAt == null
-                ? EventSourcePollLogEntity.count("eventSourceId = ?1 and status = ?2", source.id, POLL_ERROR)
-                : EventSourcePollLogEntity.count("eventSourceId = ?1 and status = ?2 and createdOn > ?3",
-                        source.id, POLL_ERROR, lastSuccessAt);
-        Instant lastAttemptAt = latest != null ? latest.createdOn : source.lastPolledAt;
-        long eventsLast24h = StreamEventEntity.count("eventSourceId = ?1 and createdOn >= ?2",
-                source.id, Instant.now().minus(Duration.ofHours(24)));
+        // Messages of the latest success and latest error per source (highest id wins on equal times).
+        entityManager.createQuery("select l.eventSourceId, l.status, l.message from EventSourcePollLogEntity l"
+                        + " where l.status in (:success, :error) and l.id = (select max(x.id)"
+                        + " from EventSourcePollLogEntity x where x.eventSourceId = l.eventSourceId"
+                        + " and x.status = l.status and x.createdOn = (select max(y.createdOn)"
+                        + " from EventSourcePollLogEntity y where y.eventSourceId = l.eventSourceId"
+                        + " and y.status = l.status))", Object[].class)
+                .setParameter("success", EventSourcePollLogEntity.STATUS_SUCCESS)
+                .setParameter("error", EventSourcePollLogEntity.STATUS_ERROR)
+                .getResultList()
+                .forEach(row -> {
+                    PollFacts f = facts.computeIfAbsent((String) row[0], k -> new PollFacts());
+                    if (EventSourcePollLogEntity.STATUS_SUCCESS.equals(row[1])) {
+                        f.lastSuccessMessage = (String) row[2];
+                    } else {
+                        f.lastErrorMessage = (String) row[2];
+                    }
+                });
 
+        // Failed polls after the latest success, per source.
+        entityManager.createQuery("select l.eventSourceId, count(l) from EventSourcePollLogEntity l"
+                        + " where l.status = :error and not exists (select 1 from EventSourcePollLogEntity s"
+                        + " where s.eventSourceId = l.eventSourceId and s.status = :success"
+                        + " and s.createdOn >= l.createdOn) group by l.eventSourceId", Object[].class)
+                .setParameter("success", EventSourcePollLogEntity.STATUS_SUCCESS)
+                .setParameter("error", EventSourcePollLogEntity.STATUS_ERROR)
+                .getResultList()
+                .forEach(row -> facts.computeIfAbsent((String) row[0], k -> new PollFacts())
+                        .errorsAfterSuccess = ((Number) row[1]).longValue());
+        return facts;
+    }
+
+    private Map<String, Long> loadEventCounts() {
+        Map<String, Long> counts = new HashMap<>();
+        entityManager.createQuery("select e.eventSourceId, count(e) from StreamEventEntity e"
+                        + " where e.createdOn >= :since and e.eventSourceId is not null"
+                        + " group by e.eventSourceId", Object[].class)
+                .setParameter("since", Instant.now().minus(Duration.ofHours(24)))
+                .getResultList()
+                .forEach(row -> counts.put((String) row[0], ((Number) row[1]).longValue()));
+        return counts;
+    }
+
+    private static Health toHealth(EventSourceEntity source, PollFacts facts, Long eventsLast24h) {
+        PollFacts f = facts != null ? facts : new PollFacts();
+        boolean errorIsLatest = f.lastErrorAt != null
+                && (f.lastSuccessAt == null || f.lastErrorAt.isAfter(f.lastSuccessAt));
+        Instant lastAttemptAt = f.lastAttemptAt != null ? f.lastAttemptAt : source.lastPolledAt;
         return new Health(source.id, source.name, source.sourceType, source.enabled,
-                state(source.enabled, latest), lastAttemptAt, lastSuccessAt, lastErrorAt, lastError,
-                consecutiveFailures, eventsLast24h);
+                state(source.enabled, f.lastAttemptAt != null, errorIsLatest, f.lastSuccessMessage),
+                lastAttemptAt, f.lastSuccessAt, f.lastErrorAt, errorIsLatest ? f.lastErrorMessage : null,
+                f.errorsAfterSuccess, eventsLast24h);
     }
 
     /**
-     * Derives the state from the enabled flag and the latest poll log.
+     * Derives the state of a source.
      *
-     * @param enabled whether the source is enabled
-     * @param latest  the latest poll log (nullable)
+     * @param enabled            whether the source is enabled
+     * @param polled             whether any poll was recorded
+     * @param errorIsLatest      whether the latest error is more recent than the latest success
+     * @param lastSuccessMessage message of the latest successful poll (nullable)
      * @return the state
      */
-    static String state(boolean enabled, EventSourcePollLogEntity latest) {
+    static String state(boolean enabled, boolean polled, boolean errorIsLatest, String lastSuccessMessage) {
         if (!enabled) {
             return DISABLED;
         }
-        if (latest == null) {
+        if (!polled) {
             return NEVER_POLLED;
         }
-        if (POLL_ERROR.equals(latest.status)) {
+        if (errorIsLatest) {
             return FAILING;
         }
-        if (latest.message != null && latest.message.startsWith(BASELINE_MESSAGE_PREFIX)) {
+        if (lastSuccessMessage != null
+                && lastSuccessMessage.startsWith(EventSourcePollLogEntity.BASELINE_MESSAGE_PREFIX)) {
             return BASELINE;
         }
         return HEALTHY;
-    }
-
-    private static EventSourcePollLogEntity latestLog(String sourceId, String status) {
-        if (status == null) {
-            return EventSourcePollLogEntity.<EventSourcePollLogEntity>find("eventSourceId = ?1",
-                    Sort.descending("createdOn", "id"), sourceId).firstResult();
-        }
-        return EventSourcePollLogEntity.<EventSourcePollLogEntity>find("eventSourceId = ?1 and status = ?2",
-                Sort.descending("createdOn", "id"), sourceId, status).firstResult();
     }
 }

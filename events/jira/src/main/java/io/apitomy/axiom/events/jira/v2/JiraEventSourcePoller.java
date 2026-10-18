@@ -124,7 +124,8 @@ public class JiraEventSourcePoller {
         if (eventSource.lastPolledAt == null) {
             LOG.infof("First poll for Jira event source %s — setting baseline to now", eventSource.id);
             updateLastPolledAt(eventSource.id, Instant.now());
-            recordPollLog(eventSource.id, "success", "Baseline set (first poll)",
+            recordPollLog(eventSource.id, EventSourcePollLogEntity.STATUS_SUCCESS,
+                    EventSourcePollLogEntity.BASELINE_MESSAGE_PREFIX + " set (first poll)",
                     null, 0, System.currentTimeMillis() - startMs);
             return;
         }
