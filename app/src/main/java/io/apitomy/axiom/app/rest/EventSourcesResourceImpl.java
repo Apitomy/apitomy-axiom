@@ -4,12 +4,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.EventResource;
 import io.apitomy.axiom.api.beans.EventSource;
+import io.apitomy.axiom.api.beans.EventSourceHealth;
 import io.apitomy.axiom.api.beans.EventSourcePollLog;
 import io.apitomy.axiom.api.beans.EventSourcePollLogSearchResults;
 import io.apitomy.axiom.api.beans.EventSourceSearchResults;
 import io.apitomy.axiom.api.beans.EventSourceStatus;
 import io.apitomy.axiom.api.beans.Configuration;
 import io.apitomy.axiom.api.beans.NewEventSource;
+import io.apitomy.axiom.app.EventSourceHealthService;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.app.validation.ConfigProblem;
@@ -54,6 +56,9 @@ public class EventSourcesResourceImpl implements EventResource {
 
     @Inject
     ValidationContextFactory contextFactory;
+
+    @Inject
+    EventSourceHealthService healthService;
 
     /**
      * {@inheritDoc}
@@ -177,26 +182,45 @@ public class EventSourcesResourceImpl implements EventResource {
         EventSourceEntity entity = findOrThrow(eventSourceId);
 
         long totalEvents = StreamEventEntity.count("eventSourceId", eventSourceId);
+        EventSourceHealthService.Health health = healthService.compute(entity);
 
         EventSourceStatus status = new EventSourceStatus();
         status.setEventSourceId(eventSourceId);
         status.setEnabled(entity.enabled);
         status.setTotalEventsProduced(totalEvents);
-        if (entity.lastPolledAt != null) {
-            status.setLastPolledAt(Date.from(entity.lastPolledAt));
-        }
-        // Find last error from poll logs
-        EventSourcePollLogEntity lastError = EventSourcePollLogEntity.<EventSourcePollLogEntity>find(
-                "eventSourceId = ?1 and status = 'error' ORDER BY createdOn DESC", eventSourceId)
-                .firstResult();
-        if (lastError != null) {
-            status.setLastError(lastError.message);
-            status.setLastErrorAt(Date.from(lastError.createdOn));
-        } else {
-            status.setLastError(null);
-            status.setLastErrorAt(null);
-        }
+        status.setLastPolledAt(toDate(entity.lastPolledAt));
+        status.setLastSuccessAt(toDate(health.lastSuccessAt()));
+        status.setLastErrorAt(toDate(health.lastErrorAt()));
+        status.setLastError(health.lastError());
         return status;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<EventSourceHealth> listEventSourceHealth() {
+        return healthService.computeAll(true).stream().map(EventSourcesResourceImpl::toHealthBean).toList();
+    }
+
+    private static EventSourceHealth toHealthBean(EventSourceHealthService.Health health) {
+        EventSourceHealth bean = new EventSourceHealth();
+        bean.setId(health.id());
+        bean.setName(health.name());
+        bean.setType(health.type());
+        bean.setEnabled(health.enabled());
+        bean.setState(EventSourceHealth.State.fromValue(health.state()));
+        bean.setLastAttemptAt(toDate(health.lastAttemptAt()));
+        bean.setLastSuccessAt(toDate(health.lastSuccessAt()));
+        bean.setLastErrorAt(toDate(health.lastErrorAt()));
+        bean.setLastError(health.lastError());
+        bean.setConsecutiveFailures(health.consecutiveFailures());
+        bean.setEventsLast24h(health.eventsLast24h() != null ? health.eventsLast24h() : 0L);
+        return bean;
+    }
+
+    private static Date toDate(Instant instant) {
+        return instant != null ? Date.from(instant) : null;
     }
 
     /**

@@ -6,6 +6,7 @@ import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.TypedQuery;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -90,7 +91,7 @@ public class EventSourceHealthService {
         if (sources.isEmpty()) {
             return List.of();
         }
-        Map<String, PollFacts> facts = loadPollFacts();
+        Map<String, PollFacts> facts = loadPollFacts(null);
         Map<String, Long> eventCounts = includeEventCounts ? loadEventCounts() : Map.of();
         return sources.stream()
                 .map(source -> toHealth(source, facts.get(source.id),
@@ -98,14 +99,31 @@ public class EventSourceHealthService {
                 .toList();
     }
 
-    private Map<String, PollFacts> loadPollFacts() {
+    /**
+     * Computes the health of a single event source with the same grouped queries as {@link #computeAll},
+     * restricted to that source. {@code eventsLast24h} is not computed (null).
+     *
+     * @param source the event source
+     * @return its health
+     */
+    public Health compute(EventSourceEntity source) {
+        return toHealth(source, loadPollFacts(source.id).get(source.id), null);
+    }
+
+    /**
+     * Loads aggregated poll log facts per source.
+     *
+     * @param sourceId restricts the queries to one source when not null
+     * @return facts keyed by source id
+     */
+    private Map<String, PollFacts> loadPollFacts(String sourceId) {
         Map<String, PollFacts> facts = new HashMap<>();
-        entityManager.createQuery("select l.eventSourceId, max(l.createdOn),"
+        String only = sourceId != null ? " and l.eventSourceId = :sourceId" : "";
+        query("select l.eventSourceId, max(l.createdOn),"
                         + " max(case when l.status = :success then l.createdOn end),"
                         + " max(case when l.status = :error then l.createdOn end)"
-                        + " from EventSourcePollLogEntity l group by l.eventSourceId", Object[].class)
-                .setParameter("success", EventSourcePollLogEntity.STATUS_SUCCESS)
-                .setParameter("error", EventSourcePollLogEntity.STATUS_ERROR)
+                        + " from EventSourcePollLogEntity l where 1 = 1" + only + " group by l.eventSourceId",
+                sourceId)
                 .getResultList()
                 .forEach(row -> {
                     PollFacts f = facts.computeIfAbsent((String) row[0], k -> new PollFacts());
@@ -115,14 +133,12 @@ public class EventSourceHealthService {
                 });
 
         // Messages of the latest success and latest error per source (highest id wins on equal times).
-        entityManager.createQuery("select l.eventSourceId, l.status, l.message from EventSourcePollLogEntity l"
-                        + " where l.status in (:success, :error) and l.id = (select max(x.id)"
+        query("select l.eventSourceId, l.status, l.message from EventSourcePollLogEntity l"
+                        + " where l.status in (:success, :error)" + only + " and l.id = (select max(x.id)"
                         + " from EventSourcePollLogEntity x where x.eventSourceId = l.eventSourceId"
                         + " and x.status = l.status and x.createdOn = (select max(y.createdOn)"
                         + " from EventSourcePollLogEntity y where y.eventSourceId = l.eventSourceId"
-                        + " and y.status = l.status))", Object[].class)
-                .setParameter("success", EventSourcePollLogEntity.STATUS_SUCCESS)
-                .setParameter("error", EventSourcePollLogEntity.STATUS_ERROR)
+                        + " and y.status = l.status))", sourceId)
                 .getResultList()
                 .forEach(row -> {
                     PollFacts f = facts.computeIfAbsent((String) row[0], k -> new PollFacts());
@@ -134,16 +150,24 @@ public class EventSourceHealthService {
                 });
 
         // Failed polls after the latest success, per source.
-        entityManager.createQuery("select l.eventSourceId, count(l) from EventSourcePollLogEntity l"
-                        + " where l.status = :error and not exists (select 1 from EventSourcePollLogEntity s"
+        query("select l.eventSourceId, count(l) from EventSourcePollLogEntity l"
+                        + " where l.status = :error" + only + " and not exists (select 1 from EventSourcePollLogEntity s"
                         + " where s.eventSourceId = l.eventSourceId and s.status = :success"
-                        + " and s.createdOn >= l.createdOn) group by l.eventSourceId", Object[].class)
-                .setParameter("success", EventSourcePollLogEntity.STATUS_SUCCESS)
-                .setParameter("error", EventSourcePollLogEntity.STATUS_ERROR)
+                        + " and s.createdOn >= l.createdOn) group by l.eventSourceId", sourceId)
                 .getResultList()
                 .forEach(row -> facts.computeIfAbsent((String) row[0], k -> new PollFacts())
                         .errorsAfterSuccess = ((Number) row[1]).longValue());
         return facts;
+    }
+
+    private TypedQuery<Object[]> query(String jpql, String sourceId) {
+        TypedQuery<Object[]> query = entityManager.createQuery(jpql, Object[].class)
+                .setParameter("success", EventSourcePollLogEntity.STATUS_SUCCESS)
+                .setParameter("error", EventSourcePollLogEntity.STATUS_ERROR);
+        if (sourceId != null) {
+            query.setParameter("sourceId", sourceId);
+        }
+        return query;
     }
 
     private Map<String, Long> loadEventCounts() {

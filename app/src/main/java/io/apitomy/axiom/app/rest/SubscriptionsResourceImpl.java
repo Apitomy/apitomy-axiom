@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
+import io.apitomy.axiom.app.EventOperationsService;
 import io.apitomy.axiom.app.EventStreamOrchestrator;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
@@ -18,6 +19,7 @@ import io.apitomy.axiom.api.beans.Subscription;
 import io.apitomy.axiom.api.beans.SubscriptionPreviewRequest;
 import io.apitomy.axiom.api.beans.SubscriptionPreviewResponse;
 import io.apitomy.axiom.api.beans.SubscriptionPreviewResult;
+import io.apitomy.axiom.api.beans.SubscriptionProcessingSummary;
 import io.apitomy.axiom.api.beans.SubscriptionSearchResults;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -50,6 +52,9 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
     private static final Logger LOG = Logger.getLogger(SubscriptionsResourceImpl.class);
 
     @Inject
+    EventOperationsService eventOperations;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @Inject
@@ -66,6 +71,14 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
     @Inject
     SubscriptionRoutingResolver routingResolver;
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<SubscriptionProcessingSummary> getSubscriptionProcessingSummary(Date since) {
+        return eventOperations.subscriptionSummary(since);
+    }
 
     /**
      * {@inheritDoc}
