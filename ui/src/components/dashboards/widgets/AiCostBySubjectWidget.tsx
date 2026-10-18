@@ -73,6 +73,7 @@ registerWidget({
     name: "AI Cost by Subject",
     description: "Top subjects ranked by AI cost shown as a bar chart.",
     category: "AI & Cost",
+    scope: "subject-labels",
     defaultSize: { w: 4, h: 3 },
     minSize: { w: 3, h: 3 },
     configSchema: [

@@ -3,7 +3,7 @@ import { useTheme, EffectiveThemeContext } from "./hooks/useTheme";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Page } from "@patternfly/react-core";
 
-import { DashboardsPage } from "./pages/DashboardsPage";
+import { DashboardHomePage, DashboardsPage } from "./pages/DashboardsPage";
 import { DashboardViewPage } from "./pages/DashboardViewPage";
 import { SubjectsPage } from "./pages/SubjectsPage";
 import { AgentsPage } from "./pages/AgentsPage";
@@ -118,7 +118,8 @@ export function App() {
                 ) : (
                     <Routes>
                         <Route path="/" element={<Navigate to="/runs" replace />} />
-                        <Route path="/dashboards" element={<DashboardsPage />} />
+                        <Route path="/dashboards" element={<DashboardHomePage />} />
+                        <Route path="/dashboards/all" element={<DashboardsPage />} />
                         <Route path="/dashboards/:dashboardId" element={<DashboardViewPage />} />
                         <Route path="/inbox" element={<InboxPage />} />
                         <Route path="/subjects" element={<SubjectsPage />} />

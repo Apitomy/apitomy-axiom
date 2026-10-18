@@ -72,6 +72,7 @@ registerWidget({
     name: "AI Cost Summary",
     description: "Total AI spending, token counts, and invocations for a time period.",
     category: "AI & Cost",
+    scope: "subject-labels",
     defaultSize: { w: 4, h: 2 },
     minSize: { w: 3, h: 2 },
     configSchema: [

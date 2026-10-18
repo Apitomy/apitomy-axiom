@@ -51,6 +51,8 @@ import {
     fetchEventSources,
     fetchSubscriptions,
     fetchWorkflowDefinitions,
+    fetchDashboards,
+    type Dashboard,
     exportPack,
     importPack,
     type PackImportProblem,
@@ -65,6 +67,7 @@ export function ConfigurationPacksPage() {
     const [eventSources, setEventSources] = useState<EventSourceConfig[]>([]);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [workflowDefs, setWorkflowDefs] = useState<WorkflowDefinition[]>([]);
+    const [dashboards, setDashboards] = useState<Dashboard[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
 
@@ -79,6 +82,7 @@ export function ConfigurationPacksPage() {
     const [selectedEventSources, setSelectedEventSources] = useState<Set<string>>(new Set());
     const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<number>>(new Set());
     const [selectedWorkflowDefs, setSelectedWorkflowDefs] = useState<Set<number>>(new Set());
+    const [selectedDashboards, setSelectedDashboards] = useState<Set<number>>(new Set());
     const [exporting, setExporting] = useState(false);
 
     // Import state
@@ -103,8 +107,9 @@ export function ConfigurationPacksPage() {
             fetchEventSources(1, 100),
             fetchSubscriptions(1, 100),
             fetchWorkflowDefinitions(1, 1000),
+            fetchDashboards(),
         ])
-            .then(([at, t, ts, mcp, st, eventSourceResults, sub, wd]) => {
+            .then(([at, t, ts, mcp, st, eventSourceResults, sub, wd, dash]) => {
                 setActionTypes(at.items);
                 setTools(t.items);
                 setToolsets(ts);
@@ -113,6 +118,7 @@ export function ConfigurationPacksPage() {
                 setEventSources(eventSourceResults.items);
                 setSubscriptions(sub.items);
                 setWorkflowDefs(wd.items);
+                setDashboards(dash);
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -124,7 +130,8 @@ export function ConfigurationPacksPage() {
         + selectedToolsets.size + selectedMcpServers.size
         + selectedSessionTemplates.size
         + selectedEventSources.size + selectedSubscriptions.size
-        + selectedWorkflowDefs.size;
+        + selectedWorkflowDefs.size
+        + selectedDashboards.size;
 
     const handleExport = async () => {
         setExporting(true);
@@ -140,6 +147,7 @@ export function ConfigurationPacksPage() {
                 eventSourceIds: [...selectedEventSources],
                 subscriptionIds: [...selectedSubscriptions],
                 workflowDefinitionIds: [...selectedWorkflowDefs],
+                dashboardIds: [...selectedDashboards],
             };
             const blob = await exportPack(request);
             const url = URL.createObjectURL(blob);
@@ -175,6 +183,7 @@ export function ConfigurationPacksPage() {
                     if (json.eventSources?.length) preview["Event Sources"] = json.eventSources.length;
                     if (json.subscriptions?.length) preview["Subscriptions"] = json.subscriptions.length;
                     if (json.workflowDefinitions?.length) preview["Workflow Definitions"] = json.workflowDefinitions.length;
+                    if (json.dashboards?.length) preview["Dashboards"] = json.dashboards.length;
                     setImportPreview(preview);
                     setImportPackName(json.metadata?.name || "");
                 } catch {
@@ -435,6 +444,10 @@ export function ConfigurationPacksPage() {
                                     items={workflowDefs.map((wd) => ({ id: wd.id, name: wd.name, description: wd.description }))}
                                     selected={selectedWorkflowDefs}
                                     onToggle={(id) => setSelectedWorkflowDefs(toggleSet(selectedWorkflowDefs, id))} />
+                                <CheckboxSection title="Dashboards"
+                                    items={dashboards.map((d) => ({ id: d.id, name: d.name, description: d.description }))}
+                                    selected={selectedDashboards}
+                                    onToggle={(id) => setSelectedDashboards(toggleSet(selectedDashboards, id))} />
                             </div>
 
                             <div style={{ marginTop: "24px" }}>
@@ -532,6 +545,7 @@ export function ConfigurationPacksPage() {
                                         {importResult.eventSources ? <li>{importResult.eventSources} event source(s)</li> : null}
                                         {importResult.subscriptions ? <li>{importResult.subscriptions} subscription(s)</li> : null}
                                         {importResult.workflowDefinitions ? <li>{importResult.workflowDefinitions} workflow definition(s)</li> : null}
+                                        {importResult.dashboards ? <li>{importResult.dashboards} dashboard(s)</li> : null}
                                     </ul>
                                 </Alert>
                             )}

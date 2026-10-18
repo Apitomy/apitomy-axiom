@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import {
     Button,
     Form,
+    FormHelperText,
+    HelperText,
+    HelperTextItem,
     FormGroup,
     FormSelect,
     FormSelectOption,
@@ -12,7 +15,9 @@ import {
     NumberInput,
     Switch,
 } from "@patternfly/react-core";
-import type { ConfigField } from "./widget-registry";
+import { type ConfigField, toStringArray } from "./widget-registry";
+import { EntitySelectField } from "./EntitySelectField";
+import { MultiSelectField } from "./MultiSelectField";
 
 interface WidgetConfigModalProps {
     isOpen: boolean;
@@ -85,23 +90,34 @@ export function WidgetConfigModal({
                             {field.type === "toggle" && (
                                 <Switch
                                     id={field.key}
+                                    aria-label={field.label}
                                     isChecked={Boolean(draft[field.key] ?? field.default)}
                                     onChange={(_e, checked) => updateField(field.key, checked)}
                                 />
                             )}
                             {field.type === "multiselect" && (
-                                <FormSelect
+                                <MultiSelectField
                                     id={field.key}
-                                    value={String(draft[field.key] ?? field.default)}
-                                    onChange={(_e, val) => updateField(field.key, val)}
-                                >
-                                    <FormSelectOption value="" label="All" />
-                                    {field.options?.map(opt => (
-                                        <FormSelectOption key={opt.value}
-                                                          value={opt.value}
-                                                          label={opt.label} />
-                                    ))}
-                                </FormSelect>
+                                    label={field.label}
+                                    options={field.options ?? []}
+                                    value={toStringArray(draft[field.key] ?? field.default)}
+                                    onChange={(val) => updateField(field.key, val)}
+                                />
+                            )}
+                            {(field.type === "subject" || field.type === "workflow"
+                                || field.type === "eventSource" || field.type === "subscription") && (
+                                <EntitySelectField
+                                    id={field.key}
+                                    kind={field.type}
+                                    label={field.label}
+                                    value={draft[field.key] ?? field.default}
+                                    onChange={(val) => updateField(field.key, val)}
+                                />
+                            )}
+                            {field.helperText && (
+                                <FormHelperText>
+                                    <HelperText><HelperTextItem>{field.helperText}</HelperTextItem></HelperText>
+                                </FormHelperText>
                             )}
                         </FormGroup>
                     ))}

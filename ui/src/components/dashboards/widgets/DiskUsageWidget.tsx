@@ -74,6 +74,7 @@ registerWidget({
     name: "Disk Usage Breakdown",
     description: "Storage consumption broken down by subject, shown as a bar chart.",
     category: "System",
+    scope: "global",
     defaultSize: { w: 4, h: 3 },
     minSize: { w: 3, h: 3 },
     configSchema: [

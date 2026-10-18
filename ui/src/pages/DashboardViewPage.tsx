@@ -29,6 +29,7 @@ import StarIcon from "@patternfly/react-icons/dist/esm/icons/star-icon";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import ThListIcon from "@patternfly/react-icons/dist/esm/icons/th-list-icon";
 import {
     type Dashboard,
     type DashboardTab,
@@ -43,6 +44,7 @@ import { AddWidgetModal } from "../components/dashboards/AddWidgetModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { LabelInput } from "../components/LabelInput";
 import { getWidget, getDefaultConfig } from "../components/dashboards/widget-registry";
+import { useErrorToasts } from "../components/dashboards/useErrorToasts";
 
 import "../components/dashboards/widgets";
 
@@ -114,16 +116,20 @@ export function DashboardViewPage() {
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteTabTarget, setDeleteTabTarget] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const { showError, toasts } = useErrorToasts();
 
     const load = useCallback(() => {
         if (!dashboardId) return;
         setLoading(true);
+        // Switching dashboards: reset per-dashboard view state so the new dashboard opens on its first tab.
+        setDashboard(null);
+        setActiveTabId("");
+        setIsEditing(false);
+        setRenamingTabId(null);
         fetchDashboard(Number(dashboardId))
             .then((d) => {
                 setDashboard(d);
-                if (d.tabs.length > 0 && !activeTabId) {
-                    setActiveTabId(d.tabs[0].id);
-                }
+                setActiveTabId(d.tabs.length > 0 ? d.tabs[0].id : "");
             })
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -185,14 +191,15 @@ export function DashboardViewPage() {
                     }
                 }
             })
-            .catch(console.error);
+            .catch((e) => showError("Failed to save dashboard", e));
     };
 
     const handleDeleteDashboard = () => {
         if (!dashboard) return;
         deleteDashboard(dashboard.id)
-            .then(() => navigate("/dashboards"))
-            .catch(console.error);
+            .then(() => navigate("/dashboards/all"))
+            .catch((e) => showError("Failed to delete dashboard", e))
+            .finally(() => setDeleteOpen(false));
     };
 
     const handleSetDefault = () => {
@@ -206,7 +213,7 @@ export function DashboardViewPage() {
         };
         updateDashboard(dashboard.id, data)
             .then(setDashboard)
-            .catch(console.error);
+            .catch((e) => showError("Failed to set default dashboard", e));
     };
 
     const handleAddWidget = (widgetType: string) => {
@@ -337,15 +344,20 @@ export function DashboardViewPage() {
     if (!dashboard) {
         return (
             <PageSection>
-                <EmptyState><EmptyStateBody>Dashboard not found.</EmptyStateBody></EmptyState>
+                <EmptyState>
+                    <EmptyStateBody>
+                        Dashboard not found. <Link to="/dashboards/all">All dashboards</Link>
+                    </EmptyStateBody>
+                </EmptyState>
             </PageSection>
         );
     }
 
     return (
         <PageSection>
+            {toasts}
             <Breadcrumb style={{ marginBottom: "16px" }}>
-                <BreadcrumbItem><Link to="/dashboards">Dashboards</Link></BreadcrumbItem>
+                <BreadcrumbItem><Link to="/dashboards/all">Dashboards</Link></BreadcrumbItem>
                 <BreadcrumbItem isActive>{dashboard.name}</BreadcrumbItem>
             </Breadcrumb>
             {/* Top bar */}
@@ -414,6 +426,12 @@ export function DashboardViewPage() {
                             </>
                         ) : (
                             <>
+                                <FlexItem>
+                                    <Button variant="link" icon={<ThListIcon />}
+                                            component={(props: object) => <Link {...props} to="/dashboards/all" />}>
+                                        All dashboards
+                                    </Button>
+                                </FlexItem>
                                 <FlexItem>
                                     <Button variant="plain"
                                             aria-label="Refresh"

@@ -55,6 +55,7 @@ registerWidget({
     name: "System Status",
     description: "Simple UP/DOWN health indicator with version.",
     category: "System",
+    scope: "global",
     defaultSize: { w: 2, h: 1 },
     minSize: { w: 2, h: 1 },
     configSchema: [],

@@ -6,7 +6,7 @@ import { type InboxItem, fetchInboxItems } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
-function InboxWidget({ config, labels }: WidgetProps) {
+function InboxWidget({ config, labels, refreshToken }: WidgetProps) {
     const navigate = useNavigate();
     const [items, setItems] = useState<InboxItem[]>([]);
     const [error, setError] = useState(false);
@@ -19,7 +19,7 @@ function InboxWidget({ config, labels }: WidgetProps) {
             .then(result => { if (!cancelled) setItems(result.items); })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [labels, maxRows]);
+    }, [labels, maxRows, refreshToken]);
 
     if (error) return <WidgetError />;
 
@@ -56,7 +56,9 @@ registerWidget({
     type: "inbox",
     name: "Inbox",
     description: "Pending human tasks awaiting input with subject name and age.",
-    category: "Operations",
+    category: "Inbox",
+    scope: "subject-labels",
+    liveEvents: ["inbox-updated"],
     defaultSize: { w: 4, h: 3 },
     minSize: { w: 3, h: 2 },
     configSchema: [

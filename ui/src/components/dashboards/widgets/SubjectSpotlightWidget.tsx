@@ -83,6 +83,7 @@ registerWidget({
     name: "Subject Spotlight",
     description: "Single-subject deep view with status, task breakdown, and details.",
     category: "Subjects",
+    scope: "subject-labels",
     defaultSize: { w: 4, h: 4 },
     minSize: { w: 3, h: 3 },
     configSchema: [

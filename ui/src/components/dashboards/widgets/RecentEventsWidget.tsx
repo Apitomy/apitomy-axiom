@@ -56,7 +56,8 @@ registerWidget({
     type: "recent-events",
     name: "Recent Events",
     description: "Latest events from GitHub/Jira with source, type, and timestamp.",
-    category: "Operations",
+    category: "Events",
+    scope: "global",
     defaultSize: { w: 6, h: 3 },
     minSize: { w: 4, h: 2 },
     configSchema: [

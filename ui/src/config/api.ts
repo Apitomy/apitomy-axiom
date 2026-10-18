@@ -40,10 +40,23 @@ export async function extractErrorMessage(response: Response, fallback: string):
 
 // ── Types ─────────────────────────────────────────────────────────
 
+/** Status of the application or one of its health checks. */
+export type HealthStatus = "UP" | "DEGRADED" | "DOWN";
+
+/** A single named health check reported by `/system/health`. */
+export interface HealthCheck {
+    name: string;
+    status: HealthStatus;
+    message?: string;
+}
+
 export interface SystemHealth {
-    status: string;
+    /** Overall status: the worst of `checks`. */
+    status: HealthStatus;
     version: string;
     timestamp: string;
+    /** Individual checks: database, eventSources, engines, scheduler. */
+    checks?: HealthCheck[];
 }
 
 export interface StartupCheck {
@@ -189,6 +202,7 @@ export interface PackExportRequest {
     eventSourceIds?: string[];
     subscriptionIds?: number[];
     workflowDefinitionIds?: number[];
+    dashboardIds?: number[];
 }
 
 export interface ImportResult {
@@ -200,6 +214,7 @@ export interface ImportResult {
     eventSources?: number;
     subscriptions?: number;
     workflowDefinitions?: number;
+    dashboards?: number;
 }
 
 export interface AssistantApplyResult {
@@ -887,6 +902,10 @@ export interface AiUsage {
     inputTokens?: number;
     outputTokens?: number;
     durationMs?: number;
+    /** Workflow run the usage was recorded for, when the task belonged to a run. */
+    workflowRunId?: number;
+    /** Workflow definition of that run. */
+    workflowDefinitionId?: number;
     createdOn: string;
 }
 
@@ -1530,7 +1549,7 @@ export async function createDashboard(data: NewDashboard): Promise<Dashboard> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`Failed to create dashboard: ${response.status}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to create dashboard"));
     return response.json();
 }
 
@@ -1546,7 +1565,7 @@ export async function updateDashboard(dashboardId: number, data: NewDashboard): 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error(`Failed to update dashboard: ${response.status}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to update dashboard"));
     return response.json();
 }
 
@@ -1554,7 +1573,7 @@ export async function deleteDashboard(dashboardId: number): Promise<void> {
     const response = await fetch(`${API}/dashboards/${dashboardId}`, {
         method: "DELETE",
     });
-    if (!response.ok) throw new Error(`Failed to delete dashboard: ${response.status}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to delete dashboard"));
 }
 
 // ── Workflow Definitions ──────────────────────────────────────────
@@ -1988,7 +2007,10 @@ export interface EventSourceStatus {
     eventSourceId: string;
     enabled: boolean;
     lastPolledAt?: string;
+    /** Number of retained events produced by this source (subject to retention). */
     totalEventsProduced: number;
+    lastSuccessAt?: string;
+    /** Present only when the latest error happened after the latest success. */
     lastError?: string;
     lastErrorAt?: string;
 }
@@ -2345,5 +2367,246 @@ export async function fetchLineage(entityType: LineageEntityType, id: string | n
     const response = await fetch(
         `${API}/lineage/${entityType}/${encodeURIComponent(String(id))}?direction=${direction}`);
     if (!response.ok) throw new Error(`Failed to fetch lineage: ${response.status}`);
+    return response.json();
+}
+
+// ── Dashboard data APIs (3.0) ───────────────────────────────────
+
+/** Counts of workflow runs per status. */
+export interface WorkflowRunStatusCounts {
+    running: number;
+    waiting: number;
+    completed: number;
+    failed: number;
+    cancelled: number;
+}
+
+/** Response of `GET /workflow/runs/summary`. */
+export interface WorkflowRunStatusSummary {
+    counts: WorkflowRunStatusCounts;
+    /** Most recently failed runs, newest first. */
+    recentFailed: WorkflowRunSummary[];
+}
+
+/** Options for {@link fetchWorkflowRunStatusSummary}. */
+export interface WorkflowRunStatusSummaryOptions {
+    /** Subject labels (AND); sent as `filterLabels`. */
+    labels?: string[];
+    /** ISO-8601 date-time; applies to terminal counts and recentFailed. */
+    since?: string;
+    /** 1..50, default 10 (server side). */
+    failedLimit?: number;
+}
+
+/** A workflow run waiting at a wait point. */
+export interface WaitingWorkflowRun {
+    runId: number;
+    runTitle?: string;
+    workflowDefinitionId: number;
+    workflowName: string;
+    subjectId?: number;
+    subjectName?: string;
+    nodeId: string;
+    waitKind: "wait" | "receive-event" | "human-task";
+    waitingSince: string;
+    dueAt?: string;
+    eventType?: string;
+    correlationKey?: string;
+    taskId?: number;
+}
+
+/** A schedule trigger with its next and last firing. */
+export interface WorkflowScheduleSummary {
+    triggerId: number;
+    workflowDefinitionId: number;
+    workflowName: string;
+    cron: string;
+    enabled: boolean;
+    subjectId?: number;
+    subjectName?: string;
+    nextFireAt?: string;
+    lastFiredAt?: string;
+    lastOutcome?: "started" | "skipped-duplicate" | "failed";
+    lastRunId?: number;
+}
+
+/** Health of one event source. */
+export interface EventSourceHealth {
+    id: string;
+    name: string;
+    type: string;
+    enabled: boolean;
+    state: "healthy" | "failing" | "baseline" | "disabled" | "never-polled";
+    lastAttemptAt?: string;
+    lastSuccessAt?: string;
+    lastErrorAt?: string;
+    lastError?: string;
+    consecutiveFailures: number;
+    eventsLast24h: number;
+}
+
+/** Processing ledger counts per status for a subscription. */
+export interface SubscriptionProcessingCounts {
+    pending: number;
+    completed: number;
+    failed: number;
+    exhausted: number;
+    skipped: number;
+    filterError: number;
+}
+
+/** Processing summary of one subscription. */
+export interface SubscriptionProcessingSummary {
+    subscriptionId: number;
+    name: string;
+    enabled: boolean;
+    counts: SubscriptionProcessingCounts;
+    lastErrorAt?: string;
+    lastError?: string;
+}
+
+/** A failed processing ledger entry. Retry with {@link retryEventProcessing}. */
+export interface ProcessingFailure {
+    ledgerId: number;
+    eventId: string;
+    eventType: string;
+    subscriptionId: number;
+    subscriptionName?: string;
+    status: "failed" | "exhausted" | "filter_error";
+    errorMessage?: string;
+    attemptCount: number;
+    nextAttemptAt?: string;
+    updatedAt: string;
+}
+
+/** One bucket of the event volume histogram. */
+export interface EventVolumeBucket {
+    bucketStart: string;
+    count: number;
+}
+
+/** Grouping dimension of the AI usage summary. */
+export type AiUsageGroupBy = "subject" | "workflow" | "engine" | "model" | "actionType";
+
+/** One row of the AI usage summary. `key` is "" (label "(none)") for records without a value. */
+export interface AiUsageSummaryRow {
+    key: string;
+    label: string;
+    costUsd: number;
+    inputTokens: number;
+    outputTokens: number;
+    invocations: number;
+}
+
+/** Response of `GET /usage/ai/summary`. */
+export interface AiUsageSummary {
+    groupBy: AiUsageGroupBy;
+    rows: AiUsageSummaryRow[];
+    totalCostUsd: number;
+    /** Present only when labels were given: cost of records without a subject (excluded). */
+    excludedUnscopedCostUsd?: number;
+}
+
+/** Options for {@link fetchAiUsageSummary}. */
+export interface AiUsageSummaryOptions {
+    since?: string;
+    /** Subject labels (AND); sent as `filterLabels`. */
+    labels?: string[];
+    /** 1..100, default 10 (server side). */
+    limit?: number;
+}
+
+function setLabels(params: URLSearchParams, labels?: string[]): void {
+    if (labels && labels.length > 0) params.set("filterLabels", labels.join(","));
+}
+
+/** Fetches workflow run counts by status plus recent failures (`GET /workflow/runs/summary`). */
+export async function fetchWorkflowRunStatusSummary(
+    options: WorkflowRunStatusSummaryOptions = {}
+): Promise<WorkflowRunStatusSummary> {
+    const params = new URLSearchParams();
+    setLabels(params, options.labels);
+    if (options.since) params.set("since", options.since);
+    if (options.failedLimit != null) params.set("failedLimit", String(options.failedLimit));
+    const response = await fetch(`${API}/workflow/runs/summary?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch run summary"));
+    return response.json();
+}
+
+/** Fetches runs currently waiting, longest waiting first (`GET /workflow/runs/waiting`). */
+export async function fetchWaitingWorkflowRuns(
+    labels?: string[], limit?: number
+): Promise<WaitingWorkflowRun[]> {
+    const params = new URLSearchParams();
+    setLabels(params, labels);
+    if (limit != null) params.set("limit", String(limit));
+    const response = await fetch(`${API}/workflow/runs/waiting?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch waiting runs"));
+    return response.json();
+}
+
+/** Fetches schedule triggers across workflows (`GET /workflow/schedules`). */
+export async function fetchWorkflowSchedules(limit?: number): Promise<WorkflowScheduleSummary[]> {
+    const params = new URLSearchParams();
+    if (limit != null) params.set("limit", String(limit));
+    const response = await fetch(`${API}/workflow/schedules?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch schedules"));
+    return response.json();
+}
+
+/** Fetches health of every event source (`GET /event-sources/health`). */
+export async function fetchEventSourceHealth(): Promise<EventSourceHealth[]> {
+    const response = await fetch(`${API}/event-sources/health`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event source health"));
+    return response.json();
+}
+
+/** Fetches processing counts per subscription (`GET /subscriptions/summary`). */
+export async function fetchSubscriptionProcessingSummary(
+    since?: string
+): Promise<SubscriptionProcessingSummary[]> {
+    const params = new URLSearchParams();
+    if (since) params.set("since", since);
+    const response = await fetch(`${API}/subscriptions/summary?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch subscription summary"));
+    return response.json();
+}
+
+/** Fetches recent processing failures, newest first (`GET /stream/processing/failures`). */
+export async function fetchProcessingFailures(
+    limit?: number, since?: string
+): Promise<ProcessingFailure[]> {
+    const params = new URLSearchParams();
+    if (limit != null) params.set("limit", String(limit));
+    if (since) params.set("since", since);
+    const response = await fetch(`${API}/stream/processing/failures?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch processing failures"));
+    return response.json();
+}
+
+/** Fetches the event volume histogram (`GET /stream/events/histogram`). */
+export async function fetchEventVolumeHistogram(
+    since?: string, bucket?: "hour" | "day", eventSourceId?: string
+): Promise<EventVolumeBucket[]> {
+    const params = new URLSearchParams();
+    if (since) params.set("since", since);
+    if (bucket) params.set("bucket", bucket);
+    if (eventSourceId) params.set("eventSourceId", eventSourceId);
+    const response = await fetch(`${API}/stream/events/histogram?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event volume"));
+    return response.json();
+}
+
+/** Fetches AI usage grouped by a dimension (`GET /usage/ai/summary`). */
+export async function fetchAiUsageSummary(
+    groupBy: AiUsageGroupBy, options: AiUsageSummaryOptions = {}
+): Promise<AiUsageSummary> {
+    const params = new URLSearchParams();
+    params.set("groupBy", groupBy);
+    if (options.since) params.set("since", options.since);
+    setLabels(params, options.labels);
+    if (options.limit != null) params.set("limit", String(options.limit));
+    const response = await fetch(`${API}/usage/ai/summary?${params}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch AI usage summary"));
     return response.json();
 }

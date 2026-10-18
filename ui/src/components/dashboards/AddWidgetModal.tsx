@@ -16,7 +16,7 @@ import {
     ToolbarContent,
     ToolbarItem,
 } from "@patternfly/react-core";
-import { getAllWidgets } from "./widget-registry";
+import { getAllWidgets, WIDGET_CATEGORIES } from "./widget-registry";
 
 interface AddWidgetModalProps {
     isOpen: boolean;
@@ -34,9 +34,8 @@ export function AddWidgetModal({ isOpen, onSelect, onCancel }: AddWidgetModalPro
     const allWidgets = getAllWidgets();
 
     const categories = useMemo(() => {
-        const cats = new Set<string>();
-        allWidgets.forEach(w => cats.add(w.category));
-        return ["All", ...Array.from(cats).sort()];
+        const used = new Set<string>(allWidgets.map(w => w.category));
+        return ["All", ...WIDGET_CATEGORIES.filter(c => used.has(c))];
     }, [allWidgets]);
 
     const filtered = useMemo(() => {
@@ -114,6 +113,12 @@ export function AddWidgetModal({ isOpen, onSelect, onCancel }: AddWidgetModalPro
                                            style={{ marginBottom: "8px" }}>
                                         {widget.category}
                                     </Label>
+                                    {widget.scope === "global" && (
+                                        <Label isCompact variant="outline"
+                                               style={{ marginBottom: "8px", marginLeft: "4px" }}>
+                                            Global
+                                        </Label>
+                                    )}
                                     <p>{widget.description}</p>
                                 </CardBody>
                             </Card>
