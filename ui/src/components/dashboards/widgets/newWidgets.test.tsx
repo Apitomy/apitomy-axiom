@@ -80,6 +80,9 @@ describe("helpers", () => {
         const now = Date.parse("2026-01-03T00:00:00Z");
         expect(formatAge("2026-01-02T23:55:00Z", now)).toBe("5m ago");
         expect(formatAge("2026-01-02T21:00:00Z", now)).toBe("3h ago");
+        expect(formatAge("2026-01-02T00:00:00Z", now)).toBe("1d ago");
+        expect(formatAge("2026-01-01T01:00:00Z", now)).toBe("1d ago");
+        expect(formatAge("2026-01-02T01:00:00Z", now)).toBe("23h ago");
         expect(formatAge("2025-12-30T00:00:00Z", now)).toBe("4d ago");
         expect(formatAge(undefined, now)).toBe("-");
     });

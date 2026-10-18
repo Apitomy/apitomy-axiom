@@ -118,8 +118,8 @@ are ignored). Time windows are 24 hours, 7 days, 30 days or 90 days.
 | **AI Usage Breakdown** | AI cost, tokens and calls grouped by subject, workflow, engine, model or action type, highest cost first. | Filtered | Manual | Group by (default workflow), time window (default 7 days), max rows (1-100, default 10) |
 | **AI Cost by Subject** | Bar chart of the subjects with the highest AI cost. | Filtered | Manual | Time window (default 7 days), max subjects (default 5) |
 
-AI usage is linked to the workflow run and workflow that caused it. Usage recorded by an earlier 3.0 build,
-before this link existed, is grouped under "(none)" when you group by workflow.
+AI usage is linked to the workflow run and workflow that caused it. Usage that did not come from a workflow,
+such as AI assistant sessions, is grouped under "(none)" when you group by workflow.
 
 ### System
 

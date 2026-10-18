@@ -54,8 +54,14 @@ export const DASHBOARD_TEMPLATES: DashboardTemplate[] = [
         description: "AI cost summary, AI usage by workflow and by model, and AI cost by subject.",
         widgets: [
             { type: "ai-cost-summary", layout: { x: 0, y: 0, w: 4, h: 2 } },
-            { type: "ai-usage-breakdown", config: { groupBy: "workflow" }, layout: { x: 4, y: 0, w: 8, h: 3 } },
-            { type: "ai-usage-breakdown", config: { groupBy: "model" }, layout: { x: 0, y: 3, w: 6, h: 3 } },
+            {
+                type: "ai-usage-breakdown", config: { groupBy: "workflow" },
+                layout: { x: 4, y: 0, w: 8, h: 3 },
+            },
+            {
+                type: "ai-usage-breakdown", config: { groupBy: "model" },
+                layout: { x: 0, y: 3, w: 6, h: 3 },
+            },
             { type: "ai-cost-by-subject", layout: { x: 6, y: 3, w: 6, h: 3 } },
         ],
     },
