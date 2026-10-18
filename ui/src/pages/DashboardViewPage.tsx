@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { type AnchorHTMLAttributes, forwardRef, useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { Responsive } from "react-grid-layout";
 import type { Layout, LayoutItem } from "react-grid-layout";
@@ -88,6 +88,12 @@ function useMeasuredContainerWidth(): {
     }, []);
     return { containerRef, width };
 }
+
+/** Link to the dashboard list, used as the "All dashboards" button component (stable identity). */
+const AllDashboardsLink = forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement>>(
+    function AllDashboardsLink(props, ref) {
+        return <Link {...props} ref={ref} to="/dashboards/all" />;
+    });
 
 export function DashboardViewPage() {
     const { dashboardId } = useParams<{ dashboardId: string }>();
@@ -428,7 +434,7 @@ export function DashboardViewPage() {
                             <>
                                 <FlexItem>
                                     <Button variant="link" icon={<ThListIcon />}
-                                            component={(props: object) => <Link {...props} to="/dashboards/all" />}>
+                                            component={AllDashboardsLink}>
                                         All dashboards
                                     </Button>
                                 </FlexItem>

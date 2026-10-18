@@ -59,10 +59,33 @@ describe("useWidgetRefresh", () => {
         expect(second).toHaveBeenCalledTimes(1);
     });
 
-    it("reloads immediately after an SSE reconnect", () => {
+    it("reloads after an SSE reconnect through the debounce timer", () => {
         const reload = vi.fn();
         renderHook(() => useWidgetRefresh(["activity"], reload));
-        act(() => { reconnects.forEach((cb) => cb()); });
+        act(() => { reconnects.forEach((cb) => cb()); emit("activity"); });
+        expect(reload).not.toHaveBeenCalled();
+        act(() => { vi.advanceTimersByTime(2000); });
+        expect(reload).toHaveBeenCalledTimes(1);
+    });
+
+    it("forces a reload after maxWaitMs under continuous events", () => {
+        const reload = vi.fn();
+        renderHook(() => useWidgetRefresh(["activity"], reload, { debounceMs: 2000, maxWaitMs: 10000 }));
+        // An event every second for 25 s: the quiet period never happens.
+        for (let i = 0; i < 25; i++) {
+            act(() => { emit("activity"); vi.advanceTimersByTime(1000); });
+        }
+        expect(reload).toHaveBeenCalledTimes(2);
+        act(() => { vi.advanceTimersByTime(2000); });
+        expect(reload).toHaveBeenCalledTimes(3);
+    });
+
+    it("uses a 10 second default max wait", () => {
+        const reload = vi.fn();
+        renderHook(() => useWidgetRefresh(["activity"], reload));
+        for (let i = 0; i < 10; i++) {
+            act(() => { emit("activity"); vi.advanceTimersByTime(1000); });
+        }
         expect(reload).toHaveBeenCalledTimes(1);
     });
 

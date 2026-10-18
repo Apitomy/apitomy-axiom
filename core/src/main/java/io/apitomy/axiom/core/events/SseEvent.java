@@ -9,7 +9,7 @@ import java.util.UUID;
 public record SseEvent(
         /**
          * Event type: "subject-updated", "task-updated", "thread-entry",
-         * "notification", "activity"
+         * "notification", "activity", "stream-event", "stream-processing", ...
          */
         String type,
 
@@ -214,6 +214,18 @@ public record SseEvent(
                 "{\"eventId\":\"" + eventId
                         + "\",\"eventType\":\"" + escapeJson(eventType)
                         + "\",\"eventSourceId\":\"" + escapeJson(eventSourceId) + "\"}");
+    }
+
+    /**
+     * Creates a stream-processing event, indicating that the processing ledger of the event
+     * stream changed (entries created, completed, failed, skipped or retried). Fired at most once
+     * per orchestrator tick, after the changes were committed.
+     *
+     * @param changes the number of ledger changes coalesced into this notification
+     * @return a new SSE event
+     */
+    public static SseEvent streamProcessing(int changes) {
+        return new SseEvent("stream-processing", "{\"changes\":" + changes + "}");
     }
 
     /**

@@ -36,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Processes stream events against enabled subscriptions using a durable
@@ -80,6 +81,12 @@ public class EventStreamOrchestrator {
 
     @Inject
     Event<SseEvent> sseEvents;
+
+    /**
+     * Ledger changes committed during the current tick; one {@code stream-processing} SSE event is
+     * sent at the end of the tick when non-zero (coalesced, so a batch produces one event).
+     */
+    private final AtomicInteger ledgerChanges = new AtomicInteger();
 
     @Inject
     WorkspaceService workspaceService;
@@ -178,6 +185,26 @@ public class EventStreamOrchestrator {
                concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
     void processNewEvents() {
         if (shuttingDown) return;
+        try {
+            runTick();
+        } finally {
+            notifyLedgerChanges();
+        }
+    }
+
+    /**
+     * Sends one {@code stream-processing} SSE event if ledger entries changed since the last
+     * notification. Every ledger change runs in its own committed transaction, so clients
+     * reloading on this event see the changes.
+     */
+    void notifyLedgerChanges() {
+        int changes = ledgerChanges.getAndSet(0);
+        if (changes > 0) {
+            sseEvents.fire(SseEvent.streamProcessing(changes));
+        }
+    }
+
+    private void runTick() {
         // Entries attempted during this tick (by the first pass) are never retried in it
         Instant tickStart = Instant.now();
 
@@ -197,6 +224,7 @@ public class EventStreamOrchestrator {
                         "status = 'failed', nextAttemptAt = ?1, errorMessage = ?2 "
                         + "where status = 'pending'", Instant.now(), reason);
                 if (recovered + exhausted > 0) {
+                    ledgerChanges.addAndGet((int) (recovered + exhausted));
                     LOG.infof("Recovered %d orphaned pending ledger entries on startup "
                             + "(%d of them on their last attempt)", recovered + exhausted,
                             exhausted);
@@ -458,6 +486,7 @@ public class EventStreamOrchestrator {
                         ledgerId, EventProcessingLedgerEntity.PENDING);
             }
         });
+        ledgerChanges.incrementAndGet();
     }
 
     /**
@@ -498,7 +527,7 @@ public class EventStreamOrchestrator {
      * @return the new entry's ID, or null if an entry already exists for the pair
      */
     private Long createLedgerEntry(UUID eventId, long subscriptionId, String status) {
-        return QuarkusTransaction.requiringNew().call(() -> {
+        Long created = QuarkusTransaction.requiringNew().call(() -> {
             // Check for existing entry (dedup)
             long existing = EventProcessingLedgerEntity.count(
                     "eventId = ?1 and subscriptionId = ?2", eventId, subscriptionId);
@@ -519,6 +548,8 @@ public class EventStreamOrchestrator {
             entry.persist();
             return entry.id;
         });
+        if (created != null) ledgerChanges.incrementAndGet();
+        return created;
     }
 
     /**
@@ -532,7 +563,7 @@ public class EventStreamOrchestrator {
      * @return the number of the new attempt, or null if the entry is no longer failed
      */
     Integer beginAttempt(Long ledgerId) {
-        return QuarkusTransaction.requiringNew().call(() -> {
+        Integer attempt = QuarkusTransaction.requiringNew().call(() -> {
             int updated = EventProcessingLedgerEntity.update(
                     "status = 'pending', attemptCount = attemptCount + 1, lastAttemptAt = ?1, "
                     + "nextAttemptAt = null where id = ?2 and status = 'failed'",
@@ -541,6 +572,8 @@ public class EventStreamOrchestrator {
             EventProcessingLedgerEntity entry = EventProcessingLedgerEntity.findById(ledgerId);
             return entry != null ? entry.attemptCount : null;
         });
+        if (attempt != null) ledgerChanges.incrementAndGet();
+        return attempt;
     }
 
     private void completeLedgerEntry(Long ledgerId) {
@@ -561,6 +594,7 @@ public class EventStreamOrchestrator {
                 entry.processedOn = Instant.now();
             }
         });
+        ledgerChanges.incrementAndGet();
     }
 
     /**
@@ -590,6 +624,7 @@ public class EventStreamOrchestrator {
                 }
             }
         });
+        ledgerChanges.incrementAndGet();
     }
 
     /**

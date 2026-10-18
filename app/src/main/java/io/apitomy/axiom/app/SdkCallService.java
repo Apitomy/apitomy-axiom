@@ -32,6 +32,9 @@ public class SdkCallService {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    jakarta.enterprise.event.Event<io.apitomy.axiom.core.events.StreamEventPersisted> persistedEvents;
+
     /** Lazy: the workflow engine itself calls this service for {@code sdk:} nodes. */
     @Inject
     jakarta.enterprise.inject.Instance<WorkflowExecutionService> workflowExecutionService;
@@ -172,6 +175,8 @@ public class SdkCallService {
         event.payload = payload;
         event.createdOn = Instant.now();
         event.persist();
+        persistedEvents.fire(new io.apitomy.axiom.core.events.StreamEventPersisted(
+                event.id.toString(), event.type, event.eventSourceId));
 
         return SdkCallResult.ok("Event fired: " + eventType,
                 Map.of("eventId", event.id.toString()));

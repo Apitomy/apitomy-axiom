@@ -2,7 +2,7 @@ package io.apitomy.axiom.events.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
-import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.events.StreamEventPersisted;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -16,7 +16,7 @@ import java.util.UUID;
 /**
  * Persists normalized events to the stream_event table with deduplication.
  * Events with a sourceEventId that already exists are silently skipped.
- * Fires an SSE event when a new event is successfully persisted.
+ * Fires a {@link StreamEventPersisted} event (sent to SSE clients after commit) for each new event.
  */
 @ApplicationScoped
 public class EventStreamService {
@@ -27,7 +27,7 @@ public class EventStreamService {
     ObjectMapper objectMapper;
 
     @Inject
-    Event<SseEvent> sseEvents;
+    Event<StreamEventPersisted> persistedEvents;
 
     /**
      * Persists a normalized event to the stream. If an event with the same
@@ -80,8 +80,8 @@ public class EventStreamService {
 
         LOG.debugf("Persisted event %s: %s [%s]", entity.id, event.type().value(), event.ref());
 
-        // Notify SSE clients that a new event arrived in the stream
-        sseEvents.fire(SseEvent.streamEventReceived(
+        // Notify SSE clients (after commit) that a new event arrived in the stream
+        persistedEvents.fire(new StreamEventPersisted(
                 entity.id.toString(), event.type().value(), event.eventSourceId()));
 
         return true;

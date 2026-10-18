@@ -4,8 +4,9 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import { type StreamEvent, fetchStreamEvents } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
+import { SSE_EVENTS } from "../../../config/sseEvents";
 
-function RecentEventsWidget({ config }: WidgetProps) {
+function RecentEventsWidget({ config, refreshToken }: WidgetProps) {
     const [events, setEvents] = useState<StreamEvent[]>([]);
     const [error, setError] = useState(false);
     const maxRows = Number(config.maxRows) || 10;
@@ -16,7 +17,7 @@ function RecentEventsWidget({ config }: WidgetProps) {
             .then(result => { if (!cancelled) setEvents(result.items); })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [maxRows]);
+    }, [maxRows, refreshToken]);
 
     if (error) return <WidgetError />;
 
@@ -58,6 +59,7 @@ registerWidget({
     description: "Latest events from GitHub/Jira with source, type, and timestamp.",
     category: "Events",
     scope: "global",
+    liveEvents: [SSE_EVENTS.streamEvent],
     defaultSize: { w: 6, h: 3 },
     minSize: { w: 4, h: 2 },
     configSchema: [
