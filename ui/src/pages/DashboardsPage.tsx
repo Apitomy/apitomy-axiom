@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import {
     Button,
     EmptyState,
@@ -14,6 +14,7 @@ import {
     ModalFooter,
     ModalHeader,
     PageSection,
+    Radio,
     TextArea,
     TextInput,
     Title,
@@ -34,6 +35,12 @@ import {
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { LabelInput } from "../components/LabelInput";
+import { useErrorToasts } from "../components/dashboards/useErrorToasts";
+import {
+    DASHBOARD_TEMPLATES,
+    buildDashboardFromTemplate,
+    getTemplate,
+} from "../components/dashboards/templates";
 
 export function DashboardsPage() {
     const navigate = useNavigate();
@@ -44,6 +51,42 @@ export function DashboardsPage() {
     const [newName, setNewName] = useState("");
     const [newDescription, setNewDescription] = useState("");
     const [newLabels, setNewLabels] = useState<string[]>([]);
+    const [templateId, setTemplateId] = useState<string | null>(null);
+    const [templateName, setTemplateName] = useState("");
+    const [templateLabels, setTemplateLabels] = useState<string[]>([]);
+    const { showError, toasts } = useErrorToasts();
+
+    const openTemplate = (id: string) => {
+        setTemplateId(id);
+        setTemplateName(getTemplate(id)?.name ?? "");
+        setTemplateLabels([]);
+    };
+
+    const handleCreateFromTemplate = () => {
+        const template = templateId ? getTemplate(templateId) : undefined;
+        if (!template || !templateName.trim()) return;
+        const data = buildDashboardFromTemplate(template, templateName.trim(), templateLabels,
+            dashboards.length === 0);
+        createDashboard(data)
+            .then((created) => {
+                setTemplateId(null);
+                navigate(`/dashboards/${created.id}`);
+            })
+            .catch((e) => showError("Failed to create dashboard", e));
+    };
+
+    const templateButtons = (
+        <Flex gap={{ default: "gapSm" }} justifyContent={{ default: "justifyContentCenter" }}>
+            {DASHBOARD_TEMPLATES.map((t) => (
+                <FlexItem key={t.id}>
+                    <Button variant="secondary" onClick={() => openTemplate(t.id)}
+                            aria-label={`Create from template ${t.name}`}>
+                        {t.name}
+                    </Button>
+                </FlexItem>
+            ))}
+        </Flex>
+    );
 
     const load = useCallback(() => {
         setLoading(true);
@@ -68,7 +111,7 @@ export function DashboardsPage() {
                 setNewLabels([]);
                 navigate(`/dashboards/${created.id}`);
             })
-            .catch(console.error);
+            .catch((e) => showError("Failed to create dashboard", e));
     };
 
     const handleSetDefault = (e: React.MouseEvent, dashboard: Dashboard) => {
@@ -81,7 +124,8 @@ export function DashboardsPage() {
             isDefault: true,
             tabs: dashboard.tabs,
         };
-        updateDashboard(dashboard.id, data).then(load).catch(console.error);
+        updateDashboard(dashboard.id, data).then(load)
+            .catch((e) => showError("Failed to set default dashboard", e));
     };
 
     const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -91,7 +135,8 @@ export function DashboardsPage() {
 
     const confirmDelete = () => {
         if (deleteTarget !== null) {
-            deleteDashboard(deleteTarget).then(load).catch(console.error);
+            deleteDashboard(deleteTarget).then(load)
+                .catch((e) => showError("Failed to delete dashboard", e));
             setDeleteTarget(null);
         }
     };
@@ -105,10 +150,15 @@ export function DashboardsPage() {
 
     return (
         <PageSection>
+            {toasts}
             <Flex justifyContent={{ default: "justifyContentSpaceBetween" }}
                   alignItems={{ default: "alignItemsCenter" }}>
                 <FlexItem><Title headingLevel="h1" size="lg">Dashboards</Title></FlexItem>
                 <FlexItem>
+                    <Button variant="secondary" style={{ marginRight: "8px" }}
+                            onClick={() => openTemplate(DASHBOARD_TEMPLATES[0].id)}>
+                        Create from Template
+                    </Button>
                     <Button variant="primary" icon={<PlusCircleIcon />} onClick={() => {
                         setNewName("");
                         setNewDescription("");
@@ -126,8 +176,10 @@ export function DashboardsPage() {
                 ) : dashboards.length === 0 ? (
                     <EmptyState>
                         <EmptyStateBody>
-                            No dashboards yet. Create your first dashboard to get started.
+                            No dashboards yet. Create your first dashboard to get started, or start
+                            from a template:
                         </EmptyStateBody>
+                        <div style={{ marginTop: "12px" }}>{templateButtons}</div>
                     </EmptyState>
                 ) : (
                     <Table aria-label="Dashboards" variant="compact">
@@ -177,6 +229,7 @@ export function DashboardsPage() {
                                             <FlexItem>
                                                 <Button variant="plain" size="sm"
                                                         style={{ padding: 0 }}
+                                                        aria-label={`Delete dashboard ${d.name}`}
                                                         onClick={(e) => handleDelete(e, d.id)}>
                                                     <TrashIcon />
                                                 </Button>
@@ -227,6 +280,73 @@ export function DashboardsPage() {
                     <Button variant="link" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
                 </ModalFooter>
             </Modal>
+
+            <Modal isOpen={templateId !== null} onClose={() => setTemplateId(null)} variant="small">
+                <ModalHeader title="Create from Template" />
+                <ModalBody>
+                    <Form>
+                        <FormGroup label="Template" fieldId="template" role="radiogroup">
+                            {DASHBOARD_TEMPLATES.map((t) => (
+                                <Radio key={t.id} id={`template-${t.id}`} name="template"
+                                       label={t.name} description={t.description}
+                                       isChecked={templateId === t.id}
+                                       onChange={() => {
+                                           const prev = templateId ? getTemplate(templateId)?.name : undefined;
+                                           setTemplateId(t.id);
+                                           if (!templateName.trim() || templateName === prev) {
+                                               setTemplateName(t.name);
+                                           }
+                                       }} />
+                            ))}
+                        </FormGroup>
+                        <FormGroup label="Name" isRequired fieldId="template-name">
+                            <TextInput id="template-name" isRequired value={templateName}
+                                       onChange={(_e, v) => setTemplateName(v)} />
+                        </FormGroup>
+                        <FormGroup label="Labels" fieldId="template-labels">
+                            <LabelInput labels={templateLabels}
+                                onChange={(labels) => setTemplateLabels(labels)} />
+                        </FormGroup>
+                    </Form>
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="primary" onClick={handleCreateFromTemplate}
+                            isDisabled={!templateName.trim()}>
+                        Create
+                    </Button>
+                    <Button variant="link" onClick={() => setTemplateId(null)}>Cancel</Button>
+                </ModalFooter>
+            </Modal>
+        </PageSection>
+    );
+}
+
+/**
+ * Entry point for `/dashboards`: opens the default dashboard when one exists, otherwise shows the list
+ * (`/dashboards/all`).
+ */
+export function DashboardHomePage() {
+    const [target, setTarget] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchDashboards()
+            .then((all) => {
+                if (cancelled) return;
+                const def = all.find((d) => d.isDefault);
+                setTarget(def ? `/dashboards/${def.id}` : "/dashboards/all");
+            })
+            .catch((e) => {
+                console.error(e);
+                if (!cancelled) setTarget("/dashboards/all");
+            });
+        return () => { cancelled = true; };
+    }, []);
+
+    if (target) return <Navigate to={target} replace />;
+    return (
+        <PageSection>
+            <EmptyState><EmptyStateBody>Loading...</EmptyStateBody></EmptyState>
         </PageSection>
     );
 }

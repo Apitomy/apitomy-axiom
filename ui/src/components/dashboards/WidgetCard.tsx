@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
     Button,
     Card,
@@ -7,13 +7,37 @@ import {
     CardTitle,
     Flex,
     FlexItem,
+    Label,
+    Tooltip,
 } from "@patternfly/react-core";
 import CogIcon from "@patternfly/react-icons/dist/esm/icons/cog-icon";
 import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import { ConfirmDeleteModal } from "../ConfirmDeleteModal";
 import { WidgetConfigModal } from "./WidgetConfigModal";
 import { WidgetErrorBoundary } from "./WidgetErrorBoundary";
-import { getWidget, type WidgetProps } from "./widget-registry";
+import { getWidget, type WidgetProps, type WidgetRegistryEntry } from "./widget-registry";
+import { useWidgetRefresh } from "../../hooks/useWidgetRefresh";
+
+/**
+ * Small indicator telling the user whether the dashboard labels apply to a widget.
+ * Rendered only when the dashboard has labels.
+ */
+export function WidgetScopeIndicator({ entry, labels }: { entry: WidgetRegistryEntry; labels: string[] }) {
+    if (labels.length === 0) return null;
+    const filtered = entry.scope === "subject-labels";
+    const text = filtered ? "Filtered" : "Global";
+    const tip = filtered
+        ? `Filtered by dashboard labels (subject labels): ${labels.join(", ")}`
+        : "Global: this widget ignores the dashboard labels";
+    return (
+        <Tooltip content={tip}>
+            <Label isCompact variant="outline" color={filtered ? "blue" : "grey"}
+                   tabIndex={0} aria-label={tip}>
+                {text}
+            </Label>
+        </Tooltip>
+    );
+}
 
 interface WidgetCardProps {
     widgetType: string;
@@ -30,7 +54,10 @@ interface WidgetCardProps {
 export function WidgetCard({ widgetType, config, labels, isEditing, onConfigChange, onRemove }: WidgetCardProps) {
     const [configOpen, setConfigOpen] = useState(false);
     const [removeOpen, setRemoveOpen] = useState(false);
+    const [refreshToken, setRefreshToken] = useState(0);
     const entry = getWidget(widgetType);
+    const bump = useCallback(() => setRefreshToken((t) => t + 1), []);
+    useWidgetRefresh(entry?.liveEvents, bump);
 
     if (!entry) {
         return (
@@ -52,7 +79,10 @@ export function WidgetCard({ widgetType, config, labels, isEditing, onConfigChan
                           alignItems={{ default: "alignItemsCenter" }}
                           style={{ width: "100%" }}>
                         <FlexItem>
-                            <CardTitle>{entry.name}</CardTitle>
+                            <Flex alignItems={{ default: "alignItemsCenter" }} gap={{ default: "gapSm" }}>
+                                <FlexItem><CardTitle>{entry.name}</CardTitle></FlexItem>
+                                <FlexItem><WidgetScopeIndicator entry={entry} labels={labels} /></FlexItem>
+                            </Flex>
                         </FlexItem>
                         {isEditing && (
                             <FlexItem>
@@ -79,7 +109,8 @@ export function WidgetCard({ widgetType, config, labels, isEditing, onConfigChan
                 <CardBody isFilled>
                     <WidgetErrorBoundary>
                         <WidgetComponent config={config} labels={labels}
-                                         onConfigChange={onConfigChange} />
+                                         onConfigChange={onConfigChange}
+                                         refreshToken={refreshToken} />
                     </WidgetErrorBoundary>
                 </CardBody>
             </Card>

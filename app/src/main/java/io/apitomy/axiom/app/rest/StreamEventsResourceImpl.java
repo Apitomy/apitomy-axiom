@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
+import io.apitomy.axiom.app.EventOperationsService;
 import io.apitomy.axiom.app.EventStreamOrchestrator;
 import io.apitomy.axiom.app.RunRequest;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
@@ -10,7 +11,9 @@ import io.apitomy.axiom.api.beans.EventProcessingEntry;
 import io.apitomy.axiom.api.beans.EventProcessingOutcome;
 import io.apitomy.axiom.api.beans.EventProcessingOutcomeItem;
 import io.apitomy.axiom.api.beans.EventProcessingSearchResults;
+import io.apitomy.axiom.api.beans.EventVolumeBucket;
 import io.apitomy.axiom.api.beans.Payload;
+import io.apitomy.axiom.api.beans.ProcessingFailure;
 import io.apitomy.axiom.api.beans.SourceData;
 import io.apitomy.axiom.api.beans.StreamEvent;
 import io.apitomy.axiom.api.beans.StreamEventProcessingStates;
@@ -36,6 +39,7 @@ import jakarta.ws.rs.WebApplicationException;
 import org.jboss.logging.Logger;
 
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -56,6 +60,9 @@ public class StreamEventsResourceImpl implements StreamResource {
 
     /** Upper bound on the page size, which also bounds the IN list of the ledger count query. */
     static final int MAX_PAGE_SIZE = 500;
+
+    @Inject
+    EventOperationsService eventOperations;
 
     @Inject
     ObjectMapper objectMapper;
@@ -188,6 +195,22 @@ public class StreamEventsResourceImpl implements StreamResource {
             return 0;
         }
         return states.getPending() + states.getCompleted() + states.getFailed() + states.getExhausted();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<EventVolumeBucket> getEventVolumeHistogram(Date since, String bucket, String eventSourceId) {
+        return eventOperations.histogram(since, bucket, eventSourceId, Instant.now());
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<ProcessingFailure> listProcessingFailures(BigInteger limit, Date since) {
+        return eventOperations.failures(limit != null ? limit.intValue() : null, since);
     }
 
     @Override

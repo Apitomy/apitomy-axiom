@@ -1,13 +1,17 @@
 package io.apitomy.axiom.app;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.apitomy.axiom.api.beans.DashboardTab;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActionTypeField;
+import io.apitomy.axiom.core.entities.DashboardEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
@@ -69,6 +73,8 @@ public class ImportExportService {
 
     @Inject
     SubscriptionRoutingResolver routingResolver;
+
+    private static final TypeReference<List<DashboardTab>> DASHBOARD_TAB_LIST = new TypeReference<>() {};
 
     /** Pack array names paired with their item types, in apply order. */
     private static final List<Map.Entry<String, ConfigItemType>> PACK_ARRAYS = List.of(
@@ -161,6 +167,14 @@ public class ImportExportService {
             }
         }
 
+        if (request.getDashboardIds() != null && !request.getDashboardIds().isEmpty()) {
+            ArrayNode arr = pack.putArray("dashboards");
+            for (Number id : request.getDashboardIds()) {
+                DashboardEntity entity = DashboardEntity.findById(id.longValue());
+                if (entity != null) arr.add(serializeDashboard(entity));
+            }
+        }
+
         LOG.infof("Exported configuration pack '%s'", request.getName());
         return pack;
     }
@@ -186,6 +200,7 @@ public class ImportExportService {
         checkConflicts(pack, "eventSources", "id", "eventSource", conflicts);
         checkConflicts(pack, "subscriptions", "name", "subscription", conflicts);
         checkConflicts(pack, "workflowDefinitions", "name", "workflowDefinition", conflicts);
+        checkConflicts(pack, "dashboards", "name", "dashboard", conflicts);
 
         if (!conflicts.isEmpty()) {
             ObjectNode error = objectMapper.createObjectNode();
@@ -208,15 +223,16 @@ public class ImportExportService {
         int workflowDefinitions = importWorkflowDefinitions(pack.path("workflowDefinitions"));
         int eventSources = importEventSources(pack.path("eventSources"));
         int subscriptions = importSubscriptions(pack.path("subscriptions"));
+        int dashboards = upsertDashboards(pack.path("dashboards"))[0];
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Imported configuration pack '%s': %d tools, %d toolsets, %d MCP servers, "
                         + "%d action types, %d session templates, "
                         + "%d event sources, %d subscriptions, "
-                        + "%d workflow definitions",
+                        + "%d workflow definitions, %d dashboards",
                 packName, tools, toolsets, mcpServers, actionTypes,
                 sessionTemplates, eventSources, subscriptions,
-                workflowDefinitions);
+                workflowDefinitions, dashboards);
 
         ImportResult result = new ImportResult();
         result.setTools(tools);
@@ -227,6 +243,7 @@ public class ImportExportService {
         result.setEventSources(eventSources);
         result.setSubscriptions(subscriptions);
         result.setWorkflowDefinitions(workflowDefinitions);
+        result.setDashboards(dashboards);
         return result;
     }
 
@@ -240,7 +257,8 @@ public class ImportExportService {
             int sessionTemplatesCreated, int sessionTemplatesUpdated,
             int eventSourcesCreated, int eventSourcesUpdated,
             int subscriptionsCreated, int subscriptionsUpdated,
-            int workflowDefinitionsCreated, int workflowDefinitionsUpdated
+            int workflowDefinitionsCreated, int workflowDefinitionsUpdated,
+            int dashboardsCreated, int dashboardsUpdated
     ) {}
 
     /**
@@ -266,6 +284,7 @@ public class ImportExportService {
         int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
         int[] eventSources = upsertEventSources(pack.path("eventSources"));
         int[] subscriptions = upsertSubscriptions(pack.path("subscriptions"));
+        int[] dashboards = upsertDashboards(pack.path("dashboards"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
@@ -274,7 +293,8 @@ public class ImportExportService {
                         + "%d session templates created, %d updated; "
                         + "%d event sources created, %d updated; "
                         + "%d subscriptions created, %d updated; "
-                        + "%d workflow definitions created, %d updated",
+                        + "%d workflow definitions created, %d updated; "
+                        + "%d dashboards created, %d updated",
                 packName,
                 tools[0], tools[1],
                 actionTypes[0], actionTypes[1],
@@ -282,7 +302,8 @@ public class ImportExportService {
                 sessionTemplates[0], sessionTemplates[1],
                 eventSources[0], eventSources[1],
                 subscriptions[0], subscriptions[1],
-                workflowDefs[0], workflowDefs[1]);
+                workflowDefs[0], workflowDefs[1],
+                dashboards[0], dashboards[1]);
 
         return new UpsertResult(
                 tools[0], tools[1],
@@ -291,7 +312,8 @@ public class ImportExportService {
                 sessionTemplates[0], sessionTemplates[1],
                 eventSources[0], eventSources[1],
                 subscriptions[0], subscriptions[1],
-                workflowDefs[0], workflowDefs[1]
+                workflowDefs[0], workflowDefs[1],
+                dashboards[0], dashboards[1]
         );
     }
 
@@ -318,6 +340,19 @@ public class ImportExportService {
                     String key = type.jsonName() + "/" + itemName(item);
                     problemsByItem.computeIfAbsent(key, k -> new ArrayList<>()).addAll(errors);
                 }
+            }
+        }
+        Set<String> dashboardNames = new HashSet<>();
+        for (JsonNode item : pack.path("dashboards")) {
+            List<ConfigProblem> errors = new ArrayList<>(validateDashboard(item));
+            String trimmedName = item.path("name").asText("").trim();
+            if (!trimmedName.isEmpty() && !dashboardNames.add(trimmedName)) {
+                errors.add(ConfigProblem.error("name", "duplicate-dashboard-name",
+                        "Duplicate dashboard name in pack: '" + trimmedName + "'"));
+            }
+            if (!errors.isEmpty()) {
+                problemsByItem.computeIfAbsent("dashboard/" + itemName(item).trim(), k -> new ArrayList<>())
+                        .addAll(errors);
             }
         }
         if (!problemsByItem.isEmpty()) {
@@ -428,6 +463,10 @@ public class ImportExportService {
         for (JsonNode item : items) {
             String name = item.path(nameField).asText(null);
             if (name == null) continue;
+            // Dashboards are upserted by trimmed name, so conflicts must be checked the same way.
+            if ("dashboard".equals(type)) {
+                name = name.trim();
+            }
             boolean exists = switch (type) {
                 case "tool" -> ToolDefinitionEntity.count("name", name) > 0;
                 case "toolset" -> ToolsetEntity.count("name", name) > 0;
@@ -437,6 +476,7 @@ public class ImportExportService {
                 case "eventSource" -> EventSourceEntity.findById(name) != null;
                 case "subscription" -> EventSubscriptionEntity.count("name", name) > 0;
                 case "workflowDefinition" -> WorkflowDefinitionEntity.count("name", name) > 0;
+                case "dashboard" -> DashboardEntity.count("name", name) > 0;
                 default -> false;
             };
             if (exists) {
@@ -1008,6 +1048,95 @@ public class ImportExportService {
             }
         }
         return n;
+    }
+
+    /**
+     * Serializes a dashboard for a pack: name, description, isDefault, labels and tabs (as a JSON array).
+     * Malformed stored tabs are exported as an empty array.
+     */
+    private ObjectNode serializeDashboard(DashboardEntity e) {
+        ObjectNode n = objectMapper.createObjectNode();
+        n.put("name", e.name);
+        putIfNotNull(n, "description", e.description);
+        n.put("isDefault", e.isDefault);
+        ArrayNode labels = n.putArray("labels");
+        e.labels.forEach(labels::add);
+        JsonNode tabs = null;
+        if (e.tabs != null && !e.tabs.isBlank()) {
+            try {
+                tabs = objectMapper.readTree(e.tabs);
+            } catch (JsonProcessingException ex) {
+                LOG.warnf("Exporting dashboard '%s' with empty tabs: stored tabs are malformed", e.name);
+            }
+        }
+        n.set("tabs", tabs != null && tabs.isArray() ? tabs : objectMapper.createArrayNode());
+        return n;
+    }
+
+    /** Validates a pack dashboard item: name, and tabs/widgets structure via {@link DashboardValidator}. */
+    private List<ConfigProblem> validateDashboard(JsonNode item) {
+        List<DashboardTab> tabs;
+        try {
+            tabs = parseDashboardTabs(item);
+        } catch (IllegalArgumentException ex) {
+            return List.of(ConfigProblem.error("tabs", "invalid-dashboard-tabs",
+                    "Dashboard tabs are malformed: " + ex.getMessage()));
+        }
+        String name = item.path("name").isTextual() ? item.path("name").asText() : null;
+        return DashboardValidator.validate(name, tabs).stream()
+                .map(message -> ConfigProblem.error("", "invalid-dashboard", message))
+                .toList();
+    }
+
+    private List<DashboardTab> parseDashboardTabs(JsonNode item) {
+        JsonNode tabs = item.path("tabs");
+        if (tabs.isMissingNode() || tabs.isNull()) {
+            return List.of();
+        }
+        if (!tabs.isArray()) {
+            throw new IllegalArgumentException("tabs must be an array");
+        }
+        return objectMapper.convertValue(tabs, DASHBOARD_TAB_LIST);
+    }
+
+    /**
+     * Creates or updates (by name) the dashboards of a pack. An imported dashboard only becomes the default
+     * when no other dashboard is currently the default.
+     *
+     * @return {created, updated}
+     */
+    private int[] upsertDashboards(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            String name = item.path("name").asText().trim();
+            DashboardEntity entity = DashboardEntity.find("name", name).firstResult();
+            boolean isNew = (entity == null);
+            if (isNew) {
+                entity = new DashboardEntity();
+                entity.name = name;
+                entity.createdOn = Instant.now();
+            }
+            entity.description = textOrNull(item, "description");
+            try {
+                entity.tabs = objectMapper.writeValueAsString(parseDashboardTabs(item));
+            } catch (JsonProcessingException ex) {
+                throw badImport("Failed to serialize tabs of dashboard '" + name + "'");
+            }
+            entity.labels.clear();
+            for (JsonNode label : item.path("labels")) {
+                entity.labels.add(label.asText());
+            }
+            boolean wantsDefault = item.path("isDefault").asBoolean(false);
+            long otherDefaults = isNew
+                    ? DashboardEntity.count("isDefault = true")
+                    : DashboardEntity.count("isDefault = true and id != ?1", entity.id);
+            entity.isDefault = wantsDefault && otherDefaults == 0;
+            entity.updatedOn = Instant.now();
+            entity.persist();
+            if (isNew) created++; else updated++;
+        }
+        return new int[]{created, updated};
     }
 
     private int importWorkflowDefinitions(JsonNode items) {

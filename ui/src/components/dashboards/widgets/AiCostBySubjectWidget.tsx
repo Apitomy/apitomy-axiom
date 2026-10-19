@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { ChartBar, ChartGroup, ChartVoronoiContainer, Chart, ChartAxis } from "@patternfly/react-charts/victory";
-import { fetchSubjects, fetchUsage } from "../../../config/api";
+import { fetchAiUsageSummary } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
+import { ExcludedUnscopedNote } from "./ExcludedUnscopedNote";
 
 const TIME_WINDOWS: Record<string, number> = {
     "24h": 1, "7d": 7, "30d": 30, "90d": 90,
@@ -13,8 +14,9 @@ interface SubjectCost {
     cost: number;
 }
 
-function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
+function AiCostBySubjectWidget({ config, labels, refreshToken }: WidgetProps) {
     const [data, setData] = useState<SubjectCost[]>([]);
+    const [excluded, setExcluded] = useState<number | undefined>(undefined);
     const [error, setError] = useState(false);
     const timeWindow = String(config.timeWindow || "7d");
     const maxSubjects = Number(config.maxSubjects) || 5;
@@ -22,25 +24,19 @@ function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
     useEffect(() => {
         let cancelled = false;
         const days = TIME_WINDOWS[timeWindow] || 7;
-        const from = new Date(Date.now() - days * 86400000).toISOString();
-        const labelsParam = labels.length > 0 ? labels.join(",") : undefined;
-
-        fetchSubjects(1, 50, undefined, undefined, labelsParam)
-            .then(async (result) => {
-                const usagePromises = result.items.map(p =>
-                    fetchUsage(1, 1, undefined, p.id, undefined, undefined, from)
-                        .then(usage => ({ name: p.name, cost: usage.totalCostUsd }))
-                        .catch(() => ({ name: p.name, cost: 0 }))
-                );
-                const costs = (await Promise.all(usagePromises))
-                    .filter(c => c.cost > 0)
-                    .sort((a, b) => b.cost - a.cost)
-                    .slice(0, maxSubjects);
-                if (!cancelled) setData(costs);
+        const since = new Date(Date.now() - days * 86400000).toISOString();
+        fetchAiUsageSummary("subject", { since, labels, limit: maxSubjects })
+            .then(summary => {
+                if (cancelled) return;
+                setData(summary.rows
+                    .filter(r => r.costUsd > 0)
+                    .map(r => ({ name: r.label, cost: r.costUsd })));
+                setExcluded(summary.excludedUnscopedCostUsd);
+                setError(false);
             })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [labels, timeWindow, maxSubjects]);
+    }, [labels, timeWindow, maxSubjects, refreshToken]);
 
     if (error) return <WidgetError />;
 
@@ -52,6 +48,7 @@ function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
 
     return (
         <div style={{ height: "100%", minHeight: "150px" }}>
+            <ExcludedUnscopedNote amount={excluded} />
             <Chart
                 containerComponent={<ChartVoronoiContainer labels={({ datum }: { datum: { label: string } }) => datum.label} />}
                 domainPadding={{ x: [30, 30] }}
@@ -71,8 +68,9 @@ function AiCostBySubjectWidget({ config, labels }: WidgetProps) {
 registerWidget({
     type: "ai-cost-by-subject",
     name: "AI Cost by Subject",
-    description: "Top subjects ranked by AI cost shown as a bar chart.",
+    description: "Top subjects ranked by AI cost in the selected time window, shown as a bar chart.",
     category: "AI & Cost",
+    scope: "subject-labels",
     defaultSize: { w: 4, h: 3 },
     minSize: { w: 3, h: 3 },
     configSchema: [

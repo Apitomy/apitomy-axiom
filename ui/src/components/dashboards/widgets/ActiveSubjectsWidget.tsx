@@ -9,7 +9,7 @@ import { type Subject, fetchSubjects } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
 
-function ActiveSubjectsWidget({ config, labels }: WidgetProps) {
+function ActiveSubjectsWidget({ config, labels, refreshToken }: WidgetProps) {
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [error, setError] = useState(false);
@@ -22,7 +22,7 @@ function ActiveSubjectsWidget({ config, labels }: WidgetProps) {
             .then(result => { if (!cancelled) setSubjects(result.items); })
             .catch(() => { if (!cancelled) setError(true); });
         return () => { cancelled = true; };
-    }, [labels, maxRows]);
+    }, [labels, maxRows, refreshToken]);
 
     if (error) return <WidgetError />;
 
@@ -57,6 +57,8 @@ registerWidget({
     name: "Active Subjects",
     description: "Compact table of active subjects (with a running or waiting workflow run) and their issue reference.",
     category: "Subjects",
+    scope: "subject-labels",
+    liveEvents: ["subject-updated"],
     defaultSize: { w: 6, h: 3 },
     minSize: { w: 4, h: 2 },
     configSchema: [

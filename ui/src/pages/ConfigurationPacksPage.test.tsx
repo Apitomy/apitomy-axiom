@@ -13,6 +13,7 @@ vi.mock("../config/api", () => ({
     fetchEventSources: vi.fn().mockResolvedValue({ items: [], totalCount: 0, page: 1, limit: 100 }),
     fetchSubscriptions: vi.fn().mockResolvedValue({ items: [], totalCount: 0, page: 1, limit: 100 }),
     fetchWorkflowDefinitions: vi.fn().mockResolvedValue({ items: [], totalCount: 0, page: 1, limit: 100 }),
+    fetchDashboards: vi.fn().mockResolvedValue([]),
     exportPack: vi.fn(),
     importPack: vi.fn().mockRejectedValue({
         status: 400,

@@ -35,7 +35,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Overall status is the worst of the individual checks (database, eventSources, engines, scheduler)."
       }
     },
     "/system/config": {
@@ -3421,6 +3422,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid dashboard (blank name or malformed tabs/widgets)"
           }
         }
       }
@@ -3477,6 +3481,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "400": {
+            "description": "Invalid dashboard (blank name or malformed tabs/widgets)"
           }
         }
       },
@@ -4299,6 +4306,31 @@
         }
       }
     },
+    "/event-sources/health": {
+      "get": {
+        "tags": [
+          "EventSources"
+        ],
+        "summary": "Health of every event source",
+        "description": "Health of every event source derived from its poll logs, ordered by name. state is disabled when the source is disabled, never-polled when no poll was recorded, failing when the latest failed poll is more recent than the latest successful poll, baseline when the latest successful poll only established the baseline, healthy otherwise. Note: an event source with the id 'health' cannot be fetched via /event-sources/{eventSourceId}.",
+        "operationId": "listEventSourceHealth",
+        "responses": {
+          "200": {
+            "description": "Event source health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventSourceHealth"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/event-sources/{eventSourceId}": {
       "get": {
         "tags": [
@@ -4549,6 +4581,66 @@
         }
       }
     },
+    "/stream/events/histogram": {
+      "get": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "Event volume histogram",
+        "description": "Number of ingested stream events (by ingestion time) per UTC hour or day from since until now, including zero-count buckets, ordered ascending. At most 400 buckets; a larger range is rejected with 400.",
+        "operationId": "getEventVolumeHistogram",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO-8601 date-time; start of the histogram (default: 24 hours ago)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "bucket",
+            "in": "query",
+            "description": "Bucket size",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "hour",
+                "day"
+              ],
+              "default": "hour"
+            }
+          },
+          {
+            "name": "eventSourceId",
+            "in": "query",
+            "description": "Only count events from this event source",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event volume buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventVolumeBucket"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid bucket or more than 400 buckets requested"
+          }
+        }
+      }
+    },
     "/stream/events/{eventId}": {
       "get": {
         "tags": [
@@ -4671,6 +4763,53 @@
         }
       ]
     },
+    "/stream/processing/failures": {
+      "get": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "Recent processing failures",
+        "description": "Processing ledger entries with status failed, exhausted or filter_error, newest first (by updatedAt). Retry with POST /stream/events/{eventId}/processing/{ledgerId}/retry.",
+        "operationId": "listProcessingFailures",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of failures to return",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO-8601 date-time; only failures updated at or after this time",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Processing failures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProcessingFailure"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/subscriptions": {
       "get": {
         "tags": [
@@ -4774,6 +4913,42 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubscriptionPreviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/subscriptions/summary": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Processing counts per subscription",
+        "description": "Processing ledger counts per status for every subscription (ordered by name), for ledger entries created at or after since, plus the most recent error in that window.",
+        "operationId": "getSubscriptionProcessingSummary",
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO-8601 date-time; only count ledger entries created at or after this time (default: 24 hours ago)",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription processing summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubscriptionProcessingSummary"
+                  }
                 }
               }
             }
@@ -6527,6 +6702,212 @@
           }
         }
       ]
+    },
+    "/workflow/runs/summary": {
+      "get": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Workflow run counts per status and recent failures",
+        "description": "Counts of workflow runs per status plus the most recent failed runs. Running and waiting counts are always current; the since filter applies to completed, failed and cancelled counts (by completion time) and to recentFailed.",
+        "operationId": "getWorkflowRunStatusSummary",
+        "parameters": [
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of subject labels to filter by (AND logic)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO-8601 date-time (e.g. 2026-01-15T00:00:00Z); only count terminal runs (completed, failed, cancelled) that finished at or after this time",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "failedLimit",
+            "in": "query",
+            "description": "Maximum number of recent failed runs to return",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow run status summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunStatusSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/runs/waiting": {
+      "get": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "List what waiting workflow runs are waiting for",
+        "description": "One entry per wait point of a waiting run (wait node, receive-event node or human task), longest waiting first.",
+        "operationId": "listWaitingWorkflowRuns",
+        "parameters": [
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of subject labels to filter by (AND logic)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of entries to return",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Waiting workflow runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WaitingWorkflowRun"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/schedules": {
+      "get": {
+        "tags": [
+          "WorkflowDefinitions"
+        ],
+        "summary": "List schedule triggers across all workflow definitions",
+        "description": "Ordered by next fire time ascending; disabled triggers last.",
+        "operationId": "listWorkflowSchedules",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of schedules to return",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "minimum": 1,
+              "maximum": 500
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule triggers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowScheduleSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/ai/summary": {
+      "get": {
+        "tags": [
+          "Usage"
+        ],
+        "summary": "Summarize AI usage cost grouped by a dimension",
+        "description": "Aggregates AI usage cost, tokens and invocation counts grouped by subject, workflow definition, engine, model or action type. Rows are ordered by cost descending.",
+        "operationId": "getAiUsageSummary",
+        "parameters": [
+          {
+            "name": "groupBy",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "subject",
+                "workflow",
+                "engine",
+                "model",
+                "actionType"
+              ]
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO-8601 date-time; only include usage recorded at or after this time",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "filterLabels",
+            "in": "query",
+            "description": "Comma-separated list of subject labels to filter by (AND logic). Usage without a subject is excluded and reported in excludedUnscopedCostUsd.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of rows",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI usage summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiUsageSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid groupBy or since"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6949,9 +7330,11 @@
           "status": {
             "enum": [
               "UP",
+              "DEGRADED",
               "DOWN"
             ],
-            "type": "string"
+            "type": "string",
+            "description": "Overall status: the worst status among checks"
           },
           "version": {
             "type": "string"
@@ -6959,6 +7342,12 @@
           "timestamp": {
             "format": "date-time",
             "type": "string"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheck"
+            }
           }
         }
       },
@@ -7775,6 +8164,16 @@
           "createdOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "workflowRunId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Workflow run whose task produced this usage (null when not part of a workflow run)"
+          },
+          "workflowDefinitionId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Workflow definition of the run that produced this usage (null when not part of a workflow run)"
           }
         }
       },
@@ -8318,6 +8717,14 @@
               "format": "int64",
               "type": "integer"
             }
+          },
+          "dashboardIds": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Dashboard IDs to include"
           }
         }
       },
@@ -8346,6 +8753,9 @@
             "type": "integer"
           },
           "workflowDefinitions": {
+            "type": "integer"
+          },
+          "dashboards": {
             "type": "integer"
           }
         }
@@ -10439,18 +10849,27 @@
           },
           "lastPolledAt": {
             "format": "date-time",
-            "type": "string"
+            "type": "string",
+            "description": "When the source was last polled"
           },
           "totalEventsProduced": {
             "format": "int64",
-            "type": "integer"
+            "type": "integer",
+            "description": "Number of events from this source currently retained in the event stream (events removed by retention are not counted)"
+          },
+          "lastSuccessAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the latest successful poll"
           },
           "lastError": {
-            "type": "string"
+            "type": "string",
+            "description": "Message of the latest failed poll; only present when that failure is more recent than the latest successful poll"
           },
           "lastErrorAt": {
             "format": "date-time",
-            "type": "string"
+            "type": "string",
+            "description": "Time of the latest failed poll (present even when a later poll succeeded)"
           }
         }
       },
@@ -10619,7 +11038,14 @@
             "description": "Pairs whose subscription filter failed to evaluate (not counted in matchedSubscriptions)"
           }
         },
-        "required": ["pending", "completed", "failed", "exhausted", "skipped", "filterError"]
+        "required": [
+          "pending",
+          "completed",
+          "failed",
+          "exhausted",
+          "skipped",
+          "filterError"
+        ]
       },
       "StreamEventSearchResults": {
         "type": "object",
@@ -11787,6 +12213,506 @@
             "type": "string",
             "maxLength": 500,
             "description": "The new title; absent or blank clears it"
+          }
+        }
+      },
+      "WorkflowRunStatusCounts": {
+        "type": "object",
+        "required": [
+          "running",
+          "waiting",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "properties": {
+          "running": {
+            "type": "integer"
+          },
+          "waiting": {
+            "type": "integer"
+          },
+          "completed": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "cancelled": {
+            "type": "integer"
+          }
+        }
+      },
+      "WorkflowRunStatusSummary": {
+        "type": "object",
+        "required": [
+          "counts",
+          "recentFailed"
+        ],
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/WorkflowRunStatusCounts"
+          },
+          "recentFailed": {
+            "type": "array",
+            "description": "Most recent failed runs, newest first",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowRunSummary"
+            }
+          }
+        }
+      },
+      "WaitingWorkflowRun": {
+        "type": "object",
+        "required": [
+          "runId",
+          "workflowDefinitionId",
+          "workflowName",
+          "nodeId",
+          "waitKind",
+          "waitingSince"
+        ],
+        "properties": {
+          "runId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "runTitle": {
+            "type": "string"
+          },
+          "workflowDefinitionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workflowName": {
+            "type": "string"
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "waitKind": {
+            "type": "string",
+            "enum": [
+              "wait",
+              "receive-event",
+              "human-task"
+            ]
+          },
+          "waitingSince": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the run started waiting at this node"
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the wait resumes (wait) or times out (receive-event)"
+          },
+          "eventType": {
+            "type": "string",
+            "description": "Awaited event type (receive-event)"
+          },
+          "correlationKey": {
+            "type": "string",
+            "description": "Correlation key of the awaited event (receive-event)"
+          },
+          "taskId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Human task awaiting input (human-task)"
+          }
+        }
+      },
+      "WorkflowScheduleSummary": {
+        "type": "object",
+        "required": [
+          "triggerId",
+          "workflowDefinitionId",
+          "workflowName",
+          "cron",
+          "enabled"
+        ],
+        "properties": {
+          "triggerId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workflowDefinitionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "workflowName": {
+            "type": "string"
+          },
+          "cron": {
+            "type": "string",
+            "description": "Unix (5-field) cron expression, evaluated in UTC"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "subjectId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Fixed subject the trigger attaches runs to; absent until the first firing creates it"
+          },
+          "subjectName": {
+            "type": "string"
+          },
+          "nextFireAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastFiredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastOutcome": {
+            "type": "string",
+            "enum": [
+              "started",
+              "skipped-duplicate",
+              "failed"
+            ]
+          },
+          "lastRunId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Most recent run started by this trigger, when it can be identified"
+          }
+        }
+      },
+      "HealthCheck": {
+        "type": "object",
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "UP",
+              "DEGRADED",
+              "DOWN"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "EventSourceHealth": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "Event source type (e.g. github, jira)"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "healthy",
+              "failing",
+              "baseline",
+              "disabled",
+              "never-polled"
+            ]
+          },
+          "lastAttemptAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the latest poll attempt"
+          },
+          "lastSuccessAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the latest successful poll"
+          },
+          "lastErrorAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the latest failed poll"
+          },
+          "lastError": {
+            "type": "string",
+            "description": "Message of the latest failed poll; only present when it is more recent than the latest successful poll"
+          },
+          "consecutiveFailures": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Failed polls since the latest successful poll"
+          },
+          "eventsLast24h": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Events ingested from this source in the last 24 hours"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "enabled",
+          "state",
+          "consecutiveFailures",
+          "eventsLast24h"
+        ]
+      },
+      "SubscriptionProcessingCounts": {
+        "type": "object",
+        "properties": {
+          "pending": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Entries with an attempt in progress"
+          },
+          "completed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Entries whose routing succeeded"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Entries whose last attempt failed and that will be retried"
+          },
+          "exhausted": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Entries that failed with no retries left"
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Entries whose filter did not match"
+          },
+          "filterError": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Entries whose filter could not be evaluated"
+          }
+        },
+        "required": [
+          "pending",
+          "completed",
+          "failed",
+          "exhausted",
+          "skipped",
+          "filterError"
+        ]
+      },
+      "SubscriptionProcessingSummary": {
+        "type": "object",
+        "properties": {
+          "subscriptionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/SubscriptionProcessingCounts"
+          },
+          "lastErrorAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the most recent failed, exhausted or filter_error entry in the window was last updated"
+          },
+          "lastError": {
+            "type": "string",
+            "description": "Error message of that entry"
+          }
+        },
+        "required": [
+          "subscriptionId",
+          "name",
+          "enabled",
+          "counts"
+        ]
+      },
+      "ProcessingFailure": {
+        "type": "object",
+        "properties": {
+          "ledgerId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "subscriptionId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "subscriptionName": {
+            "type": "string",
+            "description": "Absent if the subscription no longer exists"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "failed",
+              "exhausted",
+              "filter_error"
+            ]
+          },
+          "errorMessage": {
+            "type": "string"
+          },
+          "attemptCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "nextAttemptAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When a failed entry is due for its next retry"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the entry last changed: when its last attempt finished, else when it started, else when the entry was created"
+          }
+        },
+        "required": [
+          "ledgerId",
+          "eventId",
+          "eventType",
+          "subscriptionId",
+          "status",
+          "attemptCount",
+          "updatedAt"
+        ]
+      },
+      "EventVolumeBucket": {
+        "type": "object",
+        "properties": {
+          "bucketStart": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the bucket (UTC)"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Events ingested in the bucket"
+          }
+        },
+        "required": [
+          "bucketStart",
+          "count"
+        ]
+      },
+      "AiUsageSummaryRow": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "costUsd",
+          "inputTokens",
+          "outputTokens",
+          "invocations"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Group key (subject id, workflow definition id, engine, model or action type); empty string when the value is not set"
+          },
+          "label": {
+            "type": "string",
+            "description": "Display label for the group; \"(none)\" when the key is empty"
+          },
+          "costUsd": {
+            "type": "number",
+            "format": "double"
+          },
+          "inputTokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "outputTokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invocations": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of AI usage records in the group"
+          }
+        }
+      },
+      "AiUsageSummary": {
+        "type": "object",
+        "required": [
+          "groupBy",
+          "rows",
+          "totalCostUsd"
+        ],
+        "properties": {
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "subject",
+              "workflow",
+              "engine",
+              "model",
+              "actionType"
+            ]
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiUsageSummaryRow"
+            },
+            "description": "Top groups ordered by cost descending"
+          },
+          "totalCostUsd": {
+            "type": "number",
+            "format": "double",
+            "description": "Total cost across all matching records (not only the returned rows)"
+          },
+          "excludedUnscopedCostUsd": {
+            "type": "number",
+            "format": "double",
+            "description": "Only set when filterLabels is given: cost of records in the window that have no subject and were therefore excluded"
           }
         }
       }

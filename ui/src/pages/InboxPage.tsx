@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
     Alert,
+    AlertActionCloseButton,
     Button,
     Content,
     EmptyState,
@@ -83,7 +84,43 @@ export function InboxPage() {
             .catch(console.error);
     };
 
+    // Deep link: /inbox?task=<id> opens that task. Unknown or completed ids show a notice instead.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const deepLinkTask = searchParams.get("task");
+    const [deepLinkError, setDeepLinkError] = useState<string | null>(null);
+    useEffect(() => {
+        if (!deepLinkTask) return;
+        const id = Number(deepLinkTask);
+        if (!Number.isInteger(id) || id <= 0) {
+            setDeepLinkError(`Task "${deepLinkTask}" was not found.`);
+            return;
+        }
+        let cancelled = false;
+        fetchInboxItem(id)
+            .then((detail) => {
+                if (cancelled) return;
+                setDeepLinkError(null);
+                setSelectedItem(detail);
+                setFormValues(buildDefaultValues(detail));
+                setFormErrors({});
+                setSubmitError(null);
+            })
+            .catch(() => {
+                if (!cancelled) setDeepLinkError(`Task #${id} was not found or no longer needs input.`);
+            });
+        return () => { cancelled = true; };
+    }, [deepLinkTask]);
+
+    const clearDeepLink = () => {
+        if (searchParams.has("task")) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("task");
+            setSearchParams(next, { replace: true });
+        }
+    };
+
     const closeDetail = () => {
+        clearDeepLink();
         setSelectedItem(null);
         setFormValues({});
         setFormErrors({});
@@ -140,6 +177,12 @@ export function InboxPage() {
             <Title headingLevel="h1" size="lg" style={{ marginBottom: "16px" }}>
                 Inbox
             </Title>
+
+            {deepLinkError && (
+                <Alert variant="warning" isInline title={deepLinkError} style={{ marginBottom: "16px" }}
+                       actionClose={<AlertActionCloseButton
+                           onClose={() => { setDeepLinkError(null); clearDeepLink(); }} />} />
+            )}
 
             <Toolbar>
                 <ToolbarContent>

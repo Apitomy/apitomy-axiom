@@ -322,6 +322,18 @@ public class WorkflowRunBeanMapper {
         return results;
     }
 
+    /**
+     * Maps run entities to list summaries, batch-resolving subject and definition names.
+     *
+     * @param runs the runs
+     * @return the summaries, in the same order
+     */
+    public List<WorkflowRunSummary> toSummaries(List<WorkflowRunEntity> runs) {
+        Map<Long, String> subjectNames = resolveSubjectNames(runs);
+        Map<Long, String> definitionNames = resolveDefinitionNames(runs);
+        return runs.stream().map(r -> toSummary(r, subjectNames, definitionNames)).toList();
+    }
+
     private Map<Long, String> resolveSubjectNames(List<WorkflowRunEntity> runs) {
         Set<Long> ids = runs.stream().map(r -> r.subjectId).collect(Collectors.toSet());
         if (ids.isEmpty()) {

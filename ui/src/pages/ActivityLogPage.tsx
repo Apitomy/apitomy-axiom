@@ -22,17 +22,7 @@ import {
 } from "@apitomy/common-ui-components";
 import { type ActivityLogEntry, fetchActivityLog } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
-
-const ENTRY_TYPE_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
-    "event-received": "blue",
-    "task-created": "green",
-    "task-started": "green",
-    "task-completed": "green",
-    "task-failed": "red",
-    "subject-created": "blue",
-    "pipeline-error": "red",
-    "task-awaiting-input": "orange",
-};
+import { activityTypePresentation } from "../config/activityTypes";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "eventId", label: "Event ID", testId: "activity-filter-eventId" },
@@ -232,7 +222,8 @@ export function ActivityLogPage() {
                                     <Td>
                                         <Label
                                             isCompact
-                                            color={ENTRY_TYPE_COLORS[entry.entryType] || "grey"}
+                                            color={activityTypePresentation(entry.entryType).color}
+                                            title={entry.entryType}
                                             style={{ cursor: "pointer" }}
                                             onClick={() => {
                                                 const entryTypeType = FILTER_TYPES.find((t) => t.value === "entryType")!;
@@ -243,7 +234,7 @@ export function ActivityLogPage() {
                                                     setPage(1);
                                                 }
                                             }}>
-                                            {entry.entryType}
+                                            {activityTypePresentation(entry.entryType).label}
                                         </Label>
                                     </Td>
                                     <Td>

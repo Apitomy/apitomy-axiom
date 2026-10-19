@@ -486,6 +486,7 @@ include any combination of:
 - Event Sources
 - Subscriptions
 - Workflow definitions
+- Dashboards
 
 This is useful for sharing configurations between Axiom instances, backing up configuration, or
 distributing pre-built setups. A configuration pack is not a full instance backup — see
@@ -510,35 +511,41 @@ For full details, see the [AI Assistant](ai-assistant.md) guide.
 
 ## Dashboards
 
-Dashboards provide a customizable at-a-glance view of your Axiom instance. You can create multiple
-dashboards, each with a different set of **widgets** arranged on a drag-and-drop grid.
+Dashboards give you an at-a-glance view of your Axiom instance. You can create several dashboards, each with
+tabs of **widgets** arranged on a drag-and-drop grid, either from scratch or from a **template**
+(Operations, Event Operations or AI Usage).
 
 ### Widgets
 
-Axiom ships with a catalog of built-in widgets organized by category:
+Widgets are grouped by category:
 
 | Category | Widgets |
 |----------|---------|
+| **Runs** | Runs by Status, Recent Failed Runs, Waiting Runs, Upcoming Schedules, Workflows, Recent Activity |
+| **Inbox** | Tasks Awaiting Input |
+| **Events** | Event Source Health, Subscription Processing, Processing Failures, Event Volume, Recent Events |
+| **AI & Cost** | AI Cost Summary, AI Usage Breakdown, AI Cost by Subject |
+| **System** | Application Health, Disk Usage Breakdown, Action Types |
 | **Subjects** | Active Subjects, Subject Spotlight |
-| **Operations** | Recent Activity, Inbox, Recent Events |
-| **AI & Cost** | AI Cost Summary, AI Cost by Subject |
-| **System** | System Status, Action Types, Disk Usage Breakdown |
 
-Each widget is self-contained — it fetches its own data and renders independently. Many widgets support
-per-widget configuration (e.g. time window, maximum rows, or which subject to spotlight).
+Each widget loads its own data and has its own settings (for example a time window or a maximum number of
+rows). Most widgets refresh by themselves, either when Axiom reports a relevant change or on a timer.
 
 ### Dashboard Labels and Filtering
 
-Dashboards support labels for organization. When a dashboard has labels, those labels are passed to all
-its widgets as **data filters**. Widgets use these labels to scope their data — for example, a dashboard
-labeled `"team-a"` would show only subjects, events, and activity associated with that label.
+Dashboard labels are **subject labels**. When a dashboard has labels, widgets that show subject-related data
+(runs, tasks, activity, subjects and AI usage) only include subjects that have those labels. Widgets for data
+that does not belong to a subject, such as event sources, subscriptions, schedules and system health, are
+**global** and ignore the labels. Each widget shows a **Filtered** or **Global** badge when the dashboard has
+labels.
 
 ### Default Dashboard
 
-One dashboard can be designated as the **default**. The default dashboard is displayed when you navigate
-to the Dashboards page. If no default is set, the dashboards list is shown instead.
+One dashboard can be the **default**. **Dashboards** in the sidebar opens the default dashboard, or the
+dashboards list when there is no default.
 
-For details on the dashboard UI, see [Navigating the UI](navigating-the-ui.md#dashboards).
+Dashboards can be included in [configuration packs](#configuration-packs). For every widget and its
+settings, see [Dashboards](dashboards.md).
 
 ---
 

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Gallery, GalleryItem } from "@patternfly/react-core";
-import { fetchUsage } from "../../../config/api";
+import { fetchAiUsageSummary, fetchUsage } from "../../../config/api";
 import { registerWidget, type WidgetProps } from "../widget-registry";
 import { WidgetError } from "../WidgetError";
+import { ExcludedUnscopedNote } from "./ExcludedUnscopedNote";
 
 const TIME_WINDOWS: Record<string, number> = {
     "24h": 1, "7d": 7, "30d": 30, "90d": 90,
@@ -13,6 +14,7 @@ function AiCostSummaryWidget({ config, labels }: WidgetProps) {
     const [totalInput, setTotalInput] = useState(0);
     const [totalOutput, setTotalOutput] = useState(0);
     const [invocations, setInvocations] = useState(0);
+    const [excluded, setExcluded] = useState<number | undefined>(undefined);
     const [error, setError] = useState(false);
 
     const timeWindow = String(config.timeWindow || "7d");
@@ -31,6 +33,14 @@ function AiCostSummaryWidget({ config, labels }: WidgetProps) {
                 setInvocations(result.totalCount);
             })
             .catch(() => { if (!cancelled) setError(true); });
+        if (labels.length > 0) {
+            // Only the summary endpoint reports how much unscoped cost the labels excluded.
+            fetchAiUsageSummary("subject", { since: from, labels, limit: 1 })
+                .then(summary => { if (!cancelled) setExcluded(summary.excludedUnscopedCostUsd); })
+                .catch(() => { if (!cancelled) setExcluded(undefined); });
+        } else {
+            setExcluded(undefined);
+        }
         return () => { cancelled = true; };
     }, [labels, timeWindow]);
 
@@ -51,27 +61,31 @@ function AiCostSummaryWidget({ config, labels }: WidgetProps) {
     ];
 
     return (
-        <Gallery hasGutter minWidths={{ default: "100px" }}>
-            {stats.map(s => (
-                <GalleryItem key={s.label}>
-                    <div style={{
-                        textAlign: "center", padding: "12px", borderRadius: "8px",
-                        backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
-                    }}>
-                        <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{s.value}</div>
-                        <div style={{ fontSize: "0.8rem" }}>{s.label}</div>
-                    </div>
-                </GalleryItem>
-            ))}
-        </Gallery>
+        <>
+            <Gallery hasGutter minWidths={{ default: "100px" }}>
+                {stats.map(s => (
+                    <GalleryItem key={s.label}>
+                        <div style={{
+                            textAlign: "center", padding: "12px", borderRadius: "8px",
+                            backgroundColor: "var(--pf-t--global--background--color--secondary--default)",
+                        }}>
+                            <div style={{ fontSize: "1.5rem", fontWeight: 700 }}>{s.value}</div>
+                            <div style={{ fontSize: "0.8rem" }}>{s.label}</div>
+                        </div>
+                    </GalleryItem>
+                ))}
+            </Gallery>
+            <ExcludedUnscopedNote amount={excluded} />
+        </>
     );
 }
 
 registerWidget({
     type: "ai-cost-summary",
     name: "AI Cost Summary",
-    description: "Total AI spending, token counts, and invocations for a time period.",
+    description: "Total AI cost, token counts and invocations for a time window. With dashboard labels, only cost linked to matching subjects is counted.",
     category: "AI & Cost",
+    scope: "subject-labels",
     defaultSize: { w: 4, h: 2 },
     minSize: { w: 3, h: 2 },
     configSchema: [

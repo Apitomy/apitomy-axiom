@@ -14,6 +14,15 @@ import java.time.Instant;
 @Table(name = "event_source_poll_log")
 public class EventSourcePollLogEntity extends PanacheEntity {
 
+    /** Status of a successful poll. */
+    public static final String STATUS_SUCCESS = "success";
+
+    /** Status of a failed poll. */
+    public static final String STATUS_ERROR = "error";
+
+    /** Message prefix of a successful poll that only established the baseline (first poll). */
+    public static final String BASELINE_MESSAGE_PREFIX = "Baseline";
+
     @Column(name = "event_source_id", nullable = false, length = 63)
     public String eventSourceId;
 

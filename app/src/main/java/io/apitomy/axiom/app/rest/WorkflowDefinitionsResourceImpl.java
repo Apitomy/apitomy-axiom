@@ -11,7 +11,11 @@ import io.apitomy.axiom.api.beans.UpdateWorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinition;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowDefinitionVersion;
+import io.apitomy.axiom.api.beans.WaitingWorkflowRun;
+import io.apitomy.axiom.api.beans.WorkflowRunStatusSummary;
+import io.apitomy.axiom.api.beans.WorkflowScheduleSummary;
 import io.apitomy.axiom.app.CronSchedules;
+import io.apitomy.axiom.app.WorkflowDashboardService;
 import io.apitomy.axiom.app.WorkflowExecutionService;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.app.WorkflowTemplates;
@@ -37,6 +41,7 @@ import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
@@ -65,6 +70,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
 
     @Inject
     io.apitomy.axiom.app.EventStreamOrchestrator orchestrator;
+
+    @Inject
+    WorkflowDashboardService dashboardService;
 
     // ── List ────────────────────────────────────────────────────────
 
@@ -427,6 +435,40 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     }
 
     // ── Workflow Runs ─────────────────────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public WorkflowRunStatusSummary getWorkflowRunStatusSummary(String filterLabels, Date since,
+                                                                BigInteger failedLimit) {
+        return dashboardService.summarize(WorkflowDashboardService.parseLabels(filterLabels),
+                since != null ? since.toInstant() : null, clamp(failedLimit, 10, 50));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<WaitingWorkflowRun> listWaitingWorkflowRuns(String filterLabels, BigInteger limit) {
+        return dashboardService.listWaiting(WorkflowDashboardService.parseLabels(filterLabels),
+                clamp(limit, 20, 200));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<WorkflowScheduleSummary> listWorkflowSchedules(BigInteger limit) {
+        return dashboardService.listSchedules(clamp(limit, 50, 500));
+    }
+
+    private static int clamp(BigInteger value, int defaultValue, int max) {
+        if (value == null) {
+            return defaultValue;
+        }
+        return Math.max(1, Math.min(max, value.intValue()));
+    }
 
     /**
      * {@inheritDoc}

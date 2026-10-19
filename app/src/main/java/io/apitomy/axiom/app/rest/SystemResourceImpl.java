@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.EngineInfo;
 import io.apitomy.axiom.api.beans.Features;
+import io.apitomy.axiom.api.beans.HealthCheck;
 import io.apitomy.axiom.api.beans.ImportResult;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.api.beans.RetentionConfig;
@@ -13,6 +14,7 @@ import io.apitomy.axiom.api.beans.SystemHealth;
 import io.apitomy.axiom.api.beans.UpdateSystemConfigRequest;
 import io.apitomy.axiom.api.SystemResource;
 import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.app.EventSourceHealthService;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.StartupCheckService;
 import io.apitomy.axiom.app.validation.ConfigValidationException;
@@ -22,14 +24,17 @@ import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 
 import jakarta.transaction.Transactional;
 import java.io.InputStream;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -41,6 +46,8 @@ import java.util.Map;
 @ApplicationScoped
 @RunOnVirtualThread
 public class SystemResourceImpl implements SystemResource {
+
+    private static final Logger LOG = Logger.getLogger(SystemResourceImpl.class);
 
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0-SNAPSHOT")
     String applicationVersion;
@@ -57,16 +64,109 @@ public class SystemResourceImpl implements SystemResource {
     @Inject
     ObjectMapper packObjectMapper;
 
+    @Inject
+    EventSourceHealthService eventSourceHealthService;
+
+    @Inject
+    EntityManager entityManager;
+
+    static final String DATABASE_CHECK = "database";
+    static final String EVENT_SOURCES_CHECK = "eventSources";
+    static final String ENGINES_CHECK = "engines";
+    static final String SCHEDULER_CHECK = "scheduler";
+
     /**
      * {@inheritDoc}
      */
     @Override
     public SystemHealth getSystemHealth() {
+        List<HealthCheck> checks = new ArrayList<>();
+        checks.add(databaseCheck());
+        checks.add(eventSourcesCheck());
+        checks.add(enginesCheck());
+        checks.add(check(SCHEDULER_CHECK, HealthCheck.Status.UP, "Scheduler started"));
+
         SystemHealth health = new SystemHealth();
-        health.setStatus(SystemHealth.Status.UP);
+        health.setStatus(SystemHealth.Status.fromValue(worst(checks).value()));
         health.setVersion(applicationVersion);
         health.setTimestamp(new Date());
+        health.setChecks(checks);
         return health;
+    }
+
+    /**
+     * Returns the worst status among the checks (DOWN over DEGRADED over UP).
+     *
+     * @param checks the checks
+     * @return the worst status, UP when there are no checks
+     */
+    static HealthCheck.Status worst(List<HealthCheck> checks) {
+        return checks.stream()
+                .map(HealthCheck::getStatus)
+                .max(Comparator.comparingInt(SystemResourceImpl::severity))
+                .orElse(HealthCheck.Status.UP);
+    }
+
+    private static int severity(HealthCheck.Status status) {
+        return switch (status) {
+            case UP -> 0;
+            case DEGRADED -> 1;
+            case DOWN -> 2;
+        };
+    }
+
+    private HealthCheck databaseCheck() {
+        try {
+            entityManager.createNativeQuery("SELECT 1").getSingleResult();
+            return check(DATABASE_CHECK, HealthCheck.Status.UP, null);
+        } catch (RuntimeException e) {
+            LOG.error("Health check: database query failed", e);
+            return check(DATABASE_CHECK, HealthCheck.Status.DOWN, "Database check failed; see server log");
+        }
+    }
+
+    private HealthCheck eventSourcesCheck() {
+        try {
+            List<String> failing = eventSourceHealthService.computeAll(false).stream()
+                    .filter(h -> h.enabled() && EventSourceHealthService.FAILING.equals(h.state()))
+                    .map(EventSourceHealthService.Health::name)
+                    .toList();
+            if (failing.isEmpty()) {
+                return check(EVENT_SOURCES_CHECK, HealthCheck.Status.UP, null);
+            }
+            return check(EVENT_SOURCES_CHECK, HealthCheck.Status.DEGRADED,
+                    failing.size() + " event source(s) failing: " + String.join(", ", failing));
+        } catch (RuntimeException e) {
+            LOG.error("Health check: could not read event source health", e);
+            return check(EVENT_SOURCES_CHECK, HealthCheck.Status.DOWN,
+                    "Event source check failed; see server log");
+        }
+    }
+
+    private HealthCheck enginesCheck() {
+        String defaultType;
+        try {
+            defaultType = resolveDefaultEngineType();
+        } catch (RuntimeException e) {
+            defaultType = agentRegistry.getDefaultAgentType();
+        }
+        List<String> errors = startupCheckService.getResultsForEngine(defaultType).stream()
+                .filter(r -> "error".equals(r.status()))
+                .map(r -> r.name() + (r.message() != null ? ": " + r.message() : ""))
+                .toList();
+        if (errors.isEmpty()) {
+            return check(ENGINES_CHECK, HealthCheck.Status.UP, null);
+        }
+        return check(ENGINES_CHECK, HealthCheck.Status.DEGRADED,
+                "Default engine '" + defaultType + "' failed startup checks: " + String.join("; ", errors));
+    }
+
+    private static HealthCheck check(String name, HealthCheck.Status status, String message) {
+        HealthCheck check = new HealthCheck();
+        check.setName(name);
+        check.setStatus(status);
+        check.setMessage(message);
+        return check;
     }
 
     /**

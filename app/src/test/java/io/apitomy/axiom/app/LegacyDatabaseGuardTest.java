@@ -164,8 +164,9 @@ class LegacyDatabaseGuardTest {
     void a3xDatabaseWithLaterMigrationsIsCompatible() throws SQLException {
         String url = newUrl();
         flyway(url).migrate();
-        exec(url, historyRow(2, "2", "add widget", "V2__add_widget.sql"),
-                historyRow(3, "3", "add gadget", "V3__add_gadget.sql"));
+        // Real 3.x migrations (V1, V2, ...) are already applied; append hypothetical later ones.
+        exec(url, historyRow(90, "90", "add widget", "V90__add_widget.sql"),
+                historyRow(91, "91", "add gadget", "V91__add_gadget.sql"));
         assertTrue(check(url).isEmpty());
     }
 

@@ -6,8 +6,10 @@ import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
+import io.apitomy.axiom.core.events.StreamEventPersisted;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.WebApplicationException;
 import org.jboss.logging.Logger;
@@ -31,6 +33,9 @@ public class SdkCallService {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    Event<StreamEventPersisted> persistedEvents;
 
     /** Lazy: the workflow engine itself calls this service for {@code sdk:} nodes. */
     @Inject
@@ -172,6 +177,8 @@ public class SdkCallService {
         event.payload = payload;
         event.createdOn = Instant.now();
         event.persist();
+        persistedEvents.fire(new StreamEventPersisted(
+                event.id.toString(), event.type, event.eventSourceId));
 
         return SdkCallResult.ok("Event fired: " + eventType,
                 Map.of("eventId", event.id.toString()));

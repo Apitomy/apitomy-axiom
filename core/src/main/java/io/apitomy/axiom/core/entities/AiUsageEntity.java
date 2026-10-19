@@ -52,6 +52,18 @@ public class AiUsageEntity extends PanacheEntity {
     public Long subjectId;
 
     /**
+     * Workflow run whose task produced this usage (null when the task is not part of a workflow run).
+     */
+    @Column(name = "workflow_run_id")
+    public Long workflowRunId;
+
+    /**
+     * Workflow definition of the run that produced this usage (null when not part of a workflow run).
+     */
+    @Column(name = "workflow_definition_id")
+    public Long workflowDefinitionId;
+
+    /**
      * Agent ID (the AI agent that performed the invocation).
      */
     @Column(name = "agent_id")
