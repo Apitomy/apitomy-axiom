@@ -3268,6 +3268,69 @@
         }
       ]
     },
+    "/assistant/templates/{templateId}/overrides": {
+      "get": {
+        "tags": ["Assistant"],
+        "summary": "Get user overrides for a built-in session template",
+        "operationId": "getSessionTemplateOverrides",
+        "responses": {
+          "200": {
+            "description": "Current overrides (fields are absent when not overridden)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionTemplateOverrides" }
+              }
+            }
+          },
+          "400": { "description": "Template is not a built-in template" },
+          "404": { "description": "Template not found" }
+        }
+      },
+      "put": {
+        "tags": ["Assistant"],
+        "summary": "Replace user overrides for a built-in session template",
+        "operationId": "updateSessionTemplateOverrides",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SessionTemplateOverrides" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Template with overrides applied",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SessionTemplate" }
+              }
+            }
+          },
+          "400": { "description": "Template is not a built-in template" },
+          "404": { "description": "Template not found" }
+        }
+      },
+      "delete": {
+        "tags": ["Assistant"],
+        "summary": "Remove user overrides, restoring built-in defaults",
+        "operationId": "deleteSessionTemplateOverrides",
+        "responses": {
+          "204": { "description": "Overrides removed" },
+          "400": { "description": "Template is not a built-in template" },
+          "404": { "description": "Template not found" }
+        }
+      },
+      "parameters": [
+        {
+          "name": "templateId",
+          "in": "path",
+          "description": "The built-in template identifier",
+          "required": true,
+          "schema": { "type": "string" }
+        }
+      ]
+    },
     "/assistant/sessions/{sessionId}/history": {
       "get": {
         "tags": [
@@ -9657,6 +9720,12 @@
         ],
         "type": "object",
         "properties": {
+          "overriddenFields": {
+            "description": "Names of fields (model, engine, environment) overridden by the user on a built-in template. Empty for user-defined templates.",
+            "type": "array",
+            "items": { "type": "string" },
+            "readOnly": true
+          },
           "templateId": {
             "description": "Unique template identifier",
             "type": "string"
@@ -9733,6 +9802,25 @@
           "initialMessage": {
             "description": "Message automatically sent to the AI when a session starts",
             "type": "string"
+          }
+        }
+      },
+      "SessionTemplateOverrides": {
+        "description": "User-editable overrides for a built-in session template. Absent or null fields use the built-in default.",
+        "type": "object",
+        "properties": {
+          "model": {
+            "description": "AI model override",
+            "type": "string"
+          },
+          "engine": {
+            "description": "Interactive engine override",
+            "type": "string"
+          },
+          "environment": {
+            "description": "Environment variables; replaces the built-in default. Values can reference secrets using ${secret:NAME} syntax.",
+            "type": "object",
+            "additionalProperties": { "type": "string" }
           }
         }
       },
