@@ -109,7 +109,7 @@ Each template specifies:
 
 ### Built-in Templates
 
-Axiom ships four immutable built-in templates:
+Axiom ships four built-in templates:
 
 - **Axiom Configuration Assistant** (`axiom-config-assistant`) — purpose-built for creating
   and updating Axiom configuration items (tools, action types, toolsets, event sources,
@@ -124,8 +124,21 @@ Axiom ships four immutable built-in templates:
   [Workflow Workbench](workbench.md)'s AI Assistant. It works on a workbench composition through the
   `axiom-workbench` MCP server; use it from the Workbench rather than from the AI Assistant page.
 
-Built-in templates cannot be modified or deleted. You can clone the General, Subject and Workflow
-Workbench templates to create editable copies; the Configuration Assistant cannot be cloned.
+Built-in templates cannot be deleted, and most of their fields are locked. You can clone the General,
+Subject and Workflow Workbench templates to create fully editable copies; the Configuration Assistant
+cannot be cloned.
+
+#### Customizing Built-in Templates
+
+The **Engine**, **Model** and **Environment** of each built-in template can be customized per deployment
+from the template's detail page. Customized fields are marked **Modified**, and the template list shows a
+**Customized** label. Click **Reset to defaults** to discard all customizations and restore the shipped
+values. For any other change, clone the template instead.
+
+Customizations are stored in Axiom's database and are not included in configuration packs, so exporting
+and importing a pack does not carry them over. They are also available through the REST API at
+`/api/v1/assistant/templates/{templateId}/overrides` (`GET`, `PUT`, and `DELETE` to reset); template
+responses list customized fields in `overriddenFields`.
 
 ### User-Defined Templates
 
