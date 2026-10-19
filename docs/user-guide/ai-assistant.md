@@ -133,7 +133,9 @@ cannot be cloned.
 The **Engine**, **Model** and **Environment** of each built-in template can be customized per deployment
 from the template's detail page. Customized fields are marked **Modified**, and the template list shows a
 **Customized** label. Click **Reset to defaults** to discard all customizations and restore the shipped
-values. For any other change, clone the template instead.
+values; Axiom asks for confirmation before resetting. For any other change, clone the template instead.
+Cloning a customized built-in template copies its current (customized) engine, model and environment
+into the new template.
 
 Customizations are stored in Axiom's database and are not included in configuration packs, so exporting
 and importing a pack does not carry them over. They are also available through the REST API at
