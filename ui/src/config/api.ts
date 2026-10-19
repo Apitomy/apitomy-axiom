@@ -1016,6 +1016,7 @@ export interface SessionTemplate {
     environment?: Record<string, string>;
     mcpServers: string[];
     allowedTools: string[];
+    overriddenFields?: string[];
 }
 
 export interface NewSessionTemplate {
@@ -1033,6 +1034,12 @@ export interface NewSessionTemplate {
     environment?: Record<string, string>;
     mcpServers?: string[];
     allowedTools?: string[];
+}
+
+export interface SessionTemplateOverrides {
+    model?: string;
+    engine?: string;
+    environment?: Record<string, string>;
 }
 
 export interface AssistantSessionInfo {
@@ -1298,6 +1305,30 @@ export async function updateAssistantTemplate(
         throw new Error("Failed to update template");
     }
     return response.json();
+}
+
+export async function updateAssistantTemplateOverrides(
+    templateId: string,
+    data: SessionTemplateOverrides
+): Promise<SessionTemplate> {
+    const response = await fetch(
+        `${API}/assistant/templates/${encodeURIComponent(templateId)}/overrides`,
+        {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        }
+    );
+    if (!response.ok) throw new Error("Failed to update template overrides");
+    return response.json();
+}
+
+export async function deleteAssistantTemplateOverrides(templateId: string): Promise<void> {
+    const response = await fetch(
+        `${API}/assistant/templates/${encodeURIComponent(templateId)}/overrides`,
+        { method: "DELETE" }
+    );
+    if (!response.ok) throw new Error("Failed to reset template overrides");
 }
 
 export async function deleteAssistantTemplate(templateId: string): Promise<void> {

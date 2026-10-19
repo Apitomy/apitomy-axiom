@@ -22,6 +22,7 @@ import io.apitomy.axiom.api.beans.NewSessionTemplate;
 import io.apitomy.axiom.api.beans.RenameAssistantSessionRequest;
 import io.apitomy.axiom.api.beans.SendAssistantMessageRequest;
 import io.apitomy.axiom.api.beans.SessionTemplate;
+import io.apitomy.axiom.api.beans.SessionTemplateOverrides;
 import io.apitomy.axiom.api.beans.SetAllowAllRequest;
 import io.apitomy.axiom.api.beans.SetSubagentAllowAllRequest;
 import io.apitomy.axiom.app.assistant.SessionTokenGuard;
@@ -569,6 +570,57 @@ public class AssistantResourceImpl implements AssistantResource {
         }
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public SessionTemplateOverrides getSessionTemplateOverrides(String templateId) {
+        try {
+            SessionTemplateService.TemplateOverrides o = templateService.getOverrides(templateId);
+            SessionTemplateOverrides bean = new SessionTemplateOverrides();
+            bean.setModel(o.model());
+            bean.setEngine(o.engine());
+            bean.setEnvironment(jsonToEnvironment(o.environment()));
+            return bean;
+        } catch (SessionTemplateService.TemplateNotFoundException e) {
+            throw new WebApplicationException(e.getMessage(), 404);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException(e.getMessage(), 400);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public SessionTemplate updateSessionTemplateOverrides(String templateId,
+                                                          SessionTemplateOverrides data) {
+        if (data == null) {
+            throw new WebApplicationException("Missing request body", 400);
+        }
+        try {
+            String env = data.getEnvironment() == null ? null
+                    : objectMapper.writeValueAsString(data.getEnvironment().getAdditionalProperties());
+            SessionTemplateService.SessionTemplate updated = templateService.setOverrides(templateId,
+                    new SessionTemplateService.TemplateOverrides(data.getModel(), data.getEngine(), env));
+            return toTemplateBean(updated);
+        } catch (SessionTemplateService.TemplateNotFoundException e) {
+            throw new WebApplicationException(e.getMessage(), 404);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException(e.getMessage(), 400);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new WebApplicationException("Invalid environment: " + e.getMessage(), 400);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void deleteSessionTemplateOverrides(String templateId) {
+        try {
+            templateService.clearOverrides(templateId);
+        } catch (SessionTemplateService.TemplateNotFoundException e) {
+            throw new WebApplicationException(e.getMessage(), 404);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException(e.getMessage(), 400);
+        }
+    }
+
     // ── Auto-Approvals ────────────────────────────────────────────────
 
     /** {@inheritDoc} */
@@ -712,6 +764,7 @@ public class AssistantResourceImpl implements AssistantResource {
         bean.setEnvironment(jsonToEnvironment(template.environment()));
         bean.setMcpServers(template.mcpServers());
         bean.setAllowedTools(template.allowedTools());
+        bean.setOverriddenFields(template.overriddenFields().stream().sorted().toList());
         return bean;
     }
 
@@ -743,6 +796,7 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getMcpServers() != null ? data.getMcpServers() : List.of(),
                 data.getAllowedTools() != null ? data.getAllowedTools() : List.of(),
                 false,
+                java.util.Set.of(),
                 java.util.Set.of());
     }
 

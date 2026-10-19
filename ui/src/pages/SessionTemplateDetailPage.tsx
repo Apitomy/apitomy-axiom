@@ -14,6 +14,11 @@ import {
     HelperText,
     HelperTextItem,
     Label,
+    Modal,
+    ModalBody,
+    ModalFooter,
+    ModalHeader,
+    ModalVariant,
     PageSection,
     Spinner,
     Tab,
@@ -31,6 +36,8 @@ import { ToolListEditor } from "../components/ToolListEditor";
 import {
     fetchAssistantTemplate,
     updateAssistantTemplate,
+    updateAssistantTemplateOverrides,
+    deleteAssistantTemplateOverrides,
     fetchMcpServers,
     fetchModels,
     fetchSystemConfig,
@@ -73,6 +80,7 @@ export function SessionTemplateDetailPage() {
     const [globalDefaultEngine, setGlobalDefaultEngine] = useState<string>("");
     const [envVars, setEnvVars] = useState<Record<string, string>>({});
     const [activeTab, setActiveTab] = useState(0);
+    const [confirmReset, setConfirmReset] = useState(false);
 
     const loadData = useCallback(() => {
         if (!templateId) return;
@@ -126,13 +134,26 @@ export function SessionTemplateDetailPage() {
         if (!templateId) return;
         setSaving(true);
         const envToSend = Object.keys(envVars).length > 0 ? envVars : undefined;
-        updateAssistantTemplate(templateId, { ...form, environment: envToSend })
+        const save = template?.builtIn
+            ? updateAssistantTemplateOverrides(templateId, {
+                model: form.model, engine: form.engine, environment: envToSend,
+            })
+            : updateAssistantTemplate(templateId, { ...form, environment: envToSend });
+        save
             .then((updated) => {
                 setTemplate(updated);
                 setDirty(false);
             })
             .catch(console.error)
             .finally(() => setSaving(false));
+    };
+
+    const handleReset = () => {
+        if (!templateId) return;
+        setConfirmReset(false);
+        deleteAssistantTemplateOverrides(templateId)
+            .then(() => loadData())
+            .catch(console.error);
     };
 
     const toggleMcpServer = (serverName: string) => {
@@ -169,6 +190,10 @@ export function SessionTemplateDetailPage() {
     }
 
     const isReadOnly = template.builtIn;
+    const overridden = new Set(template.overriddenFields || []);
+    const modifiedLabel = (field: string) => overridden.has(field)
+        ? <Label color="orange" isCompact style={{ marginLeft: 8 }}>Modified</Label>
+        : null;
 
     return (
         <PageSection>
@@ -186,20 +211,30 @@ export function SessionTemplateDetailPage() {
                     </span>
                     {isReadOnly && (
                         <Label color="blue" style={{ marginLeft: 12 }}>
-                            Built-in (read-only)
+                            Built-in
                         </Label>
                     )}
                 </FlexItem>
-                {!isReadOnly && (
+                {isReadOnly && overridden.size > 0 && (
                     <FlexItem>
-                        <Button variant="primary" onClick={handleSave}
-                            isDisabled={!dirty || !form.name || saving}
-                            isLoading={saving}>
-                            Save
+                        <Button variant="secondary" onClick={() => setConfirmReset(true)}>
+                            Reset to defaults
                         </Button>
                     </FlexItem>
                 )}
+                <FlexItem>
+                    <Button variant="primary" onClick={handleSave}
+                        isDisabled={!dirty || !form.name || saving}
+                        isLoading={saving}>
+                        Save
+                    </Button>
+                </FlexItem>
             </Flex>
+
+            {isReadOnly && (
+                <Alert variant="info" isInline style={{ marginBottom: 16 }}
+                    title="Built-in template: only Engine, Model and Environment can be customized." />
+            )}
 
             <Tabs activeKey={activeTab}
                 onSelect={(_e, key) => setActiveTab(key as number)}>
@@ -270,7 +305,7 @@ export function SessionTemplateDetailPage() {
                                 readOnlyVariant={isReadOnly ? "default" : undefined} />
                         </FormGroup>
 
-                        <FormGroup label="Engine" fieldId="engine">
+                        <FormGroup label={<>Engine{modifiedLabel("engine")}</>} fieldId="engine">
                             <FormHelperText>
                                 <HelperText>
                                     <HelperTextItem>
@@ -285,7 +320,6 @@ export function SessionTemplateDetailPage() {
                                 onChange={(_e, value) => {
                                     handleEngineChange(value);
                                 }}
-                                isDisabled={isReadOnly}
                             >
                                 <FormSelectOption
                                     value=""
@@ -303,7 +337,7 @@ export function SessionTemplateDetailPage() {
                             </FormSelect>
                         </FormGroup>
 
-                        <FormGroup label="Model" fieldId="model">
+                        <FormGroup label={<>Model{modifiedLabel("model")}</>} fieldId="model">
                             <FormHelperText>
                                 <HelperText>
                                     <HelperTextItem>
@@ -316,7 +350,6 @@ export function SessionTemplateDetailPage() {
                                 id="model"
                                 value={form.model || ""}
                                 onChange={(_e, v) => updateForm({ model: v || undefined })}
-                                isDisabled={isReadOnly}
                             >
                                 <FormSelectOption value="" label="Not specified (use default)" />
                                 {(() => {
@@ -522,24 +555,36 @@ export function SessionTemplateDetailPage() {
                     </div>
                 </Tab>
 
-                <Tab eventKey={4} title={<TabTitleText>Environment</TabTitleText>}>
+                <Tab eventKey={4} title={
+                    <TabTitleText>
+                        Environment{overridden.has("environment") ? " *" : ""}
+                    </TabTitleText>
+                }>
                     <div style={{ marginTop: 24 }}>
-                        {isReadOnly ? (
-                            <p className="axiom-text-subtle" style={{ fontStyle: "italic" }}>
-                                Environment variables cannot be modified on built-in templates.
-                            </p>
-                        ) : (
-                            <EnvironmentTab
-                                envVars={envVars}
-                                onChange={(updated) => {
-                                    setEnvVars(updated);
-                                    setDirty(true);
-                                }}
-                            />
-                        )}
+                        {modifiedLabel("environment")}
+                        <EnvironmentTab
+                            envVars={envVars}
+                            onChange={(updated) => {
+                                setEnvVars(updated);
+                                setDirty(true);
+                            }}
+                        />
                     </div>
                 </Tab>
             </Tabs>
+
+            <Modal variant={ModalVariant.small} isOpen={confirmReset}
+                onClose={() => setConfirmReset(false)}>
+                <ModalHeader title="Reset to defaults?" />
+                <ModalBody>
+                    This removes your Engine, Model and Environment customizations for
+                    &quot;{template.name}&quot;.
+                </ModalBody>
+                <ModalFooter>
+                    <Button variant="danger" onClick={handleReset}>Reset</Button>
+                    <Button variant="link" onClick={() => setConfirmReset(false)}>Cancel</Button>
+                </ModalFooter>
+            </Modal>
         </PageSection>
     );
 }

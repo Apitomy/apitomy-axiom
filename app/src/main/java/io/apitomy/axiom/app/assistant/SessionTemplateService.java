@@ -2,7 +2,10 @@ package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.core.entities.SessionTemplateEntity;
+import io.apitomy.axiom.core.entities.SessionTemplateOverrideEntity;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -14,10 +17,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Manages AI Assistant session templates from two sources: immutable built-in
@@ -38,6 +43,9 @@ public class SessionTemplateService {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    AgentRegistry agentRegistry;
 
     private final Map<String, SessionTemplate> builtInTemplates = new LinkedHashMap<>();
 
@@ -60,6 +68,7 @@ public class SessionTemplateService {
      * @param allowedTools tool patterns and @ToolsetName references for --allowedTools
      * @param builtIn true if loaded from classpath resources
      * @param capabilities behaviours this template enables (empty for user-defined templates)
+     * @param overriddenFields names of fields overridden by the user (built-ins only)
      */
     public record SessionTemplate(
             String templateId,
@@ -77,7 +86,33 @@ public class SessionTemplateService {
             List<String> mcpServers,
             List<String> allowedTools,
             boolean builtIn,
-            Set<SessionCapability> capabilities) {
+            Set<SessionCapability> capabilities,
+            Set<String> overriddenFields) {
+    }
+
+    /**
+     * User overrides for a built-in template. A null field means "use the built-in default".
+     *
+     * @param model AI model override, or null
+     * @param engine interactive engine override, or null
+     * @param environment JSON object string of environment variables, or null
+     */
+    public record TemplateOverrides(String model, String engine, String environment) {
+    }
+
+    /**
+     * Thrown when a template identifier does not refer to any known template.
+     */
+    public static class TemplateNotFoundException extends RuntimeException {
+
+        /**
+         * Creates the exception.
+         *
+         * @param templateId the unknown template identifier
+         */
+        public TemplateNotFoundException(String templateId) {
+            super("Template not found: " + templateId);
+        }
     }
 
     /**
@@ -104,12 +139,19 @@ public class SessionTemplateService {
     }
 
     /**
-     * Returns all templates (built-in + user-defined), built-ins first.
+     * Returns all templates (built-in + user-defined), built-ins first. Built-in templates are returned
+     * with user overrides applied.
      *
      * @return merged list of all templates
      */
     public List<SessionTemplate> listTemplates() {
-        List<SessionTemplate> result = new ArrayList<>(builtInTemplates.values());
+        Map<String, SessionTemplateOverrideEntity> overrides =
+                SessionTemplateOverrideEntity.<SessionTemplateOverrideEntity>listAll().stream()
+                        .collect(Collectors.toMap(o -> o.templateId, o -> o));
+        List<SessionTemplate> result = new ArrayList<>();
+        for (SessionTemplate builtIn : builtInTemplates.values()) {
+            result.add(applyOverrides(builtIn, overrides.get(builtIn.templateId())));
+        }
         List<SessionTemplateEntity> entities = SessionTemplateEntity.listAll();
         for (SessionTemplateEntity entity : entities) {
             result.add(toTemplate(entity));
@@ -118,7 +160,8 @@ public class SessionTemplateService {
     }
 
     /**
-     * Returns a template by its template ID, checking built-ins first.
+     * Returns a template by its template ID, checking built-ins first. Built-in templates are returned
+     * with user overrides applied.
      *
      * @param templateId the template identifier
      * @return the template, or null if not found
@@ -126,7 +169,7 @@ public class SessionTemplateService {
     public SessionTemplate getTemplate(String templateId) {
         SessionTemplate builtIn = builtInTemplates.get(templateId);
         if (builtIn != null) {
-            return builtIn;
+            return applyOverrides(builtIn, SessionTemplateOverrideEntity.findByTemplateId(templateId));
         }
         SessionTemplateEntity entity = SessionTemplateEntity
                 .find("templateId", templateId).firstResult();
@@ -235,6 +278,137 @@ public class SessionTemplateService {
         }
     }
 
+    /**
+     * Returns the stored overrides for a built-in template.
+     *
+     * @param templateId the built-in template identifier
+     * @return the overrides; all fields null when none are stored
+     * @throws TemplateNotFoundException if the template does not exist
+     * @throws IllegalArgumentException if the template is not built-in
+     */
+    public TemplateOverrides getOverrides(String templateId) {
+        requireBuiltIn(templateId);
+        SessionTemplateOverrideEntity entity = SessionTemplateOverrideEntity.findByTemplateId(templateId);
+        if (entity == null) {
+            return new TemplateOverrides(null, null, null);
+        }
+        return new TemplateOverrides(entity.model, entity.engine, entity.environment);
+    }
+
+    /**
+     * Replaces the overrides for a built-in template. Blank values are treated as null; when
+     * every field is null the stored overrides are removed.
+     *
+     * @param templateId the built-in template identifier
+     * @param overrides the new overrides
+     * @return the built-in template with overrides applied
+     * @throws TemplateNotFoundException if the template does not exist
+     * @throws IllegalArgumentException if the template is not built-in, or the engine is not a
+     *         registered interactive engine
+     */
+    @Transactional
+    public SessionTemplate setOverrides(String templateId, TemplateOverrides overrides) {
+        requireBuiltIn(templateId);
+        String model = blankToNull(overrides.model());
+        String engine = blankToNull(overrides.engine());
+        validateInteractiveEngine(engine);
+        String environment = normalizeEnvironment(overrides.environment());
+        SessionTemplateOverrideEntity entity = SessionTemplateOverrideEntity.findByTemplateId(templateId);
+        if (model == null && engine == null && environment == null) {
+            if (entity != null) {
+                entity.delete();
+            }
+            return builtInTemplates.get(templateId);
+        }
+        if (entity == null) {
+            entity = new SessionTemplateOverrideEntity();
+            entity.templateId = templateId;
+        }
+        entity.model = model;
+        entity.engine = engine;
+        entity.environment = environment;
+        entity.persist();
+        return applyOverrides(builtInTemplates.get(templateId), entity);
+    }
+
+    /**
+     * Removes all overrides for a built-in template, restoring its defaults.
+     *
+     * @param templateId the built-in template identifier
+     * @throws TemplateNotFoundException if the template does not exist
+     * @throws IllegalArgumentException if the template is not built-in
+     */
+    @Transactional
+    public void clearOverrides(String templateId) {
+        requireBuiltIn(templateId);
+        SessionTemplateOverrideEntity.delete("templateId", templateId);
+    }
+
+    private void validateInteractiveEngine(String engine) {
+        if (engine == null) {
+            return;
+        }
+        boolean known = agentRegistry.getAllAgents().stream()
+                .filter(Agent::supportsInteractiveSessions)
+                .anyMatch(agent -> engine.equals(agent.getType()));
+        if (!known) {
+            throw new IllegalArgumentException("Unknown interactive engine type: " + engine);
+        }
+    }
+
+    private void requireBuiltIn(String templateId) {
+        if (isBuiltIn(templateId)) {
+            return;
+        }
+        if (SessionTemplateEntity.find("templateId", templateId).firstResult() != null) {
+            throw new IllegalArgumentException(
+                    "Overrides are only supported for built-in templates: " + templateId);
+        }
+        throw new TemplateNotFoundException(templateId);
+    }
+
+    private SessionTemplate applyOverrides(SessionTemplate base, SessionTemplateOverrideEntity o) {
+        if (o == null) {
+            return base;
+        }
+        Set<String> overridden = new LinkedHashSet<>();
+        String model = base.model();
+        String engine = base.engine();
+        String environment = base.environment();
+        if (o.model != null) {
+            model = o.model;
+            overridden.add("model");
+        }
+        if (o.engine != null) {
+            engine = o.engine;
+            overridden.add("engine");
+        }
+        if (o.environment != null) {
+            environment = o.environment;
+            overridden.add("environment");
+        }
+        return new SessionTemplate(base.templateId(), base.name(), base.description(), base.systemPrompt(),
+                base.welcomeMessage(), base.initialMessage(), base.workingDirectory(), model, engine,
+                base.initScript(), base.initScriptType(), environment, base.mcpServers(),
+                base.allowedTools(), base.builtIn(), base.capabilities(), Set.copyOf(overridden));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String normalizeEnvironment(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(json);
+            return node.isObject() && node.size() > 0 ? node.toString() : null;
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Invalid environment JSON", e);
+        }
+    }
+
     private SessionTemplate toTemplate(SessionTemplateEntity entity) {
         return new SessionTemplate(
                 entity.templateId,
@@ -252,6 +426,7 @@ public class SessionTemplateService {
                 List.copyOf(entity.mcpServers),
                 List.copyOf(entity.allowedTools),
                 false,
+                Set.of(),
                 Set.of());
     }
 
@@ -274,7 +449,8 @@ public class SessionTemplateService {
                 jsonArrayToList(node.path("mcpServers")),
                 jsonArrayToList(node.path("allowedTools")),
                 builtIn,
-                SessionCapability.parse(node.path("capabilities")));
+                SessionCapability.parse(node.path("capabilities")),
+                Set.of());
     }
 
     private List<String> jsonArrayToList(JsonNode arrayNode) {
