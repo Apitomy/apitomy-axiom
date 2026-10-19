@@ -149,6 +149,11 @@ export function SessionTemplatesPage() {
                                     <Label color={t.builtIn ? "blue" : "green"}>
                                         {t.builtIn ? "Built-in" : "Custom"}
                                     </Label>
+                                    {t.builtIn && (t.overriddenFields?.length ?? 0) > 0 && (
+                                        <Label color="orange" style={{ marginLeft: 8 }}>
+                                            Customized
+                                        </Label>
+                                    )}
                                 </Td>
                                 <Td>
                                     {!hasCapability(t, "config-items") && (
