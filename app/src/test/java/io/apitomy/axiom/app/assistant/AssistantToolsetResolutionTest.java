@@ -40,7 +40,8 @@ class AssistantToolsetResolutionTest {
 
     private static SessionTemplateService.SessionTemplate template(List<String> allowedTools) {
         return new SessionTemplateService.SessionTemplate("t", "T", null, null, null, null,
-                null, null, null, null, null, null, List.of(), allowedTools, false, Set.of());
+                null, null, null, null, null, null, List.of(), allowedTools, false, Set.of(),
+                Set.of());
     }
 
     @Test

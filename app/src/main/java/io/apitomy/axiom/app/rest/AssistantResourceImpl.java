@@ -743,6 +743,7 @@ public class AssistantResourceImpl implements AssistantResource {
                 data.getMcpServers() != null ? data.getMcpServers() : List.of(),
                 data.getAllowedTools() != null ? data.getAllowedTools() : List.of(),
                 false,
+                java.util.Set.of(),
                 java.util.Set.of());
     }
 
