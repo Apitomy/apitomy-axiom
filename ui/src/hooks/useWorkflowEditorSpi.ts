@@ -2,10 +2,12 @@ import { useMemo } from "react";
 import type { ActionTypeDescriptor, EditorSpi } from "@apitomy/flow-ui";
 import { fetchActionTypes } from "../config/api";
 import { fetchSdkFunctions } from "../config/sdkTools";
+import { actionTypeAppearance } from "../config/actionTypeAppearance";
 
 /**
  * Loads the action types offered by the workflow editor's action-type picker: the configured action
- * types plus the SDK functions that can be called directly ({@code sdk:} prefix).
+ * types plus the SDK functions that can be called directly ({@code sdk:} prefix). SDK calls and AI agent
+ * action types carry their own icon and color for Action nodes.
  *
  * @returns the descriptors
  */
@@ -20,6 +22,7 @@ export async function loadEditorActionTypes(): Promise<ActionTypeDescriptor[]> {
         description: at.description,
         inputs: at.inputs,
         outputs: at.outputs,
+        ...actionTypeAppearance(at.name, at.executionMode),
     }));
     const sdkActions = sdkFunctions
         .filter(fn => fn.sdkCallSupported)
@@ -33,6 +36,7 @@ export async function loadEditorActionTypes(): Promise<ActionTypeDescriptor[]> {
                 required: p.required,
                 description: p.description,
             })),
+            ...actionTypeAppearance(`sdk:${fn.name}`, undefined),
         }));
     return [...configured, ...sdkActions];
 }
