@@ -76,5 +76,5 @@ describe("DashboardViewPage with every widget type", () => {
         expect(failed).toEqual([]);
         const crashes = errorSpy.mock.calls.filter((c) => String(c[0]).includes("Widget rendering error"));
         expect(crashes).toEqual([]);
-    });
+    }, 15_000); // Renders 20+ widgets; routinely 3-5s, so the 5s default is too tight under parallel load.
 });
