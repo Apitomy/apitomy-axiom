@@ -2,6 +2,8 @@ package io.apitomy.axiom.app.assistant;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.core.entities.SessionTemplateEntity;
 import io.apitomy.axiom.core.entities.SessionTemplateOverrideEntity;
 import io.quarkus.runtime.StartupEvent;
@@ -41,6 +43,9 @@ public class SessionTemplateService {
 
     @Inject
     ObjectMapper objectMapper;
+
+    @Inject
+    AgentRegistry agentRegistry;
 
     private final Map<String, SessionTemplate> builtInTemplates = new LinkedHashMap<>();
 
@@ -298,13 +303,15 @@ public class SessionTemplateService {
      * @param overrides the new overrides
      * @return the built-in template with overrides applied
      * @throws TemplateNotFoundException if the template does not exist
-     * @throws IllegalArgumentException if the template is not built-in
+     * @throws IllegalArgumentException if the template is not built-in, or the engine is not a
+     *         registered interactive engine
      */
     @Transactional
     public SessionTemplate setOverrides(String templateId, TemplateOverrides overrides) {
         requireBuiltIn(templateId);
         String model = blankToNull(overrides.model());
         String engine = blankToNull(overrides.engine());
+        validateInteractiveEngine(engine);
         String environment = normalizeEnvironment(overrides.environment());
         SessionTemplateOverrideEntity entity = SessionTemplateOverrideEntity.findByTemplateId(templateId);
         if (model == null && engine == null && environment == null) {
@@ -335,6 +342,18 @@ public class SessionTemplateService {
     public void clearOverrides(String templateId) {
         requireBuiltIn(templateId);
         SessionTemplateOverrideEntity.delete("templateId", templateId);
+    }
+
+    private void validateInteractiveEngine(String engine) {
+        if (engine == null) {
+            return;
+        }
+        boolean known = agentRegistry.getAllAgents().stream()
+                .filter(Agent::supportsInteractiveSessions)
+                .anyMatch(agent -> engine.equals(agent.getType()));
+        if (!known) {
+            throw new IllegalArgumentException("Unknown interactive engine type: " + engine);
+        }
     }
 
     private void requireBuiltIn(String templateId) {

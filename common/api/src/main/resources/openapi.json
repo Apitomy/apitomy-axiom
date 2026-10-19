@@ -3307,7 +3307,7 @@
               }
             }
           },
-          "400": { "description": "Template is not a built-in template" },
+          "400": { "description": "Template is not a built-in template, or the request is invalid (missing body, unknown engine)" },
           "404": { "description": "Template not found" }
         }
       },

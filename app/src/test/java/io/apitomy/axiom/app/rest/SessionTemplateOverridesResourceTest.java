@@ -7,10 +7,12 @@ import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
+import java.util.List;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -113,10 +115,33 @@ class SessionTemplateOverridesResourceTest {
     }
 
     @Test
-    void sessionCreationUsesOverriddenEngine() throws IOException {
-        String engine = given().get("/api/v1/system/config").then().statusCode(200)
-                .extract().path("engines.find { it.supportsInteractiveSessions }.type");
-        given().contentType(ContentType.JSON).body("{\"engine\":\"" + engine + "\"}")
+    void putUnknownEngineReturns400() {
+        given().contentType(ContentType.JSON).body("{\"engine\":\"bogus\"}")
+                .put(BASE + "/{id}/overrides", BUILT_IN).then().statusCode(400);
+        given().get(BASE + "/{id}/overrides", BUILT_IN)
+                .then().statusCode(200).body("engine", nullValue());
+    }
+
+    @Test
+    void putWithoutBodyReturns400() {
+        given().contentType(ContentType.JSON)
+                .put(BASE + "/{id}/overrides", BUILT_IN).then().statusCode(400);
+    }
+
+    @Test
+    void sessionCreationUsesOverriddenEngineAndModel() throws IOException {
+        String defaultEngine = given().get("/api/v1/system/config").then().statusCode(200)
+                .extract().path("defaultEngine");
+        List<String> interactive = given().get("/api/v1/system/config").then().statusCode(200)
+                .extract().path("engines.findAll { it.supportsInteractiveSessions }.type");
+        String engine = interactive.stream()
+                .filter(type -> !type.equals(defaultEngine))
+                .findFirst()
+                .orElse(interactive.get(0));
+        boolean engineDiffers = !engine.equals(defaultEngine);
+        String model = "override-test-model";
+        given().contentType(ContentType.JSON)
+                .body("{\"engine\":\"" + engine + "\",\"model\":\"" + model + "\"}")
                 .put(BASE + "/{id}/overrides", BUILT_IN).then().statusCode(200);
 
         when(interactiveSessionDriverFactory.createDriver(any())).thenAnswer(i -> {
@@ -132,7 +157,11 @@ class SessionTemplateOverridesResourceTest {
             ArgumentCaptor<InteractiveSessionDriverFactory.DriverRequest> captor =
                     ArgumentCaptor.forClass(InteractiveSessionDriverFactory.DriverRequest.class);
             verify(interactiveSessionDriverFactory, atLeastOnce()).createDriver(captor.capture());
-            assertEquals(engine, captor.getValue().engineType());
+            InteractiveSessionDriverFactory.DriverRequest request = captor.getValue();
+            assertEquals(model, request.model());
+            assertEquals(engine, request.engineType());
+            Assumptions.assumeTrue(engineDiffers,
+                    "Only one interactive engine available; engine override is not distinguishable");
         } finally {
             given().delete("/api/v1/assistant/sessions/{id}", sessionId);
         }

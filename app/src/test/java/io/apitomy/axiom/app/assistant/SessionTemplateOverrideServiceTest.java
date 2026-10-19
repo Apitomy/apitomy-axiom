@@ -72,10 +72,10 @@ class SessionTemplateOverrideServiceTest {
     void getOverridesReturnsStoredValuesOrEmpty() {
         SessionTemplateService.TemplateOverrides empty = service.getOverrides(BUILT_IN);
         assertNull(empty.model());
-        service.setOverrides(BUILT_IN, new SessionTemplateService.TemplateOverrides("m", "e", null));
+        service.setOverrides(BUILT_IN, new SessionTemplateService.TemplateOverrides("m", "opencode", null));
         SessionTemplateService.TemplateOverrides o = service.getOverrides(BUILT_IN);
         assertEquals("m", o.model());
-        assertEquals("e", o.engine());
+        assertEquals("opencode", o.engine());
     }
 
     @Test
@@ -92,6 +92,17 @@ class SessionTemplateOverrideServiceTest {
         service.clearOverrides(BUILT_IN);
         assertNull(service.getTemplate(BUILT_IN).model());
         assertEquals(0L, SessionTemplateOverrideEntity.count());
+    }
+
+    @Test
+    void unknownEngineIsRejectedAndRowUnchanged() {
+        service.setOverrides(BUILT_IN, new SessionTemplateService.TemplateOverrides("m", null, null));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.setOverrides(BUILT_IN,
+                        new SessionTemplateService.TemplateOverrides("m2", "bogus", null)));
+        SessionTemplateService.TemplateOverrides o = service.getOverrides(BUILT_IN);
+        assertEquals("m", o.model());
+        assertNull(o.engine());
     }
 
     @Test
