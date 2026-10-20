@@ -5,7 +5,6 @@ import {
     Badge,
     PageSection,
     Button,
-    Switch,
     TextInput,
     Flex,
     FlexItem,
@@ -34,7 +33,6 @@ import {
     renameAssistantSession,
     fetchAutoApprovals,
     deleteAutoApproval,
-    setAllowAll as apiSetAllowAll,
     type AssistantSessionInfo,
     type AutoApprovalRule,
     type AssistantApplyResult,
@@ -42,6 +40,7 @@ import {
 import { engineColor, engineDisplayName } from "../components/engineNames";
 import { hasCapability } from "../config/capabilities";
 import "./AssistantSessionPage.css";
+import { AllowAllSwitch } from "../components/assistant/AllowAllSwitch";
 
 export function AssistantSessionPage() {
     const { sessionId } = useParams<{ sessionId: string }>();
@@ -71,7 +70,6 @@ export function AssistantSessionPage() {
     const [isAutoApprovalModalOpen, setIsAutoApprovalModalOpen] = useState(false);
     const [allowAll, setAllowAll] = useState(false);
     const [allowAllError, setAllowAllError] = useState<string | null>(null);
-    const [isAllowAllConfirmOpen, setIsAllowAllConfirmOpen] = useState(false);
 
     useEffect(() => {
         if (!sessionId) return;
@@ -165,31 +163,6 @@ export function AssistantSessionPage() {
         } catch (err) {
             console.error("Failed to delete auto-approval:", err);
             setAutoApprovalError((err as Error).message || "Failed to delete auto-approval rule");
-        }
-    };
-
-    const handleAllowAllConfirm = async () => {
-        if (!sessionId) return;
-        setIsAllowAllConfirmOpen(false);
-        setAllowAllError(null);
-        try {
-            await apiSetAllowAll(sessionId, true);
-            setAllowAll(true);
-        } catch (err) {
-            console.error("Failed to enable Allow All:", err);
-            setAllowAllError((err as Error).message || "Failed to enable Allow All");
-        }
-    };
-
-    const handleAllowAllDisable = async () => {
-        if (!sessionId) return;
-        setAllowAllError(null);
-        try {
-            await apiSetAllowAll(sessionId, false);
-            setAllowAll(false);
-        } catch (err) {
-            console.error("Failed to disable Allow All:", err);
-            setAllowAllError((err as Error).message || "Failed to disable Allow All");
         }
     };
 
@@ -357,23 +330,11 @@ export function AssistantSessionPage() {
                             Apply All
                         </Button>
                     )}
-                    <Tooltip content={allowAll
-                        ? "All tool permissions are being auto-approved"
-                        : "Auto-approve all tool permissions for this session"}>
-                        <Switch
-                            id="allow-all-toggle"
-                            label="Allow All"
-                            isChecked={allowAll}
-                            onChange={(_event, checked) => {
-                                if (checked) {
-                                    setIsAllowAllConfirmOpen(true);
-                                } else {
-                                    handleAllowAllDisable();
-                                }
-                            }}
-                            className={`axiom-session-page__allow-all-switch${allowAll ? " axiom-session-page__allow-all-switch--active" : ""}`}
-                        />
-                    </Tooltip>
+                    {sessionId && (
+                        <AllowAllSwitch sessionId={sessionId} allowAll={allowAll}
+                            onChange={(enabled: boolean) => { setAllowAllError(null); setAllowAll(enabled); }}
+                            onError={setAllowAllError} />
+                    )}
                     {autoApprovalCount > 0 && (
                         <Tooltip content={`${autoApprovalCount} auto-approval rule(s) active`}>
                             <Button variant="plain" onClick={openAutoApprovalModal}
@@ -499,29 +460,6 @@ export function AssistantSessionPage() {
                         End Session
                     </Button>
                     <Button variant="link" onClick={() => setIsEndConfirmOpen(false)}>
-                        Cancel
-                    </Button>
-                </ModalFooter>
-            </Modal>
-
-            {/* Allow All confirmation */}
-            <Modal
-                isOpen={isAllowAllConfirmOpen}
-                onClose={() => setIsAllowAllConfirmOpen(false)}
-                variant="small"
-                aria-label="Enable Allow All confirmation"
-            >
-                <ModalHeader title="Enable Allow All?" />
-                <ModalBody>
-                    All tool invocations will be approved automatically without prompting.
-                    This includes file modifications, command execution, and any other tool
-                    actions. You can disable this at any time.
-                </ModalBody>
-                <ModalFooter>
-                    <Button variant="warning" onClick={handleAllowAllConfirm}>
-                        Enable
-                    </Button>
-                    <Button variant="link" onClick={() => setIsAllowAllConfirmOpen(false)}>
                         Cancel
                     </Button>
                 </ModalFooter>
