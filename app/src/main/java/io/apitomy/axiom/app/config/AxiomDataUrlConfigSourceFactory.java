@@ -41,11 +41,16 @@ public class AxiomDataUrlConfigSourceFactory implements ConfigSourceFactory {
     /**
      * Builds the H2 file database URL for an Axiom home directory.
      *
+     * <p>{@code DB_CLOSE_ON_EXIT=FALSE} stops H2 from registering its own JVM shutdown hook. JVM shutdown
+     * hooks run concurrently, so H2's hook would close the database while Quarkus shutdown observers (for
+     * example the assistant session cleanup) still use it. The database is closed instead when Agroal closes
+     * the connection pool during Quarkus shutdown.</p>
+     *
      * @param home the Axiom home directory
      * @return the JDBC URL of {@code <home>/data/axiom}
      */
     public static String dataUrl(Path home) {
         return "jdbc:h2:file:" + home.toAbsolutePath().normalize().resolve("data").resolve("axiom")
-                + ";AUTO_SERVER=TRUE";
+                + ";AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE";
     }
 }

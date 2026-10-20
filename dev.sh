@@ -141,7 +141,7 @@ JAVA_ARGS=(-Dquarkus.http.port="$BACKEND_PORT")
 if [[ "$PERSIST" == true ]]; then
     JAVA_ARGS+=(-Dquarkus.profile=persist)
     if [[ -n "$DATA_DIR" ]]; then
-        JAVA_ARGS+=("-Dquarkus.datasource.jdbc.url=jdbc:h2:file:$DATA_DIR/axiom;AUTO_SERVER=TRUE")
+        JAVA_ARGS+=("-Dquarkus.datasource.jdbc.url=jdbc:h2:file:$DATA_DIR/axiom;AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE")
         echo "Using data directory: $DATA_DIR"
     fi
     echo "Starting backend on http://localhost:$BACKEND_PORT (persistence enabled) ..."
