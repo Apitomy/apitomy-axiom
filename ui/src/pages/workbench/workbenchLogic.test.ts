@@ -5,6 +5,7 @@ import {
     referencedTools, undoPlan,
 } from "./workbenchLogic";
 import type { Composition, CompositionItem } from "../../config/compositions";
+import { AGENT_ACTION_COLOR } from "../../config/actionTypeAppearance";
 
 const item = (id: number, type: CompositionItem["type"], name: string, extra: Partial<CompositionItem> = {}): CompositionItem =>
     ({ id, type, name, contentRevision: "r", lastAuthor: "user", changed: true, ...extra });
@@ -60,6 +61,17 @@ describe("workbenchLogic", () => {
             [{ name: "b", content: { name: "b", inputs: [{ name: "x", type: "string" }] } }, { name: "c", content: { name: "c" } }]);
         expect(merged.map((d) => d.value)).toEqual(["a", "b", "c"]);
         expect(merged[1].inputs).toEqual([{ name: "x", type: "string" }]);
+    });
+
+    it("styles draft agent action types like saved ones", () => {
+        const merged = mergeCatalog([], [
+            { name: "a", content: { name: "a", executionMode: "agent" } },
+            { name: "s", content: { name: "s", executionMode: "script" } },
+        ]);
+        expect(merged[0].color).toBe(AGENT_ACTION_COLOR);
+        expect(merged[0].icon).toBeDefined();
+        expect(merged[1].color).toBeUndefined();
+        expect(merged[1].icon).toBeUndefined();
     });
 
     it("lists where an action type or tool is still used", () => {

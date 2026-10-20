@@ -1,5 +1,6 @@
 import type { ActionTypeDescriptor, ActionTypeField, Workflow } from "@apitomy/flow-ui";
 import type { Composition, CompositionItem, CompositionItemType, ConfigProblem, UndoResult } from "../../config/compositions";
+import { actionTypeAppearance } from "../../config/actionTypeAppearance";
 
 /** Validation status of a composition item. */
 export type ItemStatus = "valid" | "warnings" | "errors" | "unknown";
@@ -184,6 +185,7 @@ export function undoPlan(result: UndoResult, lastWorkflowSaveTurnId: string | un
 
 /**
  * Merges draft action types into the database catalog. Drafts override by value; new drafts are appended.
+ * Drafts get the same icon and color as saved action types of their execution mode.
  * @param database the database catalog
  * @param drafts draft action types
  * @returns the merged catalog
@@ -201,7 +203,9 @@ export function mergeCatalog(database: ActionTypeDescriptor[],
         if (Array.isArray(d.content.outputs)) {
             descriptor.outputs = d.content.outputs as ActionTypeField[];
         }
-        return descriptor;
+        const executionMode: string | undefined = typeof d.content.executionMode === "string"
+            ? d.content.executionMode : undefined;
+        return { ...descriptor, ...actionTypeAppearance(d.name, executionMode) };
     };
     const byName: Map<string, ActionTypeDescriptor> = new Map(
         drafts.map((d: { name: string; content: Record<string, unknown> }) => [d.name, toDescriptor(d)]));

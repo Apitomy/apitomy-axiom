@@ -38,7 +38,8 @@ import {
     WorkflowEditor,
     WorkflowDiffViewer,
 } from "@apitomy/flow-ui";
-import type { ChangeMeta, Workflow, ValidationProblem } from "@apitomy/flow-ui";
+import type { ChangeMeta, Workflow, ValidationProblem, WorkflowEditorHandle } from "@apitomy/flow-ui";
+import { useFocusNodeFromQuery } from "../hooks/useFocusNodeFromQuery";
 import { findActionTypeIdByName, useWorkflowEditorSpi } from "../hooks/useWorkflowEditorSpi";
 import {
     type WorkflowDefinition,
@@ -102,6 +103,8 @@ export function WorkflowDefinitionDetailPage() {
     const [validationErrors, setValidationErrors] = useState<ValidationProblem[]>([]);
     const [versions, setVersions] = useState<WorkflowDefinitionVersion[]>([]);
     const [activeTab, setActiveTab] = useState(0);
+    const [editorHandle, setEditorHandle] = useState<WorkflowEditorHandle | null>(null);
+    useFocusNodeFromQuery(editorHandle);
     const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
     const [runsTotalCount, setRunsTotalCount] = useState(0);
     const [runsPage, setRunsPage] = useState(1);
@@ -510,6 +513,7 @@ export function WorkflowDefinitionDetailPage() {
                         <div className="workflow-definition-detail__design">
                             {editorContent ? (
                                 <WorkflowEditor
+                                    ref={setEditorHandle}
                                     workflow={editorContent}
                                     onChange={handleEditorChange}
                                     onValidationChange={handleValidationChange}

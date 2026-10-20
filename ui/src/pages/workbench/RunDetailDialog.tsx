@@ -10,6 +10,7 @@ import {
 } from "../../config/api";
 import { sseClient } from "../../config/sse";
 import { useEffectiveTheme } from "../../hooks/useTheme";
+import { loadEditorActionTypes } from "../../hooks/useWorkflowEditorSpi";
 import { STATUS_COLORS, toFlowInstance } from "../../components/workflowRun";
 import { formatDuration } from "../../components/TraceGraphNode";
 import { CodeBlock, prettyJson } from "./TestRunDetailModal";
@@ -188,7 +189,8 @@ export function RunDetailDialog({ runId, workflowName, onClose, onAskAi }: RunDe
                                 <TabContentBody className="axiom-test-run__tab-body axiom-run-detail__graph">
                                     {run.workflowContent ? (
                                         <WorkflowViewer workflow={run.workflowContent as Workflow}
-                                            instance={toFlowInstance(run)} theme={theme === "dark" ? "dark" : "light"} />
+                                            instance={toFlowInstance(run)} theme={theme === "dark" ? "dark" : "light"}
+                                            actionTypes={loadEditorActionTypes} />
                                     ) : <p className="axiom-text-subtle">The run has no workflow content.</p>}
                                 </TabContentBody>
                             </Tab>

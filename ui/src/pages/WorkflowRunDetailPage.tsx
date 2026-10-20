@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import {
     Breadcrumb, BreadcrumbItem, Button, CodeBlock, CodeBlockCode, Flex, FlexItem, Form, FormGroup, Label,
     LabelGroup, PageSection, Tab, TabTitleText, Tabs, Title,
@@ -19,6 +19,8 @@ import {
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { useEffectiveTheme } from "../hooks/useTheme";
+import { loadEditorActionTypes } from "../hooks/useWorkflowEditorSpi";
+import { buildRunNodeMenuItems } from "./workflowRunNodeMenu";
 import { STATUS_COLORS, toFlowInstance } from "../components/workflowRun";
 
 /**
@@ -38,6 +40,7 @@ function OverviewField({ label, id, children }: { label: string; id: string; chi
 /** Shows a single workflow run: diagram (default tab), overview, timeline, trace and lineage. */
 export function WorkflowRunDetailPage() {
     const { runId } = useParams<{ runId: string }>();
+    const navigate = useNavigate();
     const numericRunId = Number(runId);
     const [run, setRun] = useState<WorkflowInstanceInfo | null>(null);
     const [activeTab, setActiveTab] = useState(1);
@@ -82,28 +85,14 @@ export function WorkflowRunDetailPage() {
 
     const openLog = (taskId: number) => { setLogTaskId(taskId); setIsLogOpen(true); };
 
-    // Host-contributed right-click actions for a viewer node: open that node's
-    // task execution log, and jump to the run's execution trace tab.
-    const nodeMenuItems = (nodeId: string): WorkflowViewerNodeMenuItem[] => {
-        const items: WorkflowViewerNodeMenuItem[] = [];
-        const entry = (run.history ?? []).find((h) => h.nodeId === nodeId);
-        if (entry?.taskId != null) {
-            const taskId = entry.taskId;
-            items.push({
-                id: "open-log",
-                label: "Open execution log",
-                onSelect: () => openLog(taskId),
-            });
-        }
-        if (run.traceId) {
-            items.push({
-                id: "view-trace",
-                label: "View in execution trace",
-                onSelect: () => setActiveTab(3),
-            });
-        }
-        return items;
-    };
+    // Host-contributed right-click actions for a viewer node: open that node's task execution log, jump to
+    // the run's execution trace tab, or open the node in the workflow editor.
+    const nodeMenuItems = (nodeId: string): WorkflowViewerNodeMenuItem[] =>
+        buildRunNodeMenuItems(run, nodeId, {
+            openLog,
+            viewTrace: () => setActiveTab(3),
+            openInEditor: (url: string) => navigate(url),
+        });
 
     return (
         <PageSection>
@@ -231,6 +220,7 @@ export function WorkflowRunDetailPage() {
                             instance={viewerInstance}
                             theme={effectiveTheme === "dark" ? "dark" : "light"}
                             nodeContextMenuItems={nodeMenuItems}
+                            actionTypes={loadEditorActionTypes}
                         />
                     </div>
                 )}
