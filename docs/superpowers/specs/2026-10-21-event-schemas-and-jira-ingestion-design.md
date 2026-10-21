@@ -137,8 +137,8 @@ A new `EventSchemasResourceImpl` implements the generated interface.
 - A reflection-based test lists record components of the payload/defs records that have no corresponding
   schema property, and fails if there are any.
 - `EventStreamService` tests cover: an invalid event is saved with errors; a validator exception is saved with
-  an error; the same `sourceEventId` under two event sources is saved twice; the same `sourceEventId` under one
-  source is a duplicate.
+  an error; the same `sourceEventId` under two event sources is saved twice; the same `sourceEventId` under
+  one source is a duplicate.
 
 ## Plan 2: Jira Ingestion Fixes
 
@@ -182,9 +182,9 @@ current issue.
 
 ### Requested fields and formatting
 
-- Add `project`, `resolutiondate`, `status`, `duedate`, and the configured `extraFields` to the search request's
-  `fields`. Field names are resolved to field IDs through `GET /rest/api/3/field`, cached per poll. Unknown
-  names are ignored.
+- Add `project`, `resolutiondate`, `status`, `duedate`, and the configured `extraFields` to the search
+  request's `fields`. Field names are resolved to field IDs through `GET /rest/api/3/field`, cached per
+  poll. Unknown names are ignored.
 - All timestamps written to the normalized payload (`createdAt`, `updatedAt`, `closedAt`, comment timestamps)
   are formatted as ISO-8601 UTC `…Z`.
 - Assignee `Actor` on `issue.assigned` and `issue.unassigned` events gets `login` from the changelog item's
