@@ -11,6 +11,10 @@ import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -28,6 +32,26 @@ public class EventStreamService {
 
     @Inject
     Event<StreamEventPersisted> persistedEvents;
+
+    /**
+     * Returns which of the given source event IDs are already stored, with a single indexed query. Pollers use
+     * it to skip events they have already ingested before doing any work on them.
+     *
+     * @param sourceEventIds the source event IDs to look up
+     * @return the subset of {@code sourceEventIds} already stored
+     */
+    @Transactional
+    public Set<String> existingSourceEventIds(Collection<String> sourceEventIds) {
+        if (sourceEventIds.isEmpty()) {
+            return Set.of();
+        }
+        List<String> found = StreamEventEntity.getEntityManager()
+                .createQuery("select e.sourceEventId from StreamEventEntity e where e.sourceEventId in :ids",
+                        String.class)
+                .setParameter("ids", sourceEventIds)
+                .getResultList();
+        return new HashSet<>(found);
+    }
 
     /**
      * Persists a normalized event to the stream. If an event with the same
