@@ -1,8 +1,10 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Workflow } from "@apitomy/flow-ui";
 import { Alert, AlertActionCloseButton, AlertActionLink, Button, Tooltip } from "@patternfly/react-core";
 import { UndoIcon } from "@patternfly/react-icons";
 import { AssistantChatPanel } from "../../components/assistant/AssistantChatPanel";
+import { AllowAllSwitch } from "../../components/assistant/AllowAllSwitch";
+import { fetchAssistantSession } from "../../config/api";
 import type { ToolUseRenderContext } from "../../components/assistant/AssistantMessageList";
 import { ApiError, type Composition, interruptComposition, sendCompositionMessage, undoTurn,
     type UndoResult } from "../../config/compositions";
@@ -38,27 +40,49 @@ function summarise(result: UndoResult, workflowRestored: boolean): string {
 }
 
 /**
- * Workbench chat pane: a toolbar (host controls on the left, "Undo AI turn" on the right) above the
- * composition's assistant chat.
+ * Workbench chat pane: a toolbar (host controls on the left, "Allow All" and "Undo AI turn" on the right)
+ * above the composition's assistant chat.
  */
 export function ChatPane(props: ChatPaneProps) {
     const { composition, sessionError, lastCompletedTurnId, toolbarStart, toolActions } = props;
     const [notice, setNotice] = useState<{ variant: "info" | "danger"; title: string; body?: string } | null>(null);
     const [undoing, setUndoing] = useState<boolean>(false);
     const [undoneTurnId, setUndoneTurnId] = useState<string | undefined>(undefined);
+    const [allowAll, setAllowAll] = useState<boolean>(false);
+    const sessionId: string | undefined = composition.assistantSessionId;
+
+    // Allow All lives on the assistant session (in memory), so a recreated session starts with it off.
+    useEffect(() => {
+        setAllowAll(false);
+        if (!sessionId) {
+            return;
+        }
+        let current = true;
+        fetchAssistantSession(sessionId)
+            .then((s) => { if (current) { setAllowAll(Boolean(s.allowAll)); } })
+            .catch(console.error);
+        return () => { current = false; };
+    }, [sessionId]);
 
     const canUndo: boolean = Boolean(lastCompletedTurnId) && lastCompletedTurnId !== undoneTurnId
         && composition.turnState === "idle" && !sessionError;
     const toolbar = (
         <div className="axiom-workbench__chat-toolbar">
             {toolbarStart}
-            {canUndo && lastCompletedTurnId && (
-                <Tooltip content="Undo the last AI turn">
-                    <Button variant="plain" size="sm" aria-label="Undo AI turn" icon={<UndoIcon />}
-                        isDisabled={undoing} className="axiom-workbench__chat-toolbar-end"
-                        onClick={() => void undo(lastCompletedTurnId)} />
-                </Tooltip>
-            )}
+            <div className="axiom-workbench__chat-toolbar-end">
+                {sessionId && !sessionError && (
+                    <AllowAllSwitch id="workbench-allow-all-toggle" sessionId={sessionId} allowAll={allowAll}
+                        onChange={setAllowAll}
+                        onError={(message: string) => setNotice({ variant: "danger", title: "Allow All toggle failed",
+                            body: message })} />
+                )}
+                {canUndo && lastCompletedTurnId && (
+                    <Tooltip content="Undo the last AI turn">
+                        <Button variant="plain" size="sm" aria-label="Undo AI turn" icon={<UndoIcon />}
+                            isDisabled={undoing} onClick={() => void undo(lastCompletedTurnId)} />
+                    </Tooltip>
+                )}
+            </div>
         </div>
     );
 
@@ -71,7 +95,6 @@ export function ChatPane(props: ChatPaneProps) {
             </div>
         );
     }
-    const sessionId: string | undefined = composition.assistantSessionId;
     if (!sessionId) {
         return (
             <div className="axiom-workbench__chat">
@@ -128,7 +151,7 @@ export function ChatPane(props: ChatPaneProps) {
                     {notice.body}
                 </Alert>
             )}
-            <AssistantChatPanel sessionId={sessionId} onSend={onSend}
+            <AssistantChatPanel sessionId={sessionId} onSend={onSend} onAllowAllChanged={setAllowAll}
                 onInterrupt={() => interruptComposition(composition.id)}
                 disabledReason={composition.turnState === "ai-working" ? "The AI is working…" : undefined}
                 prefill={props.prefill}

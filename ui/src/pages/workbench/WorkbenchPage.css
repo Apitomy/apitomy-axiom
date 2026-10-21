@@ -193,6 +193,17 @@
     margin-left: auto;
 }
 
+.axiom-workbench__chat-toolbar-end {
+    display: flex;
+    align-items: center;
+    gap: var(--pf-t--global--spacer--xs, 4px);
+}
+
+/* The switch's own right margin is for the session page header; the toolbar gap spaces it here. */
+.axiom-workbench__chat-toolbar-end .axiom-allow-all-switch {
+    margin-right: 0;
+}
+
 /* The left toolbar holds only the collapse button; no side padding so it also fits the 32px rail. */
 .axiom-workbench__pane-toolbar {
     padding: 0;

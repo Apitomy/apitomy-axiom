@@ -1,0 +1,8 @@
+/* Allow All switch: amber toggle while every tool permission is auto-approved. */
+.axiom-allow-all-switch {
+    margin-right: 12px;
+}
+
+.axiom-allow-all-switch--active .pf-v6-c-switch__toggle {
+    --pf-v6-c-switch__toggle--before--BackgroundColor: var(--pf-t--global--color--status--warning--default, #f0ab00);
+}

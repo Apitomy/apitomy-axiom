@@ -1,6 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as c from "../../config/compositions";
+import * as api from "../../config/api";
 import { ChatPane } from "./ChatPane";
 
 let chatProps: Record<string, any> = {};
@@ -15,6 +16,11 @@ const props = { composition, sessionError: null, lastCompletedTurnId: "t1", pref
     onReplaceWorkflow: vi.fn(), lastWorkflowSaveTurnId: "t1", onUndone: vi.fn() };
 
 describe("ChatPane", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        vi.spyOn(api, "fetchAssistantSession").mockResolvedValue({ id: "s1", allowAll: false } as never);
+    });
+
     it("sends through the composition with the selection after flushing", async () => {
         const send = vi.spyOn(c, "sendCompositionMessage").mockResolvedValue(composition);
         render(<ChatPane {...props} />);
@@ -102,5 +108,33 @@ describe("ChatPane", () => {
     it("keeps the generic tool blocks without tool actions", () => {
         render(<ChatPane {...props} />);
         expect(chatProps.renderToolUseGroup).toBeUndefined();
+    });
+
+    it("shows the session's Allow All state in the toolbar", async () => {
+        vi.mocked(api.fetchAssistantSession).mockResolvedValue({ id: "s1", allowAll: true } as never);
+        render(<ChatPane {...props} />);
+        await waitFor(() => expect((screen.getByLabelText("Allow All") as HTMLInputElement).checked).toBe(true));
+        expect(api.fetchAssistantSession).toHaveBeenCalledWith("s1");
+    });
+
+    it("follows Allow All changes reported by the chat", async () => {
+        render(<ChatPane {...props} />);
+        const toggle = screen.getByLabelText("Allow All") as HTMLInputElement;
+        await waitFor(() => expect(api.fetchAssistantSession).toHaveBeenCalled());
+        expect(toggle.checked).toBe(false);
+        act(() => chatProps.onAllowAllChanged(true));
+        expect(toggle.checked).toBe(true);
+    });
+
+    it("rereads Allow All when the composition gets a new session", async () => {
+        const { rerender } = render(<ChatPane {...props} />);
+        await waitFor(() => expect(api.fetchAssistantSession).toHaveBeenCalledWith("s1"));
+        rerender(<ChatPane {...props} composition={{ ...composition, assistantSessionId: "s2" }} />);
+        await waitFor(() => expect(api.fetchAssistantSession).toHaveBeenCalledWith("s2"));
+    });
+
+    it("has no Allow All switch until the session exists", () => {
+        render(<ChatPane {...props} composition={{ ...composition, assistantSessionId: undefined }} />);
+        expect(screen.queryByLabelText("Allow All")).toBeNull();
     });
 });
