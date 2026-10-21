@@ -55,6 +55,29 @@ describe("SubscriptionItemEditor", () => {
         expect(api.previewSubscriptionFilter).toHaveBeenCalledWith({ filterExpression: base.filterExpression, limit: 200 });
     });
 
+    it("ignores a preview response for a filter that has since changed", async () => {
+        const result = (type: string, matched: boolean) => ({
+            results: [{ matched, event: { id: type, type, ref: "r", timestamp: "2026-10-15T10:00:00Z" } }],
+            totalMatched: matched ? 1 : 0, totalCount: 1, page: 1, limit: 200, errorCount: 0,
+        });
+        let resolveOld: (v: unknown) => void = () => {};
+        vi.mocked(api.previewSubscriptionFilter)
+            .mockImplementationOnce(() => new Promise((r) => { resolveOld = r; }) as never)
+            .mockResolvedValueOnce(result("new.type", false) as never);
+        const props = { value: { ...base, filterExpression: "old" }, onChange: vi.fn(), workflowName: "wf",
+            published: false, workflowPublished: false, enabled: false, onToggleEnabled: vi.fn() };
+        const { rerender } = render(<MemoryRouter><SubscriptionItemEditor {...props} /></MemoryRouter>);
+        await vi.waitFor(() => expect(api.previewSubscriptionFilter).toHaveBeenCalledTimes(1));
+        rerender(<MemoryRouter>
+            <SubscriptionItemEditor {...props} value={{ ...base, filterExpression: "new" }} />
+        </MemoryRouter>);
+        expect(await screen.findByText("0 of 1 recent events match")).toBeInTheDocument();
+        resolveOld(result("old.type", true));
+        await new Promise((r) => setTimeout(r, 0));
+        expect(screen.getByText("0 of 1 recent events match")).toBeInTheDocument();
+        expect(screen.queryByText("1 of 1 recent events match")).toBeNull();
+    });
+
     it("adds a dispatch rule and a start rule bound to the workflow", async () => {
         const props = renderEditor({ value: { ...base, routing: [] } });
         await userEvent.click(screen.getByRole("button", { name: "Add start rule" }));

@@ -61,12 +61,27 @@ export function SubscriptionItemEditor(props: SubscriptionItemEditorProps) {
     const [previewError, setPreviewError] = useState<string | null>(null);
 
     useEffect(() => {
+        // Set when the filter changes again (or the editor unmounts), so a slow response for an older filter
+        // can never overwrite the preview of the current one.
+        let stale: boolean = false;
         const timer = setTimeout(() => {
             previewSubscriptionFilter({ filterExpression: filter, limit: PREVIEW_LIMIT })
-                .then((r) => { setPreview(r); setPreviewError(null); })
-                .catch((e: unknown) => setPreviewError(e instanceof Error ? e.message : String(e)));
+                .then((r) => {
+                    if (!stale) {
+                        setPreview(r);
+                        setPreviewError(null);
+                    }
+                })
+                .catch((e: unknown) => {
+                    if (!stale) {
+                        setPreviewError(e instanceof Error ? e.message : String(e));
+                    }
+                });
         }, PREVIEW_DEBOUNCE_MS);
-        return () => clearTimeout(timer);
+        return () => {
+            stale = true;
+            clearTimeout(timer);
+        };
     }, [filter]);
 
     const set = (field: string, v: unknown) => onChange({ ...value, [field]: v });
