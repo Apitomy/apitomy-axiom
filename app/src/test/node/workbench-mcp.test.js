@@ -115,3 +115,32 @@ test("formatSubscriptionPreview with no matches", () => {
     assert.strictEqual(helpers.formatSubscriptionPreview({ results: [], totalMatched: 0, errorCount: 0 }),
         "0 of 0 recent events match (0 in all events).");
 });
+
+test("validateArgs accepts calls matching the declared parameters", () => {
+    const upsert = helpers.TOOLS.find(t => t.name === "upsert_item");
+    assert.strictEqual(helpers.validateArgs(upsert, { type: "tool", item: {} }), null);
+    const validate = helpers.TOOLS.find(t => t.name === "validate_composition");
+    assert.strictEqual(helpers.validateArgs(validate, {}), null);
+});
+
+test("validateArgs reports a misnamed upsert_item argument in the tool's own terms", () => {
+    const upsert = helpers.TOOLS.find(t => t.name === "upsert_item");
+    assert.strictEqual(helpers.validateArgs(upsert, { type: "action-type", content: "{}" }),
+        "Invalid arguments for upsert_item: missing required argument 'item'; unknown argument 'content'. "
+        + "Expected: type: string, item: object.");
+});
+
+test("validateArgs reports misnamed suggest_test arguments and optional parameters", () => {
+    const suggest = helpers.TOOLS.find(t => t.name === "suggest_test");
+    assert.strictEqual(helpers.validateArgs(suggest, { targetType: "tool", targetName: "t", inputs: {} }),
+        "Invalid arguments for suggest_test: missing required arguments 'type', 'name'; "
+        + "unknown arguments 'targetType', 'targetName'. Expected: type: string, name: string, inputs?: object.");
+});
+
+test("validateArgs treats null as missing and rejects arguments to a no-argument tool", () => {
+    const upsert = helpers.TOOLS.find(t => t.name === "upsert_item");
+    assert.match(helpers.validateArgs(upsert, { type: "tool", item: null }), /missing required argument 'item'/);
+    const validate = helpers.TOOLS.find(t => t.name === "validate_composition");
+    assert.strictEqual(helpers.validateArgs(validate, { x: 1 }),
+        "Invalid arguments for validate_composition: unknown argument 'x'. Expected: (no arguments).");
+});
