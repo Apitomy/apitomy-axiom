@@ -80,6 +80,39 @@ function asObject(value, name) {
 }
 
 /**
+ * Checks tool call arguments against the tool's declared parameters before the handler runs, so a
+ * misnamed or missing argument is reported in the tool's own terms instead of surfacing as a confusing
+ * downstream (backend) error.
+ * @param {{name: string, parameters?: Array<{name: string, type?: string, required?: boolean}>}} tool the tool
+ * @param {object} args the call arguments
+ * @returns {string|null} an error message listing every problem and the expected signature, or null if valid
+ */
+function validateArgs(tool, args) {
+    const params = tool.parameters || [];
+    const known = new Set(params.map(p => p.name));
+    const given = Object.keys(args || {});
+    const problems = [];
+    const missing = params
+        .filter(p => p.required && (args?.[p.name] === undefined || args?.[p.name] === null))
+        .map(p => p.name);
+    if (missing.length > 0) {
+        problems.push(`missing required argument${missing.length > 1 ? "s" : ""} `
+            + missing.map(n => `'${n}'`).join(", "));
+    }
+    const unknown = given.filter(n => !known.has(n));
+    if (unknown.length > 0) {
+        problems.push(`unknown argument${unknown.length > 1 ? "s" : ""} `
+            + unknown.map(n => `'${n}'`).join(", "));
+    }
+    if (problems.length === 0) {
+        return null;
+    }
+    const signature = params.length === 0 ? "(no arguments)"
+        : params.map(p => `${p.name}${p.required ? "" : "?"}: ${p.type || "string"}`).join(", ");
+    return `Invalid arguments for ${tool.name}: ${problems.join("; ")}. Expected: ${signature}.`;
+}
+
+/**
  * Summarizes a stream event on one line.
  * @param {object} e the stream event
  * @returns {string} the summary line
@@ -654,6 +687,11 @@ async function main() {
             return { content: [{ type: "text", text: "Unknown tool: " + toolName }], isError: true };
         }
         log("INFO", "Tool called", { toolName, args: Object.keys(args) });
+        const argError = validateArgs(tool, args);
+        if (argError) {
+            log("WARN", "Tool called with invalid arguments", { toolName, error: argError });
+            return { content: [{ type: "text", text: argError }], isError: true };
+        }
         try {
             const result = await tool.handler(args);
             return { content: [{ type: "text", text: result || "OK" }] };
@@ -669,7 +707,7 @@ async function main() {
 
 module.exports = {
     summarizeEvent, pickPath, truncateDeep, formatProblems, suggestionBody, formatRunList, formatRun, formatTrace,
-    formatSubscriptionPreview,
+    formatSubscriptionPreview, validateArgs, TOOLS,
 };
 
 if (require.main === module) {
