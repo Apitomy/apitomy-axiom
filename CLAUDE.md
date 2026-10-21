@@ -17,3 +17,16 @@ This project follows **contract-first** (API-first) development for the REST lay
    resource methods.
 
 See `docs/developer-guide/api-first-development.md` for the full guide.
+
+## Live Testing
+
+A production Axiom instance may be running on this machine on the standard ports (UI/API `9191`, data in
+`~/.axiom`). Never use or modify it when testing.
+
+- **Always start a separate instance with `dev.sh` and a port offset**, e.g.
+  `./dev.sh --skip-ui --portOffset=500` (backend on `9590`). Never test against port `9191` or `9090`.
+- **Isolate the Axiom home** by setting the `AXIOM_HOME` environment variable to a temporary directory,
+  and use `--dataDir` for the database, e.g.
+  `AXIOM_HOME=/tmp/axiom-test/home ./dev.sh --skip-ui --portOffset=500 --dataDir=/tmp/axiom-test/data`.
+  Do not pass `-Daxiom.home` via `JAVA_TOOL_OPTIONS`: it breaks `dev.sh`'s Java version check.
+- Stop the test instance when finished.

@@ -16,7 +16,7 @@ import jakarta.transaction.Transactional;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,9 +51,6 @@ GitHubEventSourcePoller {
     // Track ETag per event source+repo for conditional polling
     // Key: "eventSourceId:owner/repo"
     private final Map<String, String> etagCache = new ConcurrentHashMap<>();
-
-    // Track last-seen event IDs per event source+repo for dedup
-    private final Map<String, Set<String>> seenEventIds = new ConcurrentHashMap<>();
 
     @PreDestroy
     void onShutdown() {
@@ -134,7 +131,8 @@ GitHubEventSourcePoller {
                 errors.append("Invalid repo format: ").append(repoFullName);
                 continue;
             }
-            int ingested = pollRepository(eventSource, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl, errors);
+            int ingested = pollRepository(eventSource.id, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl,
+                    errors);
             totalIngested += ingested;
         }
 
@@ -155,76 +153,96 @@ GitHubEventSourcePoller {
                 eventSource.id, totalIngested, repositories.size());
     }
 
-    private int pollRepository(EventSourceEntity eventSource, String owner, String repo,
-                                String token, String apiBaseUrl, String htmlBaseUrl,
-                                StringBuilder errors) {
-        String cacheKey = eventSource.id + ":" + owner + "/" + repo;
+    /**
+     * Polls one repository and ingests the events that are not yet in the event stream.
+     *
+     * <p>All event IDs of the page are looked up in the stream with one indexed query, and events already
+     * stored are skipped before normalization and PR backfill. After a restart (which loses the in-memory
+     * ETag) this keeps the first poll cheap. The full PR is only fetched for PR events whose action is
+     * supported, so unsupported events cost no API calls either.</p>
+     *
+     * <p>If storing an event fails, the remaining events are left for the next poll, and the ETag is not
+     * updated so that the next request is not answered with a 304.</p>
+     *
+     * @param eventSourceId the event source identifier
+     * @param owner the repository owner
+     * @param repo the repository name
+     * @param token the GitHub token, or null
+     * @param apiBaseUrl the GitHub REST API base URL
+     * @param htmlBaseUrl the GitHub web base URL (for event refs)
+     * @param errors collects error descriptions for the poll log
+     * @return the number of events stored
+     */
+    int pollRepository(String eventSourceId, String owner, String repo,
+                       String token, String apiBaseUrl, String htmlBaseUrl,
+                       StringBuilder errors) {
+        String repository = owner + "/" + repo;
+        String cacheKey = eventSourceId + ":" + repository;
         String etag = etagCache.get(cacheKey);
 
         GitHubEventsApiClient.EventsPollResult result = apiClient.fetchRepositoryEvents(
                 apiBaseUrl, owner, repo, token, etag);
 
         if (!result.success()) {
-            LOG.warnf("Failed to poll %s/%s for event source %s: %s",
-                    owner, repo, eventSource.id, result.errorMessage());
-            if (!errors.isEmpty()) errors.append("; ");
-            errors.append(owner).append("/").append(repo).append(": ").append(result.errorMessage());
+            LOG.warnf("Failed to poll %s for event source %s: %s",
+                    repository, eventSourceId, result.errorMessage());
+            appendError(errors, repository + ": " + result.errorMessage());
             return 0;
-        }
-
-        // Update cached ETag
-        if (result.etag() != null) {
-            etagCache.put(cacheKey, result.etag());
         }
 
         if (result.notModified()) {
-            LOG.debugf("No changes for %s/%s (304 Not Modified)", owner, repo);
+            LOG.debugf("No changes for %s (304 Not Modified)", repository);
             return 0;
         }
 
-        // Process events (newest first in API, we want oldest first for ordering)
         JsonNode events = result.events();
         if (events == null || !events.isArray()) return 0;
 
-        Set<String> seen = seenEventIds.computeIfAbsent(cacheKey, k -> new HashSet<>());
+        List<String> pageIds = new ArrayList<>();
+        for (JsonNode event : events) {
+            String id = event.path("id").asText(null);
+            if (id != null) pageIds.add(id);
+        }
+        Set<String> alreadyStored = eventStreamService.existingSourceEventIds(pageIds);
+
         int ingested = 0;
+        boolean complete = true;
 
         // Events API returns newest first; process in reverse for chronological order
         for (int i = events.size() - 1; i >= 0; i--) {
             JsonNode event = events.get(i);
             String eventId = event.path("id").asText(null);
+            if (eventId != null && alreadyStored.contains(eventId)) continue;
 
-            // Skip if already seen (dedup in memory)
-            if (eventId != null && seen.contains(eventId)) continue;
-
-            // Backfill PR data if needed
-            JsonNode fullPr = null;
-            String eventType = event.path("type").asText("");
-            if (needsPrBackfill(eventType)) {
-                fullPr = backfillPr(apiBaseUrl, owner, repo, event, token);
+            try {
+                JsonNode fullPr = normalizer.isSupportedPullRequestEvent(event)
+                        ? backfillPr(apiBaseUrl, owner, repo, event, token)
+                        : null;
+                NormalizedEvent normalized = normalizer.normalize(event, eventSourceId, htmlBaseUrl, fullPr);
+                if (normalized != null && eventStreamService.persistEvent(normalized)) {
+                    ingested++;
+                }
+            } catch (RuntimeException e) {
+                LOG.warnf(e, "Failed to ingest GitHub event %s from %s for event source %s; "
+                        + "will retry on the next poll", eventId, repository, eventSourceId);
+                appendError(errors, repository + ": failed to ingest event " + eventId + ": " + e.getMessage());
+                complete = false;
+                break;
             }
-
-            NormalizedEvent normalized = normalizer.normalize(event, eventSource.id, htmlBaseUrl, fullPr);
-            if (normalized != null) {
-                boolean persisted = eventStreamService.persistEvent(normalized);
-                if (persisted) ingested++;
-            }
-
-            if (eventId != null) seen.add(eventId);
         }
 
-        // Keep seen set bounded (only keep last 1000 IDs per repo)
-        if (seen.size() > 1000) {
-            // Clear and let dedup in EventStreamService handle duplicates
-            seen.clear();
+        if (complete && result.etag() != null) {
+            etagCache.put(cacheKey, result.etag());
         }
 
+        LOG.debugf("Polled %s: %d events, %d already stored, %d ingested",
+                repository, events.size(), alreadyStored.size(), ingested);
         return ingested;
     }
 
-    private boolean needsPrBackfill(String eventType) {
-        return "PullRequestEvent".equals(eventType)
-                || "PullRequestReviewEvent".equals(eventType);
+    private static void appendError(StringBuilder errors, String message) {
+        if (!errors.isEmpty()) errors.append("; ");
+        errors.append(message);
     }
 
     private JsonNode backfillPr(String apiBaseUrl, String owner, String repo,

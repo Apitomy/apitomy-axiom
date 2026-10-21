@@ -46,6 +46,7 @@ import org.jboss.logging.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -301,10 +302,33 @@ public class GitHubEventNormalizerV2 {
         };
     }
 
+    /** PullRequestEvent actions that {@link #normalize} turns into stream events. */
+    static final Set<String> PR_ACTIONS = Set.of("opened", "closed", "reopened", "review_requested",
+            "labeled", "unlabeled", "synchronize");
+
+    /** PullRequestReviewEvent actions that {@link #normalize} turns into stream events. */
+    static final Set<String> PR_REVIEW_ACTIONS = Set.of("created");
+
+    /**
+     * Tells whether a pull request event will be normalized, so callers can avoid fetching the full pull
+     * request (an extra API call) for events that would be dropped anyway.
+     *
+     * @param event a single event JSON object from the Events API
+     * @return true if the event is a PullRequestEvent or PullRequestReviewEvent with a supported action
+     */
+    public boolean isSupportedPullRequestEvent(JsonNode event) {
+        String action = textOrNull(event.path("payload"), "action");
+        return switch (event.path("type").asText("")) {
+            case "PullRequestEvent" -> PR_ACTIONS.contains(action);
+            case "PullRequestReviewEvent" -> PR_REVIEW_ACTIONS.contains(action);
+            default -> false;
+        };
+    }
+
     private NormalizationResult normalizePrReviewEvent(String action, JsonNode payload,
                                                         String baseUrl, String repoFullName,
                                                         JsonNode fullPr) {
-        if (!"created".equals(action)) {
+        if (!PR_REVIEW_ACTIONS.contains(action)) {
             return null;
         }
         JsonNode prNode = fullPr != null ? fullPr : payload.path("pull_request");
