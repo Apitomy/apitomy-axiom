@@ -11,6 +11,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
@@ -92,7 +93,7 @@ public class ClaudeCodeAgent implements Agent {
     }
 
     /**
-     * Parses the configured plugin directories once at startup so tasks neither
+     * Parses the configured plugin directories once per bean so tasks neither
      * re-parse the config nor re-log misconfiguration warnings per execution.
      */
     @PostConstruct
@@ -101,15 +102,17 @@ public class ClaudeCodeAgent implements Agent {
     }
 
     /**
-     * Parses the raw comma-separated plugin directory configuration. Blank
-     * entries are ignored. Entries that are not absolute paths are logged and
-     * skipped: the CLI would otherwise resolve them against each task's working
-     * directory, silently loading a different plugin per task. Entries that
-     * point at a missing directory are logged and still passed through, so the
-     * CLI reports the problem it sees.
+     * Parses the raw comma-separated plugin path configuration. Blank entries
+     * are ignored. Entries that are not absolute paths are logged and skipped:
+     * the CLI would otherwise resolve them against each task's working
+     * directory, silently loading a different plugin per task. Entries that do
+     * not exist are logged and still passed through: the CLI ignores a missing
+     * {@code --plugin-dir} without any diagnostic of its own, so this warning
+     * is the only signal an operator gets. Entries that cannot be parsed as
+     * paths are logged and skipped rather than failing bean creation.
      *
      * @param config the raw comma-separated configuration value
-     * @return the plugin directories in configured order, never {@code null}
+     * @return the plugin paths in configured order, never {@code null}
      */
     static List<String> parsePluginDirs(String config) {
         if (config == null || config.isBlank()) {
@@ -121,12 +124,19 @@ public class ClaudeCodeAgent implements Agent {
             if (trimmed.isEmpty()) {
                 continue;
             }
-            if (!Path.of(trimmed).isAbsolute()) {
-                LOG.warnf("Skipping configured plugin directory that is not an absolute path: %s", trimmed);
+            Path path;
+            try {
+                path = Path.of(trimmed);
+            } catch (InvalidPathException e) {
+                LOG.warnf("Skipping configured plugin path that cannot be parsed as a path: %s", trimmed);
                 continue;
             }
-            if (!Files.isDirectory(Path.of(trimmed))) {
-                LOG.warnf("Configured plugin directory does not exist or is not a directory: %s", trimmed);
+            if (!path.isAbsolute()) {
+                LOG.warnf("Skipping configured plugin path that is not absolute: %s", trimmed);
+                continue;
+            }
+            if (!Files.exists(path)) {
+                LOG.warnf("Configured plugin path does not exist: %s", trimmed);
             }
             dirs.add(trimmed);
         }
@@ -206,7 +216,8 @@ public class ClaudeCodeAgent implements Agent {
 
     private CompletableFuture<AgentResult> executeInternal(AgentRequest request,
                                                             String jsonSchema) {
-        LOG.infof("Executing via Claude Code (executionId=%s)", request.getExecutionId());
+        LOG.infof("Executing via Claude Code (executionId=%s, pluginDirs=%s)",
+                request.getExecutionId(), configuredPluginDirs);
 
         ExecutionLogBuilder logBuilder = new ExecutionLogBuilder();
         logBuilder.header(0, "agent", Instant.now());

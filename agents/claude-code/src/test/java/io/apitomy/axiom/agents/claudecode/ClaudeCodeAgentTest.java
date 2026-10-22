@@ -46,8 +46,9 @@ class ClaudeCodeAgentTest {
     }
 
     /**
-     * An absolute entry pointing at a missing directory is still passed
-     * through: the CLI reports the problem it sees.
+     * An absolute entry pointing at a missing path is still passed through. The
+     * CLI ignores a missing {@code --plugin-dir} without any diagnostic, so the
+     * parser's warning is the only signal an operator gets.
      */
     @Test
     void keepsAbsoluteEntryForMissingDirectory() {
