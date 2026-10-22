@@ -460,7 +460,7 @@ All Issue fields plus:
 | `issue.labeled` | `IssuesEvent` / `labeled` | Changelog: `labels` (added) |
 | `issue.unlabeled` | `IssuesEvent` / `unlabeled` | Changelog: `labels` (removed) |
 | `issue.comment.created` | `IssueCommentEvent` / `created` | Comment `created` > last poll |
-| `issue.comment.updated` | `IssueCommentEvent` / `edited` | Comment `updated` > `created` and in poll window (one event per edit) |
+| `issue.comment.updated` | `IssueCommentEvent` / `edited` | Comment `updated` > `created` and in poll window (one event per observed edit: the latest `updated` seen in each poll window) |
 | `issue.comment.deleted` | `IssueCommentEvent` / `deleted` | Changelog: `Comment` item with `fromString` and no `toString` |
 
 ## Pull Request Events (GitHub only)
@@ -561,6 +561,8 @@ Limits:
 - Fields without changelog history keep their current values in every snapshot.
 - A rebuilt description is the changelog's plain/wiki text; the current one is converted from ADF.
 - Comment bodies are always the current text (Jira keeps no comment history).
+- Jira exposes only a comment's latest `updated` time, so several edits of one comment within one poll window
+  produce a single `issue.comment.updated`; intermediate edits are not recorded individually.
 - Extra-field values from the changelog are Jira's display strings (`toString`); current values are rendered
   from the field JSON (`value`, `name`, `displayName` or `key` of objects, arrays joined with `, `, integral
   numbers without a fraction).
@@ -591,7 +593,7 @@ the `done` category emits `issue.closed`, out of it `issue.reopened`, anything e
 | Changelog entry producing one event | `{KEY}-{historyId}` |
 | Changelog entry producing several events | `{KEY}-{historyId}-{i}` (item order) |
 | Comment created | `{KEY}-comment-{commentId}` |
-| Comment edited | `{KEY}-comment-{commentId}-updated-{updatedEpochMillis}` (one per edit) |
+| Comment edited | `{KEY}-comment-{commentId}-updated-{updatedEpochMillis}` (one per observed edit, keyed by the latest `updated`) |
 
 **Timestamps:** every timestamp in the payload (`createdAt`, `updatedAt`, `closedAt`, comment timestamps) and
 the event `timestamp` are ISO-8601 UTC ending in `Z`.
@@ -625,6 +627,9 @@ event where history exists):
 - Changelog entries that now produce more events (for example a status change plus a resolution change)
   use `-{i}` suffixes; such an entry re-read in the first poll window after the upgrade is stored once more
   under the new IDs (accepted one-time effect, limited to the two-minute query overlap).
+- Whether an entry gets `{KEY}-{historyId}` or `-{i}` IDs depends on how many events it produces, which
+  depends on `configuration.extraFields`; changing `extraFields` can likewise re-key an entry re-read inside
+  the two-minute overlap, which is then stored once more.
 - GitHub and Jira event sources whose `baseUrl` lacks `http://` or `https://` (for example
   `github.ibm.com/api/v3`) now fail validation when edited or imported and must be updated.
 
