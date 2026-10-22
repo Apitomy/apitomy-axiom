@@ -216,8 +216,10 @@ public class ClaudeCodeAgent implements Agent {
 
     private CompletableFuture<AgentResult> executeInternal(AgentRequest request,
                                                             String jsonSchema) {
-        LOG.infof("Executing via Claude Code (executionId=%s, pluginDirs=%s)",
-                request.getExecutionId(), configuredPluginDirs);
+        LOG.infof("Executing via Claude Code (executionId=%s)", request.getExecutionId());
+        if (LOG.isDebugEnabled()) {
+            LOG.debugf("Plugin dirs applied to this execution: %s", configuredPluginDirs);
+        }
 
         ExecutionLogBuilder logBuilder = new ExecutionLogBuilder();
         logBuilder.header(0, "agent", Instant.now());
