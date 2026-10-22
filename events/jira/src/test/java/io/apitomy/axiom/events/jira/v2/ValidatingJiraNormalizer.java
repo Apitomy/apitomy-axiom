@@ -21,8 +21,8 @@ class ValidatingJiraNormalizer extends JiraEventNormalizerV2 {
 
     @Override
     public List<NormalizedEvent> normalizeIssue(JsonNode issue, Instant since, String eventSourceId,
-                                                String baseUrl) {
-        List<NormalizedEvent> events = super.normalizeIssue(issue, since, eventSourceId, baseUrl);
+                                                String baseUrl, JiraNormalizationContext context) {
+        List<NormalizedEvent> events = super.normalizeIssue(issue, since, eventSourceId, baseUrl, context);
         for (NormalizedEvent event : events) {
             assertEquals(List.of(), REGISTRY.validate(event), "schema errors for " + event.sourceEventId());
         }

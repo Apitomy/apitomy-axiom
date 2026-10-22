@@ -30,30 +30,26 @@ import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
- * Normalizes raw Jira issue JSON (from JQL search results with {@code expand=changelog})
- * into {@link NormalizedEvent} records with typed payloads. A single Jira issue can
- * produce multiple events: one per changelog history item (field-level change) and
- * one per comment that was created or updated after the {@code since} cutoff.
- *
- * <p>This is the V2 normalizer designed for the event-sourcing redesign, replacing
- * the V1 {@code JiraEventClassifier} which used raw ObjectNodes.</p>
+ * Normalizes raw Jira issue JSON (from JQL search results with {@code expand=changelog}, with the complete
+ * changelog and comment list) into {@link NormalizedEvent} records with typed payloads. A single issue can
+ * produce multiple events: one for its creation, one or more per changelog history entry, and one per
+ * comment created or edited after the {@code since} cutoff. Every event carries the issue state as of that
+ * event, rebuilt by {@link JiraIssueHistory}.
  */
 @ApplicationScoped
 public class JiraEventNormalizerV2 {
 
     private static final Logger LOG = Logger.getLogger(JiraEventNormalizerV2.class);
     private static final String SOURCE = "jira";
-
-    /** Status category keys that Jira considers "done". */
-    private static final Set<String> DONE_CATEGORIES = Set.of("done");
 
     @Inject
     ObjectMapper objectMapper;
@@ -62,24 +58,41 @@ public class JiraEventNormalizerV2 {
     public JiraEventNormalizerV2() {
     }
 
-    /** Constructor for testing (direct injection). */
+    /**
+     * Constructor for testing (direct injection).
+     *
+     * @param objectMapper the object mapper used to build {@code sourceData}
+     */
     public JiraEventNormalizerV2(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
     /**
-     * Normalizes a single Jira issue (from JQL search with {@code expand=changelog})
-     * into a list of {@link NormalizedEvent} records -- one per detected change since
-     * the given cutoff.
+     * Normalizes an issue with no status-category lookup and no extra fields.
      *
-     * @param issue        a single issue JSON object from the Jira search results
-     * @param since        only events after this instant are included
+     * @param issue         a single issue JSON object from the Jira search results
+     * @param since         only events after this instant are included
      * @param eventSourceId the slug of the EventSource that produced this event
-     * @param baseUrl      the Jira instance base URL (e.g., {@code https://myorg.atlassian.net})
-     * @return a list of normalized events (may be empty if nothing changed since {@code since})
+     * @param baseUrl       the Jira instance base URL (e.g., {@code https://myorg.atlassian.net})
+     * @return the normalized events (may be empty)
      */
     public List<NormalizedEvent> normalizeIssue(JsonNode issue, Instant since,
-                                                 String eventSourceId, String baseUrl) {
+                                                String eventSourceId, String baseUrl) {
+        return normalizeIssue(issue, since, eventSourceId, baseUrl, JiraNormalizationContext.defaults());
+    }
+
+    /**
+     * Normalizes a single Jira issue into the events that happened after {@code since}.
+     *
+     * @param issue         a single issue JSON object (complete changelog and comment list)
+     * @param since         only events after this instant are included
+     * @param eventSourceId the slug of the EventSource that produced this event
+     * @param baseUrl       the Jira instance base URL, without trailing slash
+     * @param context       status categories and configured extra fields for this poll
+     * @return the normalized events (may be empty)
+     */
+    public List<NormalizedEvent> normalizeIssue(JsonNode issue, Instant since, String eventSourceId,
+                                                String baseUrl, JiraNormalizationContext context) {
         List<NormalizedEvent> events = new ArrayList<>();
 
         String issueKey = textOrNull(issue, "key");
@@ -90,148 +103,48 @@ public class JiraEventNormalizerV2 {
         }
 
         String ref = baseUrl + "/browse/" + issueKey;
-        NormalizedIssue normalizedIssue = mapIssue(issue, fields, baseUrl);
-        JsonNode sourceData = buildSourceData(issue, fields);
+        JiraIssueHistory history = JiraIssueHistory.rebuild(issue, context);
 
-        // 1. Check for new issue
+        // 1. Creation
         Instant createdAt = parseJiraTimestamp(textOrNull(fields, "created"));
         if (createdAt != null && createdAt.isAfter(since)) {
-            events.add(buildEvent(
-                    issueKey + "-created",
-                    eventSourceId,
-                    EventType.ISSUE_CREATED,
-                    ref,
-                    formatTimestamp(createdAt),
-                    mapActor(fields.path("reporter")),
-                    new IssueCreatedPayload(normalizedIssue),
-                    sourceData
-            ));
+            JiraIssueState state = history.created();
+            events.add(buildEvent(issueKey + "-created", eventSourceId, EventType.ISSUE_CREATED, ref,
+                    formatTimestamp(createdAt), mapActor(fields.path("reporter")),
+                    new IssueCreatedPayload(toNormalizedIssue(issueKey, fields, state, baseUrl)),
+                    buildSourceData(issue, fields, state, context)));
         }
 
-        // 2. Process changelog entries
+        // 2. Changelog entries
         JsonNode histories = issue.path("changelog").path("histories");
         if (histories.isArray()) {
-            for (JsonNode history : histories) {
-                Instant historyCreated = parseJiraTimestamp(textOrNull(history, "created"));
-                if (historyCreated == null || !historyCreated.isAfter(since)) {
+            for (JsonNode entry : histories) {
+                Instant historyCreated = parseJiraTimestamp(textOrNull(entry, "created"));
+                JsonNode items = entry.path("items");
+                if (historyCreated == null || !historyCreated.isAfter(since) || !items.isArray()) {
                     continue;
                 }
-
-                String historyId = textOrNull(history, "id");
-                Actor historyActor = mapActor(history.path("author"));
-                String historyTimestamp = formatTimestamp(historyCreated);
-                JsonNode items = history.path("items");
-
-                if (!items.isArray()) {
-                    continue;
-                }
+                String historyId = textOrNull(entry, "id");
+                JiraIssueState state = history.after(historyId);
+                ItemContext itemContext = new ItemContext(eventSourceId, ref, formatTimestamp(historyCreated),
+                        mapActor(entry.path("author")), toNormalizedIssue(issueKey, fields, state, baseUrl),
+                        buildSourceData(issue, fields, state, context));
 
                 List<NormalizedEvent> historyEvents = new ArrayList<>();
-
                 for (JsonNode item : items) {
-                    String field = textOrNull(item, "field");
-                    if (field == null) continue;
-
-                    String fromString = textOrNull(item, "fromString");
-                    String toString = textOrNull(item, "toString");
-
-                    switch (field) {
-                        case "status" -> {
-                            Change change = new Change(field, fromString, toString, historyActor);
-                            if (isDoneStatus(toString)) {
-                                historyEvents.add(buildEvent(
-                                        null, eventSourceId, EventType.ISSUE_CLOSED, ref,
-                                        historyTimestamp, historyActor,
-                                        new IssueClosedPayload(normalizedIssue), sourceData
-                                ));
-                            } else if (isDoneStatus(fromString)) {
-                                historyEvents.add(buildEvent(
-                                        null, eventSourceId, EventType.ISSUE_REOPENED, ref,
-                                        historyTimestamp, historyActor,
-                                        new IssueReopenedPayload(normalizedIssue), sourceData
-                                ));
-                            } else {
-                                historyEvents.add(buildEvent(
-                                        null, eventSourceId, EventType.ISSUE_UPDATED, ref,
-                                        historyTimestamp, historyActor,
-                                        new IssueUpdatedPayload(normalizedIssue, change), sourceData
-                                ));
-                            }
-                        }
-                        case "summary", "description" -> {
-                            Change change = new Change(field, fromString, toString, historyActor);
-                            historyEvents.add(buildEvent(
-                                    null, eventSourceId, EventType.ISSUE_UPDATED, ref,
-                                    historyTimestamp, historyActor,
-                                    new IssueUpdatedPayload(normalizedIssue, change), sourceData
-                            ));
-                        }
-                        case "assignee" -> {
-                            if (toString != null && !toString.isEmpty()) {
-                                Actor assignee = new Actor(null, toString, null, null);
-                                historyEvents.add(buildEvent(
-                                        null, eventSourceId, EventType.ISSUE_ASSIGNED, ref,
-                                        historyTimestamp, historyActor,
-                                        new IssueAssignedPayload(normalizedIssue, assignee), sourceData
-                                ));
-                            } else {
-                                Actor previousAssignee = fromString != null
-                                        ? new Actor(null, fromString, null, null) : null;
-                                historyEvents.add(buildEvent(
-                                        null, eventSourceId, EventType.ISSUE_UNASSIGNED, ref,
-                                        historyTimestamp, historyActor,
-                                        new IssueUnassignedPayload(normalizedIssue, previousAssignee),
-                                        sourceData
-                                ));
-                            }
-                        }
-                        case "labels" -> {
-                            Set<String> oldLabels = parseSpaceSeparatedLabels(fromString);
-                            Set<String> newLabels = parseSpaceSeparatedLabels(toString);
-
-                            // Added labels = in new but not in old
-                            for (String label : newLabels) {
-                                if (!oldLabels.contains(label)) {
-                                    historyEvents.add(buildEvent(
-                                            null, eventSourceId, EventType.ISSUE_LABELED, ref,
-                                            historyTimestamp, historyActor,
-                                            new IssueLabeledPayload(normalizedIssue,
-                                                    new NormalizedLabel(label, null, null)),
-                                            sourceData
-                                    ));
-                                }
-                            }
-                            // Removed labels = in old but not in new
-                            for (String label : oldLabels) {
-                                if (!newLabels.contains(label)) {
-                                    historyEvents.add(buildEvent(
-                                            null, eventSourceId, EventType.ISSUE_UNLABELED, ref,
-                                            historyTimestamp, historyActor,
-                                            new IssueUnlabeledPayload(normalizedIssue,
-                                                    new NormalizedLabel(label, null, null)),
-                                            sourceData
-                                    ));
-                                }
-                            }
-                        }
-                        default -> LOG.tracef("Ignoring changelog field: %s", field);
-                    }
+                    historyEvents.addAll(classifyItem(item, itemContext, context));
                 }
-
-                // Assign sourceEventIds to history events
                 if (historyEvents.size() == 1) {
-                    NormalizedEvent e = historyEvents.get(0);
-                    events.add(withSourceEventId(e, issueKey + "-" + historyId));
+                    events.add(withSourceEventId(historyEvents.get(0), issueKey + "-" + historyId));
                 } else {
                     for (int i = 0; i < historyEvents.size(); i++) {
-                        NormalizedEvent e = historyEvents.get(i);
-                        events.add(withSourceEventId(e, issueKey + "-" + historyId + "-" + i));
+                        events.add(withSourceEventId(historyEvents.get(i), issueKey + "-" + historyId + "-" + i));
                     }
                 }
             }
         }
 
-        // 3. Process comments
+        // 3. Comments (bodies are always the current text: Jira keeps no comment history)
         JsonNode comments = fields.path("comment").path("comments");
         if (comments.isArray()) {
             for (JsonNode comment : comments) {
@@ -242,31 +155,23 @@ public class JiraEventNormalizerV2 {
                 NormalizedComment normalizedComment = mapComment(comment, issueKey, baseUrl);
 
                 if (commentCreated != null && commentCreated.isAfter(since)) {
-                    events.add(buildEvent(
-                            issueKey + "-comment-" + commentId,
-                            eventSourceId,
-                            EventType.ISSUE_COMMENT_CREATED,
-                            ref,
-                            formatTimestamp(commentCreated),
-                            commentAuthor,
-                            new IssueCommentCreatedPayload(normalizedIssue, normalizedComment),
-                            sourceData
-                    ));
+                    JiraIssueState state = history.asOf(commentCreated);
+                    events.add(buildEvent(issueKey + "-comment-" + commentId, eventSourceId,
+                            EventType.ISSUE_COMMENT_CREATED, ref, formatTimestamp(commentCreated), commentAuthor,
+                            new IssueCommentCreatedPayload(toNormalizedIssue(issueKey, fields, state, baseUrl),
+                                    normalizedComment),
+                            buildSourceData(issue, fields, state, context)));
                 }
 
                 if (commentUpdated != null && commentCreated != null
                         && commentUpdated.isAfter(commentCreated)
                         && commentUpdated.isAfter(since)) {
-                    events.add(buildEvent(
-                            issueKey + "-comment-" + commentId + "-updated",
-                            eventSourceId,
-                            EventType.ISSUE_COMMENT_UPDATED,
-                            ref,
-                            formatTimestamp(commentUpdated),
-                            commentAuthor,
-                            new IssueCommentUpdatedPayload(normalizedIssue, normalizedComment),
-                            sourceData
-                    ));
+                    JiraIssueState state = history.asOf(commentUpdated);
+                    events.add(buildEvent(issueKey + "-comment-" + commentId + "-updated", eventSourceId,
+                            EventType.ISSUE_COMMENT_UPDATED, ref, formatTimestamp(commentUpdated), commentAuthor,
+                            new IssueCommentUpdatedPayload(toNormalizedIssue(issueKey, fields, state, baseUrl),
+                                    normalizedComment),
+                            buildSourceData(issue, fields, state, context)));
                 }
             }
         }
@@ -274,53 +179,103 @@ public class JiraEventNormalizerV2 {
         return events;
     }
 
+    /** Shared values for the events produced by one changelog history entry. */
+    private record ItemContext(String eventSourceId, String ref, String timestamp, Actor actor,
+                               NormalizedIssue issue, JsonNode sourceData) {
+
+        NormalizedEvent event(EventType type, EventPayload payload) {
+            return buildEvent(null, eventSourceId, type, ref, timestamp, actor, payload, sourceData);
+        }
+    }
+
+    /**
+     * Classifies one changelog item into zero or more events.
+     */
+    private List<NormalizedEvent> classifyItem(JsonNode item, ItemContext c, JiraNormalizationContext context) {
+        String field = textOrNull(item, "field");
+        if (field == null) {
+            return List.of();
+        }
+        String from = textOrNull(item, "from");
+        String fromString = textOrNull(item, "fromString");
+        String to = textOrNull(item, "to");
+        String toString = textOrNull(item, "toString");
+        List<NormalizedEvent> out = new ArrayList<>();
+
+        switch (field.toLowerCase(Locale.ROOT)) {
+            case "status" -> {
+                // With an empty status lookup this falls back to name matching, so a custom done status
+                // (e.g. "Shipped") yields issue.updated while the snapshot state may already be closed.
+                boolean fromDone = context.statusCategories().isDone(from, fromString);
+                boolean toDone = context.statusCategories().isDone(to, toString);
+                if (toDone && !fromDone) {
+                    out.add(c.event(EventType.ISSUE_CLOSED, new IssueClosedPayload(c.issue())));
+                } else if (fromDone && !toDone) {
+                    out.add(c.event(EventType.ISSUE_REOPENED, new IssueReopenedPayload(c.issue())));
+                } else {
+                    out.add(c.event(EventType.ISSUE_UPDATED, new IssueUpdatedPayload(c.issue(),
+                            new Change(field, fromString, toString, c.actor()))));
+                }
+            }
+            case "summary", "description" -> out.add(c.event(EventType.ISSUE_UPDATED,
+                    new IssueUpdatedPayload(c.issue(), new Change(field, fromString, toString, c.actor()))));
+            case "assignee" -> {
+                if (toString != null && !toString.isEmpty()) {
+                    out.add(c.event(EventType.ISSUE_ASSIGNED,
+                            new IssueAssignedPayload(c.issue(), new Actor(to, toString, null, null))));
+                } else {
+                    Actor previous = from != null || fromString != null
+                            ? new Actor(from, fromString, null, null) : null;
+                    out.add(c.event(EventType.ISSUE_UNASSIGNED, new IssueUnassignedPayload(c.issue(), previous)));
+                }
+            }
+            case "labels" -> {
+                Set<String> oldLabels = parseSpaceSeparatedLabels(fromString);
+                Set<String> newLabels = parseSpaceSeparatedLabels(toString);
+                for (String label : newLabels) {
+                    if (!oldLabels.contains(label)) {
+                        out.add(c.event(EventType.ISSUE_LABELED, new IssueLabeledPayload(c.issue(),
+                                new NormalizedLabel(label, null, null))));
+                    }
+                }
+                for (String label : oldLabels) {
+                    if (!newLabels.contains(label)) {
+                        out.add(c.event(EventType.ISSUE_UNLABELED, new IssueUnlabeledPayload(c.issue(),
+                                new NormalizedLabel(label, null, null))));
+                    }
+                }
+            }
+            default -> LOG.tracef("Ignoring changelog field: %s", field);
+        }
+        return out;
+    }
+
     // -- Mapping helpers -------------------------------------------------------
 
     /**
-     * Maps a Jira issue into a {@link NormalizedIssue}.
+     * Maps an issue snapshot to a {@link NormalizedIssue}. {@code state} is {@code closed} exactly when the
+     * snapshot's status category is {@code done}.
      */
-    NormalizedIssue mapIssue(JsonNode issue, JsonNode fields, String baseUrl) {
-        String issueKey = textOrNull(issue, "key");
-        String statusCategoryKey = fields.path("status").path("statusCategory")
-                .path("key").asText("");
-        String state = "done".equals(statusCategoryKey) ? "closed" : "open";
-        String stateDetail = textOrNull(fields.path("status"), "name");
-
-        // Description: handle ADF (object) vs plain string
-        String description = extractDescription(fields.path("description"));
-
-        // Assignees: wrap single assignee into list
-        List<Actor> assignees;
-        JsonNode assignee = fields.path("assignee");
-        if (!assignee.isMissingNode() && !assignee.isNull()) {
-            assignees = List.of(mapActor(assignee));
-        } else {
-            assignees = Collections.emptyList();
-        }
-
-        // Labels
-        List<String> labels = new ArrayList<>();
-        JsonNode labelsNode = fields.path("labels");
-        if (labelsNode.isArray()) {
-            for (JsonNode label : labelsNode) {
-                labels.add(label.asText());
-            }
-        }
-
+    NormalizedIssue toNormalizedIssue(String issueKey, JsonNode fields, JiraIssueState state, String baseUrl) {
+        List<Actor> assignees = state.assigneeAccountId == null && state.assigneeDisplayName == null
+                ? List.of()
+                : List.of(new Actor(state.assigneeAccountId, state.assigneeDisplayName,
+                        state.assigneeAvatarUrl, null));
+        String openState = JiraStatusCategories.DONE.equals(state.statusCategoryKey) ? "closed" : "open";
         return new NormalizedIssue(
                 issueKey,
-                textOrNull(fields, "summary"),
-                description,
-                state,
-                stateDetail,
+                state.summary,
+                state.description,
+                openState,
+                state.statusName,
                 mapActor(fields.path("reporter")),
                 assignees,
-                labels,
+                List.copyOf(state.labels),
                 null, // milestone
                 baseUrl + "/browse/" + issueKey,
                 isoTimestamp(textOrNull(fields, "created")),
-                isoTimestamp(textOrNull(fields, "updated")),
-                isoTimestamp(textOrNull(fields, "resolutiondate"))
+                state.updatedAt,
+                state.closedAt
         );
     }
 
@@ -345,27 +300,72 @@ public class JiraEventNormalizerV2 {
             return null;
         }
         String commentId = textOrNull(comment, "id");
-        String body = extractDescription(comment.path("body"));
-        Actor author = mapActor(comment.path("author"));
-        // Jira comments don't have a direct HTML URL in the API response,
-        // but we can construct one
-        String url = baseUrl + "/browse/" + issueKey
-                + "?focusedCommentId=" + commentId;
+        String url = baseUrl + "/browse/" + issueKey + "?focusedCommentId=" + commentId;
         return new NormalizedComment(
                 commentId,
-                body,
-                author,
+                extractDescription(comment.path("body")),
+                mapActor(comment.path("author")),
                 url,
                 isoTimestamp(textOrNull(comment, "created")),
                 isoTimestamp(textOrNull(comment, "updated"))
         );
     }
 
+    /**
+     * Builds the selected Jira {@code sourceData} for a snapshot: {@code jiraId}, {@code project{key,name}},
+     * {@code issueType{name}}, {@code status{name,categoryKey}}, {@code priority{name}},
+     * {@code resolution{name}}, {@code dueDate}, {@code components[{name}]}, {@code fixVersions[{name}]} and,
+     * when configured, {@code extraFields{name: value}}.
+     */
+    JsonNode buildSourceData(JsonNode issue, JsonNode fields, JiraIssueState state,
+                             JiraNormalizationContext context) {
+        ObjectNode source = objectMapper.createObjectNode();
+        source.put("jiraId", textOrNull(issue, "id"));
+
+        JsonNode project = fields.path("project");
+        if (project.isObject()) {
+            ObjectNode projectNode = source.putObject("project");
+            projectNode.put("key", textOrNull(project, "key"));
+            projectNode.put("name", textOrNull(project, "name"));
+        }
+        JsonNode issueType = fields.path("issuetype");
+        if (issueType.isObject()) {
+            source.putObject("issueType").put("name", textOrNull(issueType, "name"));
+        }
+        ObjectNode status = source.putObject("status");
+        status.put("name", state.statusName);
+        status.put("categoryKey", state.statusCategoryKey);
+        if (state.priority != null) {
+            source.putObject("priority").put("name", state.priority);
+        }
+        if (state.resolution != null) {
+            source.putObject("resolution").put("name", state.resolution);
+        }
+        if (state.dueDate != null) {
+            source.put("dueDate", state.dueDate);
+        }
+        if (!state.components.isEmpty()) {
+            ArrayNode components = source.putArray("components");
+            state.components.forEach(name -> components.addObject().put("name", name));
+        }
+        if (!state.fixVersions.isEmpty()) {
+            ArrayNode fixVersions = source.putArray("fixVersions");
+            state.fixVersions.forEach(name -> fixVersions.addObject().put("name", name));
+        }
+        if (!context.extraFields().isEmpty()) {
+            ObjectNode extra = source.putObject("extraFields");
+            for (Map.Entry<String, String> field : context.extraFields().entrySet()) {
+                extra.put(field.getKey(), state.extraFields.get(field.getKey()));
+            }
+        }
+        return source;
+    }
+
     // -- Internal helpers -------------------------------------------------------
 
     /**
-     * Extracts text from a Jira description field. If the value is an ADF object,
-     * recursively collects all text nodes. If it is a plain string, returns it directly.
+     * Extracts text from a Jira description or comment body. If the value is an ADF object, recursively
+     * collects all text nodes. If it is a plain string, returns it directly.
      */
     static String extractDescription(JsonNode descriptionNode) {
         if (descriptionNode == null || descriptionNode.isMissingNode() || descriptionNode.isNull()) {
@@ -375,7 +375,6 @@ public class JiraEventNormalizerV2 {
             return descriptionNode.asText();
         }
         if (descriptionNode.isObject()) {
-            // ADF format: recursively extract text nodes
             StringBuilder sb = new StringBuilder();
             extractAdfText(descriptionNode, sb);
             String result = sb.toString().trim();
@@ -401,17 +400,6 @@ public class JiraEventNormalizerV2 {
     }
 
     /**
-     * Determines if a status name represents a "done" status.
-     * Uses heuristic matching on common done status names since changelog
-     * entries only provide status names, not category keys.
-     */
-    private boolean isDoneStatus(String statusName) {
-        if (statusName == null) return false;
-        String lower = statusName.toLowerCase();
-        return lower.equals("done") || lower.equals("closed") || lower.equals("resolved");
-    }
-
-    /**
      * Parses space-separated label strings from Jira changelog entries.
      */
     static Set<String> parseSpaceSeparatedLabels(String labelString) {
@@ -423,94 +411,36 @@ public class JiraEventNormalizerV2 {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private NormalizedEvent buildEvent(String sourceEventId, String eventSourceId,
-                                        EventType type, String ref, String timestamp,
-                                        Actor actor, EventPayload payload, JsonNode sourceData) {
-        return new NormalizedEvent(
-                UUID.randomUUID().toString(),
-                sourceEventId,
-                SOURCE,
-                eventSourceId,
-                type,
-                ref,
-                timestamp,
-                actor,
-                payload,
-                sourceData
-        );
+    private static NormalizedEvent buildEvent(String sourceEventId, String eventSourceId,
+                                              EventType type, String ref, String timestamp,
+                                              Actor actor, EventPayload payload, JsonNode sourceData) {
+        return new NormalizedEvent(UUID.randomUUID().toString(), sourceEventId, SOURCE, eventSourceId, type, ref,
+                timestamp, actor, payload, sourceData);
     }
 
-    private NormalizedEvent withSourceEventId(NormalizedEvent event, String sourceEventId) {
-        return new NormalizedEvent(
-                event.id(),
-                sourceEventId,
-                event.source(),
-                event.eventSourceId(),
-                event.type(),
-                event.ref(),
-                event.timestamp(),
-                event.actor(),
-                event.payload(),
-                event.sourceData()
-        );
+    private static NormalizedEvent withSourceEventId(NormalizedEvent event, String sourceEventId) {
+        return new NormalizedEvent(event.id(), sourceEventId, event.source(), event.eventSourceId(),
+                event.type(), event.ref(), event.timestamp(), event.actor(), event.payload(), event.sourceData());
     }
 
-    private JsonNode buildSourceData(JsonNode issue, JsonNode fields) {
-        ObjectNode source = objectMapper.createObjectNode();
-        source.put("jiraId", textOrNull(issue, "id"));
-
-        // Project
-        JsonNode project = fields.path("project");
-        if (!project.isMissingNode()) {
-            ObjectNode projectNode = source.putObject("project");
-            projectNode.put("key", textOrNull(project, "key"));
-            projectNode.put("name", textOrNull(project, "name"));
+    /**
+     * Parses a Jira API timestamp string into an Instant. Handles both ISO-8601 format and Jira's
+     * {@code yyyy-MM-dd'T'HH:mm:ss.SSSZ} format.
+     */
+    static Instant parseJiraTimestamp(String timestamp) {
+        if (timestamp == null || timestamp.isEmpty()) {
+            return null;
         }
-
-        // Issue type
-        JsonNode issueType = fields.path("issuetype");
-        if (!issueType.isMissingNode()) {
-            ObjectNode issueTypeNode = source.putObject("issueType");
-            issueTypeNode.put("name", textOrNull(issueType, "name"));
-        }
-
-        // Priority
-        JsonNode priority = fields.path("priority");
-        if (!priority.isMissingNode() && !priority.isNull()) {
-            ObjectNode priorityNode = source.putObject("priority");
-            priorityNode.put("name", textOrNull(priority, "name"));
-        }
-
-        // Resolution
-        JsonNode resolution = fields.path("resolution");
-        if (!resolution.isMissingNode() && !resolution.isNull()) {
-            ObjectNode resolutionNode = source.putObject("resolution");
-            resolutionNode.put("name", textOrNull(resolution, "name"));
-        }
-
-        // Components
-        JsonNode components = fields.path("components");
-        if (components.isArray() && components.size() > 0) {
-            ArrayNode componentsArray = source.putArray("components");
-            for (JsonNode comp : components) {
-                ObjectNode compNode = objectMapper.createObjectNode();
-                compNode.put("name", textOrNull(comp, "name"));
-                componentsArray.add(compNode);
+        try {
+            return DateTimeFormatter.ISO_DATE_TIME.parse(timestamp, Instant::from);
+        } catch (Exception e) {
+            try {
+                return DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ").parse(timestamp, Instant::from);
+            } catch (Exception e2) {
+                LOG.tracef("Failed to parse Jira timestamp: %s", timestamp);
+                return null;
             }
         }
-
-        // Fix versions
-        JsonNode fixVersions = fields.path("fixVersions");
-        if (fixVersions.isArray() && fixVersions.size() > 0) {
-            ArrayNode fixVersionsArray = source.putArray("fixVersions");
-            for (JsonNode version : fixVersions) {
-                ObjectNode versionNode = objectMapper.createObjectNode();
-                versionNode.put("name", textOrNull(version, "name"));
-                fixVersionsArray.add(versionNode);
-            }
-        }
-
-        return source;
     }
 
     /**
@@ -525,25 +455,6 @@ public class JiraEventNormalizerV2 {
         }
         Instant parsed = parseJiraTimestamp(jiraTimestamp);
         return parsed != null ? parsed.toString() : jiraTimestamp;
-    }
-
-    /**
-     * Parses a Jira API timestamp string into an Instant. Handles both
-     * ISO-8601 format and Jira's {@code yyyy-MM-dd'T'HH:mm:ss.SSSZ} format.
-     */
-    static Instant parseJiraTimestamp(String timestamp) {
-        if (timestamp == null || timestamp.isEmpty()) return null;
-        try {
-            return DateTimeFormatter.ISO_DATE_TIME.parse(timestamp, Instant::from);
-        } catch (Exception e) {
-            try {
-                return DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ")
-                        .parse(timestamp, Instant::from);
-            } catch (Exception e2) {
-                LOG.tracef("Failed to parse Jira timestamp: %s", timestamp);
-                return null;
-            }
-        }
     }
 
     private static String formatTimestamp(Instant instant) {
