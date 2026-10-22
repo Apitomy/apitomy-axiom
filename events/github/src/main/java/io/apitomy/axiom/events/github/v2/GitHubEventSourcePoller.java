@@ -144,16 +144,38 @@ GitHubEventSourcePoller {
 
         if (errors.isEmpty()) {
             recordPollLog(eventSource.id, "success",
-                    "Polled " + repositories.size() + " repositories" + tally.validationSuffix(),
+                    successMessage(repositories.size(), tally),
                     null, totalIngested, duration);
         } else {
             recordPollLog(eventSource.id, "error",
-                    "Polled " + repositories.size() + " repositories with errors" + tally.validationSuffix(),
+                    errorMessage(repositories.size(), tally),
                     errors.toString(), totalIngested, duration);
         }
 
         LOG.infof("Polled event source %s: %d events ingested across %d repositories",
                 eventSource.id, totalIngested, repositories.size());
+    }
+
+    /**
+     * Builds the poll-log message for a successful poll.
+     *
+     * @param repositoryCount number of configured repositories
+     * @param tally persist outcomes of the poll
+     * @return the message
+     */
+    static String successMessage(int repositoryCount, IngestTally tally) {
+        return "Polled " + repositoryCount + " repositories" + tally.validationSuffix();
+    }
+
+    /**
+     * Builds the poll-log message for a poll with errors.
+     *
+     * @param repositoryCount number of configured repositories
+     * @param tally persist outcomes of the poll
+     * @return the message
+     */
+    static String errorMessage(int repositoryCount, IngestTally tally) {
+        return "Polled " + repositoryCount + " repositories with errors" + tally.validationSuffix();
     }
 
     /**

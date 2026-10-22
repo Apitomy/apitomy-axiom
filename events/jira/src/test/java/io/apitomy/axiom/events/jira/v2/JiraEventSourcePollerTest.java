@@ -98,8 +98,16 @@ class JiraEventSourcePollerTest {
         assertTrue(result.complete());
         assertEquals(3, result.eventsIngested());
         assertEquals(1, tally.invalid());
-        assertTrue(("Polled 1 projects, 3 issues" + tally.validationSuffix())
-                .endsWith(" (1 failed schema validation)"));
+        assertEquals("Polled 1 projects, 3 issues (1 failed schema validation)",
+                JiraEventSourcePoller.successMessage(1, 3, tally));
+    }
+
+    @Test
+    void pollLogMessageHasNoSuffixWhenAllValid() {
+        IngestTally tally = new IngestTally();
+        tally.record(PersistOutcome.PERSISTED);
+
+        assertEquals("Polled 1 projects, 3 issues", JiraEventSourcePoller.successMessage(1, 3, tally));
     }
 
     @Test

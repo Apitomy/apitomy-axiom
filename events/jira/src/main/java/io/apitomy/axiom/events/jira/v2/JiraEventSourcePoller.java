@@ -171,8 +171,7 @@ public class JiraEventSourcePoller {
 
         if (result.complete()) {
             recordPollLog(eventSource.id, "success",
-                    "Polled " + projects.size() + " projects, " + result.issuesProcessed() + " issues"
-                            + tally.validationSuffix(),
+                    successMessage(projects.size(), result.issuesProcessed(), tally),
                     null, result.eventsIngested(), duration);
             LOG.infof("Polled Jira event source %s: %d events ingested from %d issues",
                     eventSource.id, result.eventsIngested(), result.issuesProcessed());
@@ -196,6 +195,18 @@ public class JiraEventSourcePoller {
      */
     record WindowResult(boolean complete, Instant checkpoint, int issuesProcessed,
                         int eventsIngested, String errorMessage) {
+    }
+
+    /**
+     * Builds the poll-log message for a complete poll.
+     *
+     * @param projectCount    number of configured projects
+     * @param issuesProcessed number of issues processed
+     * @param tally           persist outcomes of the poll
+     * @return the message
+     */
+    static String successMessage(int projectCount, int issuesProcessed, IngestTally tally) {
+        return "Polled " + projectCount + " projects, " + issuesProcessed + " issues" + tally.validationSuffix();
     }
 
     /**

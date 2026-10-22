@@ -23,7 +23,6 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link GitHubEventSourcePoller}: events already in the event stream are skipped before any
@@ -76,8 +75,19 @@ class GitHubEventSourcePollerTest {
 
         assertEquals(2, ingested);
         assertEquals(1, tally.invalid());
-        assertTrue(("Polled 1 repositories" + tally.validationSuffix())
-                .endsWith(" (1 failed schema validation)"));
+        assertEquals("Polled 1 repositories (1 failed schema validation)",
+                GitHubEventSourcePoller.successMessage(1, tally));
+        assertEquals("Polled 1 repositories with errors (1 failed schema validation)",
+                GitHubEventSourcePoller.errorMessage(1, tally));
+    }
+
+    @Test
+    void pollLogMessagesHaveNoSuffixWhenAllValid() {
+        IngestTally tally = new IngestTally();
+        tally.record(PersistOutcome.PERSISTED);
+
+        assertEquals("Polled 2 repositories", GitHubEventSourcePoller.successMessage(2, tally));
+        assertEquals("Polled 2 repositories with errors", GitHubEventSourcePoller.errorMessage(2, tally));
     }
 
     @Test
