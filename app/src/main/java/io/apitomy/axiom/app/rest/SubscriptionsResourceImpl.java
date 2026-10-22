@@ -1,6 +1,7 @@
 package io.apitomy.axiom.app.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.SubscriptionsResource;
 import io.apitomy.axiom.app.EventOperationsService;
@@ -345,6 +346,15 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
                 bean.setSourceData(objectMapper.readValue(entity.sourceData, SourceData.class));
             } catch (Exception e) {
                 LOG.warnf("Failed to parse sourceData JSON for event %s: %s", entity.id, e.getMessage());
+            }
+        }
+
+        if (entity.validationErrors != null) {
+            try {
+                bean.setValidationErrors(objectMapper.readValue(entity.validationErrors,
+                        new TypeReference<List<String>>() { }));
+            } catch (Exception e) {
+                LOG.warnf("Failed to parse validation errors for event %s: %s", entity.id, e.getMessage());
             }
         }
 
