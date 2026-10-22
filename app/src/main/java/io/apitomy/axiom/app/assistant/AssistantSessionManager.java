@@ -26,6 +26,7 @@ import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
 import io.apitomy.axiom.core.util.BoundedProcessRunner;
 import jakarta.enterprise.event.Event;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -61,6 +62,9 @@ import java.util.stream.Stream;
 public class AssistantSessionManager {
 
     private static final Logger LOG = Logger.getLogger(AssistantSessionManager.class);
+
+    /** Set when Quarkus shutdown begins; the database may no longer be usable from then on. */
+    private volatile boolean shuttingDown = false;
 
     /** Upper bound for a session's init script. */
     private static final java.time.Duration INIT_SCRIPT_TIMEOUT = java.time.Duration.ofSeconds(60);
@@ -459,6 +463,15 @@ public class AssistantSessionManager {
     }
 
     /**
+     * Sets the shutdown flag, for tests.
+     *
+     * @param shuttingDown whether shutdown has begun
+     */
+    void setShuttingDown(boolean shuttingDown) {
+        this.shuttingDown = shuttingDown;
+    }
+
+    /**
      * Returns the number of open history journals, for tests.
      *
      * @return the number of journals currently tracked
@@ -474,7 +487,6 @@ public class AssistantSessionManager {
      *
      * @param sessionId the session to destroy
      */
-    @jakarta.transaction.Transactional
     public void destroySession(String sessionId) {
         destroySession(sessionId, false);
     }
@@ -486,17 +498,23 @@ public class AssistantSessionManager {
      * @param sessionId the session to destroy
      * @param keepDirectory whether to keep the session directory on disk
      */
-    @jakarta.transaction.Transactional
     public void destroySession(String sessionId, boolean keepDirectory) {
         AssistantSession session = sessions.remove(sessionId);
         if (session != null) {
             sessionCount.decrementAndGet();
             session.destroy();
-            try {
-                recordUsage(session);
-            } catch (Exception e) {
-                LOG.debugf("Could not record usage for session %s: %s",
-                        sessionId, e.getMessage());
+            if (shuttingDown) {
+                // H2's own JVM shutdown hook runs concurrently with Quarkus shutdown and may already have
+                // closed the database, so usage is not persisted during shutdown (see GH #517).
+                LOG.infof("Skipping usage record for session %s during shutdown (cost=$%.4f, turns=%d, "
+                                + "inputTokens=%d, outputTokens=%d)", sessionId, session.getTotalCostUsd(),
+                        session.getTurnCount(), session.getTotalInputTokens(), session.getTotalOutputTokens());
+            } else {
+                try {
+                    QuarkusTransaction.requiringNew().run(() -> recordUsage(session));
+                } catch (Exception e) {
+                    LOG.warnf("Could not record usage for session %s: %s", sessionId, e.getMessage());
+                }
             }
             closeJournal(sessionId);
             if (!keepDirectory) {
@@ -794,6 +812,7 @@ public class AssistantSessionManager {
      * @param event the shutdown event
      */
     void onShutdown(@Observes ShutdownEvent event) {
+        shuttingDown = true;
         LOG.info("Shutting down — destroying all assistant sessions");
         for (AssistantSession session : new ArrayList<>(sessions.values())) {
             destroySession(session.getId(), session.hasCapability(SessionCapability.COMPOSITION));
