@@ -23,6 +23,7 @@ public class ClaudeCodeCommandBuilder {
     private Double maxBudgetUsd;
     private String sessionId;
     private Path mcpConfigFile;
+    private List<String> pluginDirs = List.of();
     private boolean bare = true;
     private boolean streamJson = true;
 
@@ -70,6 +71,11 @@ public class ClaudeCodeCommandBuilder {
 
     public ClaudeCodeCommandBuilder mcpConfigFile(Path mcpConfigFile) {
         this.mcpConfigFile = mcpConfigFile;
+        return this;
+    }
+
+    public ClaudeCodeCommandBuilder pluginDirs(List<String> pluginDirs) {
+        this.pluginDirs = pluginDirs;
         return this;
     }
 
@@ -155,6 +161,13 @@ public class ClaudeCodeCommandBuilder {
         if (mcpConfigFile != null) {
             cmd.add("--mcp-config");
             cmd.add(mcpConfigFile.toAbsolutePath().toString());
+        }
+
+        if (pluginDirs != null && !pluginDirs.isEmpty()) {
+            for (String pluginDir : pluginDirs) {
+                cmd.add("--plugin-dir");
+                cmd.add(pluginDir);
+            }
         }
 
         return cmd;

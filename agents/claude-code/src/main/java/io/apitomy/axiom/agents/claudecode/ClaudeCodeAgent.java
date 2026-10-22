@@ -4,11 +4,14 @@ import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentCheckResult;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -48,8 +51,13 @@ public class ClaudeCodeAgent implements Agent {
     @ConfigProperty(name = "axiom.agent.claude-code.available-models", defaultValue = "")
     String availableModels;
 
+    @ConfigProperty(name = "axiom.agent.claude-code.plugin-dirs", defaultValue = "")
+    String pluginDirs;
+
     @Inject
     ClaudeCodeMcpManager mcpManager;
+
+    private List<String> configuredPluginDirs = List.of();
 
     private final Map<String, ClaudeCodeSubprocess> runningProcesses = new ConcurrentHashMap<>();
 
@@ -81,6 +89,48 @@ public class ClaudeCodeAgent implements Agent {
     @Override
     public boolean supportsInteractiveSessions() {
         return true;
+    }
+
+    /**
+     * Parses the configured plugin directories once at startup so tasks neither
+     * re-parse the config nor re-log misconfiguration warnings per execution.
+     */
+    @PostConstruct
+    void initPluginDirs() {
+        configuredPluginDirs = parsePluginDirs(pluginDirs);
+    }
+
+    /**
+     * Parses the raw comma-separated plugin directory configuration. Blank
+     * entries are ignored. Entries that are not absolute paths are logged and
+     * skipped: the CLI would otherwise resolve them against each task's working
+     * directory, silently loading a different plugin per task. Entries that
+     * point at a missing directory are logged and still passed through, so the
+     * CLI reports the problem it sees.
+     *
+     * @param config the raw comma-separated configuration value
+     * @return the plugin directories in configured order, never {@code null}
+     */
+    static List<String> parsePluginDirs(String config) {
+        if (config == null || config.isBlank()) {
+            return List.of();
+        }
+        List<String> dirs = new ArrayList<>();
+        for (String dir : config.split(",")) {
+            String trimmed = dir.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            if (!Path.of(trimmed).isAbsolute()) {
+                LOG.warnf("Skipping configured plugin directory that is not an absolute path: %s", trimmed);
+                continue;
+            }
+            if (!Files.isDirectory(Path.of(trimmed))) {
+                LOG.warnf("Configured plugin directory does not exist or is not a directory: %s", trimmed);
+            }
+            dirs.add(trimmed);
+        }
+        return dirs;
     }
 
     /** {@inheritDoc} */
@@ -180,7 +230,8 @@ public class ClaudeCodeAgent implements Agent {
                 .executable(executable)
                 .streamJson(true)
                 .maxTurns(maxSteps)
-                .maxBudgetUsd(maxBudget);
+                .maxBudgetUsd(maxBudget)
+                .pluginDirs(configuredPluginDirs);
 
         String resolvedModel;
         if (request.getModel() != null && !request.getModel().isBlank()) {
