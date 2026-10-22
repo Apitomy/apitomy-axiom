@@ -8,6 +8,8 @@ import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.events.core.EventStreamService;
+import io.apitomy.axiom.events.core.IngestTally;
+import io.apitomy.axiom.events.core.PersistOutcome;
 import io.quarkus.scheduler.Scheduled;
 import jakarta.annotation.PreDestroy;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -120,6 +122,7 @@ GitHubEventSourcePoller {
         String htmlBaseUrl = urls.webBaseUrl();
 
         int totalIngested = 0;
+        IngestTally tally = new IngestTally();
         StringBuilder errors = new StringBuilder();
         for (String repoFullName : repositories) {
             if (shuttingDown) break;
@@ -132,7 +135,7 @@ GitHubEventSourcePoller {
                 continue;
             }
             int ingested = pollRepository(eventSource.id, parts[0], parts[1], token, apiBaseUrl, htmlBaseUrl,
-                    errors);
+                    errors, tally);
             totalIngested += ingested;
         }
 
@@ -141,11 +144,11 @@ GitHubEventSourcePoller {
 
         if (errors.isEmpty()) {
             recordPollLog(eventSource.id, "success",
-                    "Polled " + repositories.size() + " repositories",
+                    "Polled " + repositories.size() + " repositories" + tally.validationSuffix(),
                     null, totalIngested, duration);
         } else {
             recordPollLog(eventSource.id, "error",
-                    "Polled " + repositories.size() + " repositories with errors",
+                    "Polled " + repositories.size() + " repositories with errors" + tally.validationSuffix(),
                     errors.toString(), totalIngested, duration);
         }
 
@@ -176,6 +179,27 @@ GitHubEventSourcePoller {
     int pollRepository(String eventSourceId, String owner, String repo,
                        String token, String apiBaseUrl, String htmlBaseUrl,
                        StringBuilder errors) {
+        return pollRepository(eventSourceId, owner, repo, token, apiBaseUrl, htmlBaseUrl, errors,
+                new IngestTally());
+    }
+
+    /**
+     * Polls one repository, recording each persist outcome in the given tally.
+     *
+     * @param eventSourceId the event source identifier
+     * @param owner the repository owner
+     * @param repo the repository name
+     * @param token the GitHub token, or null
+     * @param apiBaseUrl the GitHub REST API base URL
+     * @param htmlBaseUrl the GitHub web base URL (for event refs)
+     * @param errors collects error descriptions for the poll log
+     * @param tally collects persist outcomes for the poll log
+     * @return the number of events stored
+     * @see #pollRepository(String, String, String, String, String, String, StringBuilder)
+     */
+    int pollRepository(String eventSourceId, String owner, String repo,
+                       String token, String apiBaseUrl, String htmlBaseUrl,
+                       StringBuilder errors, IngestTally tally) {
         String repository = owner + "/" + repo;
         String cacheKey = eventSourceId + ":" + repository;
         String etag = etagCache.get(cacheKey);
@@ -219,8 +243,12 @@ GitHubEventSourcePoller {
                         ? backfillPr(apiBaseUrl, owner, repo, event, token)
                         : null;
                 NormalizedEvent normalized = normalizer.normalize(event, eventSourceId, htmlBaseUrl, fullPr);
-                if (normalized != null && eventStreamService.persistEvent(normalized).persisted()) {
-                    ingested++;
+                if (normalized != null) {
+                    PersistOutcome outcome = eventStreamService.persistEvent(normalized);
+                    tally.record(outcome);
+                    if (outcome.persisted()) {
+                        ingested++;
+                    }
                 }
             } catch (RuntimeException e) {
                 LOG.warnf(e, "Failed to ingest GitHub event %s from %s for event source %s; "

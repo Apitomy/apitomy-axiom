@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
+import io.apitomy.axiom.events.core.IngestTally;
 import io.apitomy.axiom.events.core.PersistOutcome;
 import io.apitomy.axiom.events.github.v2.GitHubEventsApiClient.EventsPollResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for {@link GitHubEventSourcePoller}: events already in the event stream are skipped before any
@@ -61,6 +63,21 @@ class GitHubEventSourcePollerTest {
 
         assertEquals(2, poll());
         assertEquals(List.of("101", "102"), List.copyOf(stream.ids));
+    }
+
+    @Test
+    void invalidEventsAreCountedForPollLog() {
+        stream.invalidIds.add("101");
+        api.pages.add(EventsPollResult.ok(events(issueOpened("102"), issueOpened("101")), "\"e1\"", 60));
+        IngestTally tally = new IngestTally();
+
+        int ingested = poller.pollRepository(SOURCE_ID, "owner", "repo", "token",
+                "https://api.github.com", "https://github.com", new StringBuilder(), tally);
+
+        assertEquals(2, ingested);
+        assertEquals(1, tally.invalid());
+        assertTrue(("Polled 1 repositories" + tally.validationSuffix())
+                .endsWith(" (1 failed schema validation)"));
     }
 
     @Test
@@ -226,6 +243,7 @@ class GitHubEventSourcePollerTest {
     /** In-memory event stream that dedupes by sourceEventId like the real service. */
     static class RecordingStream extends EventStreamService {
         final Set<String> ids = new LinkedHashSet<>();
+        final Set<String> invalidIds = new HashSet<>();
         String failOn;
         int lookups;
 
@@ -242,7 +260,11 @@ class GitHubEventSourcePollerTest {
             if (event.sourceEventId().equals(failOn)) {
                 throw new IllegalStateException("db down");
             }
-            return ids.add(event.sourceEventId()) ? PersistOutcome.PERSISTED : PersistOutcome.DUPLICATE;
+            if (!ids.add(event.sourceEventId())) {
+                return PersistOutcome.DUPLICATE;
+            }
+            return invalidIds.contains(event.sourceEventId())
+                    ? PersistOutcome.PERSISTED_INVALID : PersistOutcome.PERSISTED;
         }
     }
 }

@@ -10,6 +10,8 @@ import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
+import io.apitomy.axiom.events.core.IngestTally;
+import io.apitomy.axiom.events.core.PersistOutcome;
 import io.quarkus.scheduler.Scheduled;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import jakarta.annotation.PreDestroy;
@@ -158,8 +160,9 @@ public class JiraEventSourcePoller {
         Instant windowStart = Instant.now();
         recordAttempt(eventSource.id, windowStart);
 
+        IngestTally tally = new IngestTally();
         WindowResult result = ingestWindow(eventSource.id, eventSource.baseUrl, projects,
-                since, credentials, windowStart);
+                since, credentials, windowStart, tally);
         long duration = System.currentTimeMillis() - startMs;
 
         if (result.checkpoint() != null) {
@@ -168,7 +171,8 @@ public class JiraEventSourcePoller {
 
         if (result.complete()) {
             recordPollLog(eventSource.id, "success",
-                    "Polled " + projects.size() + " projects, " + result.issuesProcessed() + " issues",
+                    "Polled " + projects.size() + " projects, " + result.issuesProcessed() + " issues"
+                            + tally.validationSuffix(),
                     null, result.eventsIngested(), duration);
             LOG.infof("Polled Jira event source %s: %d events ingested from %d issues",
                     eventSource.id, result.eventsIngested(), result.issuesProcessed());
@@ -213,6 +217,26 @@ public class JiraEventSourcePoller {
      */
     WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
                               Instant since, String credentials, Instant windowStart) {
+        return ingestWindow(eventSourceId, baseUrl, projects, since, credentials, windowStart,
+                new IngestTally());
+    }
+
+    /**
+     * Ingests one window, recording each persist outcome in the given tally.
+     *
+     * @param eventSourceId the event source id
+     * @param baseUrl       Jira base URL
+     * @param projects      project keys
+     * @param since         the current (last successful) checkpoint
+     * @param credentials   email:api_token credentials
+     * @param windowStart   time captured before the first request of this window
+     * @param tally         collects persist outcomes for the poll log
+     * @return the window outcome
+     * @see #ingestWindow(String, String, List, Instant, String, Instant)
+     */
+    WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
+                              Instant since, String credentials, Instant windowStart,
+                              IngestTally tally) {
         // Normalizer cutoff overlaps the previous window to tolerate clock skew and
         // boundary timestamps; duplicates are dropped by source-event de-duplication.
         Instant normalizeSince = since.minus(JiraEventsApiClient.QUERY_OVERLAP);
@@ -244,7 +268,9 @@ public class JiraEventSourcePoller {
                         List<NormalizedEvent> events = normalizer.normalizeIssue(
                                 completeIssue, normalizeSince, eventSourceId, baseUrl);
                         for (NormalizedEvent event : events) {
-                            if (eventStreamService.persistEvent(event).persisted()) {
+                            PersistOutcome outcome = eventStreamService.persistEvent(event);
+                            tally.record(outcome);
+                            if (outcome.persisted()) {
                                 totalIngested++;
                             }
                         }

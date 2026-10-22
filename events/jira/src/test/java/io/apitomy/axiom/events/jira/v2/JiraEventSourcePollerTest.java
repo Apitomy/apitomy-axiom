@@ -8,6 +8,7 @@ import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
+import io.apitomy.axiom.events.core.IngestTally;
 import io.apitomy.axiom.events.core.PersistOutcome;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -82,6 +84,22 @@ class JiraEventSourcePollerTest {
         assertEquals(150, result.issuesProcessed());
         assertEquals(150, stream.ids.size());
         assertEquals(List.of("<first>", "tok2"), api.tokens);
+    }
+
+    @Test
+    void invalidEventsAreCountedForPollLog() {
+        api.pages.add(page(issues(0, 3, "2026-10-01T10:01:00.000+0000"), null));
+        stream.invalidIds.add("P-1-created");
+        IngestTally tally = new IngestTally();
+
+        JiraEventSourcePoller.WindowResult result = poller.ingestWindow(SOURCE_ID, BASE_URL, List.of("P"),
+                SINCE, "a:b", WINDOW_START, tally);
+
+        assertTrue(result.complete());
+        assertEquals(3, result.eventsIngested());
+        assertEquals(1, tally.invalid());
+        assertTrue(("Polled 1 projects, 3 issues" + tally.validationSuffix())
+                .endsWith(" (1 failed schema validation)"));
     }
 
     @Test
@@ -345,6 +363,7 @@ class JiraEventSourcePollerTest {
     /** In-memory event stream that dedupes by sourceEventId like the real service. */
     static class RecordingStream extends EventStreamService {
         final Set<String> ids = new LinkedHashSet<>();
+        final Set<String> invalidIds = new HashSet<>();
         int attempts;
         String failOn;
         Runnable onPersist;
@@ -359,7 +378,11 @@ class JiraEventSourcePollerTest {
             if (onPersist != null) {
                 onPersist.run();
             }
-            return added ? PersistOutcome.PERSISTED : PersistOutcome.DUPLICATE;
+            if (!added) {
+                return PersistOutcome.DUPLICATE;
+            }
+            return invalidIds.contains(event.sourceEventId())
+                    ? PersistOutcome.PERSISTED_INVALID : PersistOutcome.PERSISTED;
         }
     }
 }
