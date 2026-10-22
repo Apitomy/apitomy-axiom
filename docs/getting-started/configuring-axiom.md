@@ -62,6 +62,7 @@ CLI). Set the default agent used for tasks
 | Property | Default | Description |
 |----------|---------|--------------|
 | `axiom.agent.claude-code.executable` | `claude` | Path to the Claude CLI binary |
+| `axiom.agent.claude-code.plugin-dirs` | *(empty)* | Comma-separated absolute paths passed to the CLI as repeated `--plugin-dir` flags (paths cannot contain commas). Each path is a plugin directory, a folder of plugins, or a plugin `.zip`, as the CLI's `--plugin-dir` accepts; with `--bare` (Axiom's default) skills load from plugin dirs only |
 | `axiom.agent.claude-code.model` | *(agent default)* | AI model override |
 | `axiom.agent.claude-code.max-steps` | `50` | Maximum agentic turns per task (passed as `--max-turns`) |
 | `axiom.agent.claude-code.max-budget-usd` | `5.0` | Maximum cost per task in USD |
