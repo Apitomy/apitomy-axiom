@@ -49,7 +49,7 @@ class JiraEventSourcePollerTest {
         stream = new RecordingStream();
         poller = new JiraEventSourcePoller();
         poller.apiClient = api;
-        poller.normalizer = new JiraEventNormalizerV2(MAPPER);
+        poller.normalizer = new ValidatingJiraNormalizer(MAPPER);
         poller.eventStreamService = stream;
     }
 
