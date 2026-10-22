@@ -1,16 +1,22 @@
 package io.apitomy.axiom.events.jira.v2;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.core.events.model.EventType;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
+import io.apitomy.axiom.core.events.model.payloads.IssueCommentDeletedPayload;
+import io.apitomy.axiom.core.events.model.payloads.IssueCommentUpdatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueUnassignedPayload;
+import io.apitomy.axiom.core.events.model.payloads.IssueUpdatedPayload;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -237,5 +243,119 @@ class JiraEventNormalizerV2FixtureTest {
         assertEquals("1.2.0", text(closed.path("fixVersions").get(0), "name"));
         assertEquals("core", text(closed.path("components").get(0), "name"));
         assertEquals("IPT", text(closed.path("project"), "key"));
+    }
+
+    private static NormalizedEvent byId(List<NormalizedEvent> events, String sourceEventId) {
+        return events.stream().filter(e -> sourceEventId.equals(e.sourceEventId())).findFirst()
+                .orElseThrow(() -> new AssertionError(sourceEventId + " not in "
+                        + events.stream().map(NormalizedEvent::sourceEventId).toList()));
+    }
+
+    private static void assertChange(NormalizedEvent event, String field, String from, String to) {
+        assertEquals(EventType.ISSUE_UPDATED, event.type(), event.sourceEventId());
+        IssueUpdatedPayload payload = (IssueUpdatedPayload) event.payload();
+        assertEquals(field, payload.change().field());
+        assertEquals(from, payload.change().from());
+        assertEquals(to, payload.change().to());
+    }
+
+    @Test
+    void apicurio137_producesTheCompleteEventSet() {
+        Set<String> ids = apicurio137().stream().map(NormalizedEvent::sourceEventId).collect(Collectors.toSet());
+        assertEquals(Set.of(
+                "APICURIO-137-created",
+                "APICURIO-137-93654123",
+                "APICURIO-137-93654138",
+                "APICURIO-137-93654147-0",
+                "APICURIO-137-93654147-1",
+                "APICURIO-137-93654152",
+                "APICURIO-137-93654157",
+                "APICURIO-137-93654169",
+                "APICURIO-137-93654174",
+                "APICURIO-137-93654235",
+                "APICURIO-137-93654249-0",
+                "APICURIO-137-93654249-1",
+                "APICURIO-137-93654254",
+                "APICURIO-137-93654267-0",
+                "APICURIO-137-93654267-1",
+                "APICURIO-137-comment-19040900",
+                "APICURIO-137-comment-19040900-updated-1792594436781"), ids);
+    }
+
+    @Test
+    void commentDeletion_emitsIssueCommentDeleted() {
+        NormalizedEvent event = byId(apicurio137(), "APICURIO-137-93654235");
+        assertEquals(EventType.ISSUE_COMMENT_DELETED, event.type());
+        IssueCommentDeletedPayload payload = (IssueCommentDeletedPayload) event.payload();
+        assertNull(payload.comment().id());
+        assertNull(payload.comment().author());
+        assertEquals("Deleted comment text", payload.comment().body());
+        assertEquals("acct-reporter-1", event.actor().login());
+        assertEquals("In Progress", payload.issue().stateDetail());
+    }
+
+    @Test
+    void priorityAndResolutionChanges_emitIssueUpdated() {
+        List<NormalizedEvent> events = apicurio137();
+        assertChange(byId(events, "APICURIO-137-93654157"), "priority", "Undefined", "Major");
+        assertChange(byId(events, "APICURIO-137-93654249-0"), "resolution", null, "Done");
+        assertEquals(EventType.ISSUE_CLOSED, byId(events, "APICURIO-137-93654249-1").type());
+        assertChange(byId(events, "APICURIO-137-93654267-0"), "resolution", "Done", null);
+        assertEquals(EventType.ISSUE_REOPENED, byId(events, "APICURIO-137-93654267-1").type());
+        assertEquals("Major", byId(events, "APICURIO-137-93654157").sourceData().path("priority")
+                .path("name").asText());
+    }
+
+    @Test
+    void fixVersionComponentDueDateAndExtraFields_emitIssueUpdated() {
+        List<NormalizedEvent> events = normalize("ipt-1001-issue.json", iptContext(CATEGORIES));
+        assertChange(byId(events, "IPT-1001-2001-0"), "Fix Version", null, "1.2.0");
+        assertChange(byId(events, "IPT-1001-2001-1"), "Component", null, "core");
+        assertChange(byId(events, "IPT-1001-2002"), "duedate", null, "2026-10-30 00:00:00.0");
+        assertChange(byId(events, "IPT-1001-2003"), "Story Points", null, "5");
+        assertEquals("5", byId(events, "IPT-1001-2003").sourceData().path("extraFields")
+                .path("Story Points").asText());
+        assertChange(byId(events, "IPT-1001-2004-0"), "resolution", null, "Done");
+        assertEquals(EventType.ISSUE_CLOSED, byId(events, "IPT-1001-2004-1").type());
+    }
+
+    @Test
+    void unconfiguredCustomField_emitsNothing() {
+        List<NormalizedEvent> events = normalize("ipt-1001-issue.json",
+                new JiraNormalizationContext(CATEGORIES, Map.of()));
+        assertTrue(events.stream().noneMatch(e -> e.sourceEventId().startsWith("IPT-1001-2003")));
+        assertFalse(byId(events, "IPT-1001-created").sourceData().has("extraFields"));
+    }
+
+    @Test
+    void extraFields_matchChangelogFieldCaseInsensitively() {
+        Map<String, String> extra = new LinkedHashMap<>();
+        extra.put("story points", "customfield_10028");
+        List<NormalizedEvent> events = normalize("ipt-1001-issue.json",
+                new JiraNormalizationContext(CATEGORIES, extra));
+        assertChange(byId(events, "IPT-1001-2003"), "Story Points", null, "5");
+        assertEquals("5", byId(events, "IPT-1001-2003").sourceData().path("extraFields")
+                .path("story points").asText());
+    }
+
+    @Test
+    void repeatedCommentEdits_produceDistinctIds() {
+        List<NormalizedEvent> first = apicurio137();
+        ObjectNode issue = (ObjectNode) JiraFixtures.load("apicurio-137-issue.json");
+        ObjectNode comment = (ObjectNode) issue.path("fields").path("comment").path("comments").get(0);
+        comment.put("updated", "2026-10-21T15:10:00.000+0000");
+        List<NormalizedEvent> second = normalizer.normalizeIssue(issue, SINCE, SOURCE_ID, BASE_URL,
+                new JiraNormalizationContext(CATEGORIES, Map.of()));
+        JiraFixtures.assertSchemaValid(second);
+
+        NormalizedEvent firstEdit = byId(first, "APICURIO-137-comment-19040900-updated-1792594436781");
+        String secondId = "APICURIO-137-comment-19040900-updated-"
+                + Instant.parse("2026-10-21T15:10:00Z").toEpochMilli();
+        NormalizedEvent secondEdit = byId(second, secondId);
+        assertEquals(EventType.ISSUE_COMMENT_UPDATED, firstEdit.type());
+        assertEquals("2026-10-21T15:10:00Z", secondEdit.timestamp());
+        assertEquals("In Progress", ((IssueCommentUpdatedPayload) firstEdit.payload()).issue().stateDetail());
+        assertEquals("New", ((IssueCommentUpdatedPayload) secondEdit.payload()).issue().stateDetail(),
+                "an edit after the reopen sees the reopened state");
     }
 }

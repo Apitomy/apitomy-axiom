@@ -15,6 +15,7 @@ import io.apitomy.axiom.core.events.model.payloads.EventPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueAssignedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueClosedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueCommentCreatedPayload;
+import io.apitomy.axiom.core.events.model.payloads.IssueCommentDeletedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueCommentUpdatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueCreatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueLabeledPayload;
@@ -50,6 +51,9 @@ public class JiraEventNormalizerV2 {
 
     private static final Logger LOG = Logger.getLogger(JiraEventNormalizerV2.class);
     private static final String SOURCE = "jira";
+    /** Built-in changelog fields (lower case) that produce {@code issue.updated} with a {@code change}. */
+    private static final Set<String> UPDATED_FIELDS = Set.of("summary", "description", "priority",
+            "resolution", "duedate", "fix version", "component");
 
     @Inject
     ObjectMapper objectMapper;
@@ -167,7 +171,7 @@ public class JiraEventNormalizerV2 {
                         && commentUpdated.isAfter(commentCreated)
                         && commentUpdated.isAfter(since)) {
                     JiraIssueState state = history.asOf(commentUpdated);
-                    events.add(buildEvent(issueKey + "-comment-" + commentId + "-updated", eventSourceId,
+                    events.add(buildEvent(issueKey + "-comment-" + commentId + "-updated-" + commentUpdated.toEpochMilli(), eventSourceId,
                             EventType.ISSUE_COMMENT_UPDATED, ref, formatTimestamp(commentUpdated), commentAuthor,
                             new IssueCommentUpdatedPayload(toNormalizedIssue(issueKey, fields, state, baseUrl),
                                     normalizedComment),
@@ -217,8 +221,6 @@ public class JiraEventNormalizerV2 {
                             new Change(field, fromString, toString, c.actor()))));
                 }
             }
-            case "summary", "description" -> out.add(c.event(EventType.ISSUE_UPDATED,
-                    new IssueUpdatedPayload(c.issue(), new Change(field, fromString, toString, c.actor()))));
             case "assignee" -> {
                 if (toString != null && !toString.isEmpty()) {
                     out.add(c.event(EventType.ISSUE_ASSIGNED,
@@ -245,7 +247,20 @@ public class JiraEventNormalizerV2 {
                     }
                 }
             }
-            default -> LOG.tracef("Ignoring changelog field: %s", field);
+            case "comment" -> {
+                if (fromString != null && toString == null) {
+                    out.add(c.event(EventType.ISSUE_COMMENT_DELETED, new IssueCommentDeletedPayload(c.issue(),
+                            new NormalizedComment(null, fromString, null, null, null, null))));
+                }
+            }
+            default -> {
+                if (UPDATED_FIELDS.contains(field.toLowerCase(Locale.ROOT)) || context.isExtraField(field)) {
+                    out.add(c.event(EventType.ISSUE_UPDATED, new IssueUpdatedPayload(c.issue(),
+                            new Change(field, fromString, toString, c.actor()))));
+                } else {
+                    LOG.tracef("Ignoring changelog field: %s", field);
+                }
+            }
         }
         return out;
     }
