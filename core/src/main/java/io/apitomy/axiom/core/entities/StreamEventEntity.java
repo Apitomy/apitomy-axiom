@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -15,7 +16,8 @@ import java.util.UUID;
  * schema-validated payload.
  */
 @Entity
-@Table(name = "stream_event")
+@Table(name = "stream_event", uniqueConstraints = @UniqueConstraint(
+        name = "idx_stream_event_source_event", columnNames = {"event_source_id", "source_event_id"}))
 public class StreamEventEntity extends PanacheEntityBase {
 
     @Id
@@ -80,4 +82,11 @@ public class StreamEventEntity extends PanacheEntityBase {
 
     @Column(name = "created_on", nullable = false)
     public Instant createdOn;
+
+    /**
+     * JSON array of schema validation errors, or null when the event was valid or was stored before
+     * validation existed.
+     */
+    @Column(name = "validation_errors", columnDefinition = "TEXT")
+    public String validationErrors;
 }

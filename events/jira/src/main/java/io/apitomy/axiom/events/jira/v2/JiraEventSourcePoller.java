@@ -244,7 +244,7 @@ public class JiraEventSourcePoller {
                         List<NormalizedEvent> events = normalizer.normalizeIssue(
                                 completeIssue, normalizeSince, eventSourceId, baseUrl);
                         for (NormalizedEvent event : events) {
-                            if (eventStreamService.persistEvent(event)) {
+                            if (eventStreamService.persistEvent(event).persisted()) {
                                 totalIngested++;
                             }
                         }

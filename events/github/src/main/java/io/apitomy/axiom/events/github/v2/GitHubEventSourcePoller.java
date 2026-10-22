@@ -203,7 +203,7 @@ GitHubEventSourcePoller {
             String id = event.path("id").asText(null);
             if (id != null) pageIds.add(id);
         }
-        Set<String> alreadyStored = eventStreamService.existingSourceEventIds(pageIds);
+        Set<String> alreadyStored = eventStreamService.existingSourceEventIds(eventSourceId, pageIds);
 
         int ingested = 0;
         boolean complete = true;
@@ -219,7 +219,7 @@ GitHubEventSourcePoller {
                         ? backfillPr(apiBaseUrl, owner, repo, event, token)
                         : null;
                 NormalizedEvent normalized = normalizer.normalize(event, eventSourceId, htmlBaseUrl, fullPr);
-                if (normalized != null && eventStreamService.persistEvent(normalized)) {
+                if (normalized != null && eventStreamService.persistEvent(normalized).persisted()) {
                     ingested++;
                 }
             } catch (RuntimeException e) {

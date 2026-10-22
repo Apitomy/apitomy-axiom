@@ -8,6 +8,7 @@ import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
+import io.apitomy.axiom.events.core.PersistOutcome;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -349,7 +350,7 @@ class JiraEventSourcePollerTest {
         Runnable onPersist;
 
         @Override
-        public boolean persistEvent(NormalizedEvent event) {
+        public PersistOutcome persistEvent(NormalizedEvent event) {
             attempts++;
             if (event.sourceEventId().equals(failOn)) {
                 throw new IllegalStateException("db down");
@@ -358,7 +359,7 @@ class JiraEventSourcePollerTest {
             if (onPersist != null) {
                 onPersist.run();
             }
-            return added;
+            return added ? PersistOutcome.PERSISTED : PersistOutcome.DUPLICATE;
         }
     }
 }

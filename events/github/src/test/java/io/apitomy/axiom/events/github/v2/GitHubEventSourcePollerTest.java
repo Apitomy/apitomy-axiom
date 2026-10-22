@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
+import io.apitomy.axiom.events.core.PersistOutcome;
 import io.apitomy.axiom.events.github.v2.GitHubEventsApiClient.EventsPollResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -229,7 +230,7 @@ class GitHubEventSourcePollerTest {
         int lookups;
 
         @Override
-        public Set<String> existingSourceEventIds(Collection<String> sourceEventIds) {
+        public Set<String> existingSourceEventIds(String eventSourceId, Collection<String> sourceEventIds) {
             lookups++;
             Set<String> found = new HashSet<>(sourceEventIds);
             found.retainAll(ids);
@@ -237,11 +238,11 @@ class GitHubEventSourcePollerTest {
         }
 
         @Override
-        public boolean persistEvent(NormalizedEvent event) {
+        public PersistOutcome persistEvent(NormalizedEvent event) {
             if (event.sourceEventId().equals(failOn)) {
                 throw new IllegalStateException("db down");
             }
-            return ids.add(event.sourceEventId());
+            return ids.add(event.sourceEventId()) ? PersistOutcome.PERSISTED : PersistOutcome.DUPLICATE;
         }
     }
 }
