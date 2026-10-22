@@ -1,0 +1,16 @@
+{
+  "startAt": 0,
+  "maxResults": 100,
+  "total": 3,
+  "comments": [
+    {"id": "3001", "author": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+     "body": "Comment one.", "created": "2026-10-20T09:30:00.000+0000",
+     "updated": "2026-10-20T09:30:00.000+0000"},
+    {"id": "3002", "author": {"accountId": "acct-reporter-2", "displayName": "Reporter Two"},
+     "body": "Comment two (edited).", "created": "2026-10-20T09:31:00.000+0000",
+     "updated": "2026-10-20T09:35:00.000+0000"},
+    {"id": "3003", "author": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+     "body": "Comment three.", "created": "2026-10-20T09:40:00.000+0000",
+     "updated": "2026-10-20T09:40:00.000+0000"}
+  ]
+}

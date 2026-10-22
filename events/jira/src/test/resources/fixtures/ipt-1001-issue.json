@@ -1,0 +1,58 @@
+{
+  "id": "8800001",
+  "key": "IPT-1001",
+  "fields": {
+    "summary": "Modelled IPT issue",
+    "description": "Plain description.",
+    "status": {
+      "id": "10500",
+      "name": "Shipped",
+      "statusCategory": {"id": 3, "key": "done", "name": "Done"}
+    },
+    "resolution": {"id": "10000", "name": "Done"},
+    "resolutiondate": "2026-10-20T09:20:00.000+0000",
+    "assignee": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+    "reporter": {"accountId": "acct-reporter-2", "displayName": "Reporter Two"},
+    "labels": [],
+    "priority": {"id": "10002", "name": "Major"},
+    "created": "2026-10-20T08:00:00.000+0000",
+    "updated": "2026-10-20T09:40:00.000+0000",
+    "project": {"id": "20001", "key": "IPT", "name": "IPT Project"},
+    "issuetype": {"id": "1", "name": "Story"},
+    "components": [{"id": "30001", "name": "core"}],
+    "fixVersions": [{"id": "40001", "name": "1.2.0"}],
+    "duedate": "2026-10-30",
+    "customfield_10028": 5.0,
+    "comment": {
+      "startAt": 0,
+      "maxResults": 1,
+      "total": 3,
+      "comments": [
+        {"id": "3001", "author": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+         "body": "Comment one.", "created": "2026-10-20T09:30:00.000+0000",
+         "updated": "2026-10-20T09:30:00.000+0000"}
+      ]
+    }
+  },
+  "changelog": {
+    "startAt": 0,
+    "maxResults": 4,
+    "total": 4,
+    "histories": [
+      {"id": "2004", "author": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+       "created": "2026-10-20T09:20:00.000+0000", "items": [
+        {"field": "resolution", "fieldtype": "jira", "fieldId": "resolution", "from": null, "fromString": null, "to": "10000", "toString": "Done"},
+        {"field": "status", "fieldtype": "jira", "fieldId": "status", "from": "3", "fromString": "In Progress", "to": "10500", "toString": "Shipped"}]},
+      {"id": "2003", "author": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+       "created": "2026-10-20T09:10:00.000+0000", "items": [
+        {"field": "Story Points", "fieldtype": "custom", "fieldId": "customfield_10028", "from": null, "fromString": null, "to": null, "toString": "5"}]},
+      {"id": "2002", "author": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+       "created": "2026-10-20T09:05:00.000+0000", "items": [
+        {"field": "duedate", "fieldtype": "jira", "fieldId": "duedate", "from": null, "fromString": null, "to": "2026-10-30", "toString": "2026-10-30 00:00:00.0"}]},
+      {"id": "2001", "author": {"accountId": "acct-dev-1", "displayName": "Developer One"},
+       "created": "2026-10-20T09:00:00.000+0000", "items": [
+        {"field": "Fix Version", "fieldtype": "jira", "fieldId": "fixVersions", "from": null, "fromString": null, "to": "40001", "toString": "1.2.0"},
+        {"field": "Component", "fieldtype": "jira", "fieldId": "components", "from": null, "fromString": null, "to": "30001", "toString": "core"}]}
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+[
+  {"id": "10142", "name": "New", "statusCategory": {"id": 2, "key": "new", "name": "To Do"}},
+  {"id": "10143", "name": "Refinement", "statusCategory": {"id": 2, "key": "new", "name": "To Do"}},
+  {"id": "3", "name": "In Progress", "statusCategory": {"id": 4, "key": "indeterminate", "name": "In Progress"}},
+  {"id": "6", "name": "Closed", "statusCategory": {"id": 3, "key": "done", "name": "Done"}},
+  {"id": "10500", "name": "Shipped", "statusCategory": {"id": 3, "key": "done", "name": "Done"}}
+]
