@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * The database URL always holds an absolute path, because H2 rejects paths implicitly relative to the working
@@ -13,10 +14,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  */
 class AxiomDataUrlConfigSourceFactoryTest {
 
+    /**
+     * Pins the exact URL. {@code AUTO_SERVER=TRUE} must stay out: H2 2.4.240 rejects the combination
+     * {@code AUTO_SERVER=TRUE && DB_CLOSE_ON_EXIT=FALSE} at open time, which stopped prod from starting.
+     */
     @Test
     void aRelativeHomeBecomesAnAbsoluteUrl() {
         Path expected = Path.of("relhome").toAbsolutePath().normalize().resolve("data").resolve("axiom");
-        assertEquals("jdbc:h2:file:" + expected + ";AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE",
+        assertEquals("jdbc:h2:file:" + expected + ";DB_CLOSE_ON_EXIT=FALSE",
                 AxiomDataUrlConfigSourceFactory.dataUrl(AxiomHome.of("relhome")));
     }
 
@@ -27,7 +32,7 @@ class AxiomDataUrlConfigSourceFactoryTest {
     @Test
     void theDatabaseIsNotClosedByH2sShutdownHook() {
         String url = AxiomDataUrlConfigSourceFactory.dataUrl(AxiomHome.of("relhome"));
-        assertEquals(true, url.contains(";DB_CLOSE_ON_EXIT=FALSE"));
+        assertTrue(url.contains(";DB_CLOSE_ON_EXIT=FALSE"));
     }
 
     @Test

@@ -141,8 +141,18 @@ JAVA_ARGS=(-Dquarkus.http.port="$BACKEND_PORT")
 if [[ "$PERSIST" == true ]]; then
     JAVA_ARGS+=(-Dquarkus.profile=persist)
     if [[ -n "$DATA_DIR" ]]; then
-        JAVA_ARGS+=("-Dquarkus.datasource.jdbc.url=jdbc:h2:file:$DATA_DIR/axiom;AUTO_SERVER=TRUE;DB_CLOSE_ON_EXIT=FALSE")
+        # The config source factory builds the H2 URL from axiom.home
+        # (jdbc:h2:file:$DATA_DIR/data/axiom;DB_CLOSE_ON_EXIT=FALSE); an explicit
+        # axiom.data-url or quarkus.datasource.jdbc.url override still wins.
+        JAVA_ARGS+=("-Daxiom.home=$DATA_DIR")
         echo "Using data directory: $DATA_DIR"
+        if [[ -f "$DATA_DIR/axiom.mv.db" ]]; then
+            echo "WARNING: the database now lives at $DATA_DIR/data/axiom (Axiom home is $DATA_DIR)."
+            echo "         The old $DATA_DIR/axiom.mv.db is not picked up, and secret.key is"
+            echo "         recreated under $DATA_DIR, so secret values from the old location"
+            echo "         cannot be decrypted. Move the old database manually if you need it:"
+            echo "         mkdir -p $DATA_DIR/data && mv $DATA_DIR/axiom.mv.db $DATA_DIR/data/"
+        fi
     fi
     echo "Starting backend on http://localhost:$BACKEND_PORT (persistence enabled) ..."
 else
