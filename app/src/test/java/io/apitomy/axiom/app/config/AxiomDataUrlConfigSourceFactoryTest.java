@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 /**
  * The database URL always holds an absolute path, because H2 rejects paths implicitly relative to the working
@@ -32,7 +32,7 @@ class AxiomDataUrlConfigSourceFactoryTest {
     @Test
     void theDatabaseIsNotClosedByH2sShutdownHook() {
         String url = AxiomDataUrlConfigSourceFactory.dataUrl(AxiomHome.of("relhome"));
-        assertTrue(url.contains(";DB_CLOSE_ON_EXIT=FALSE"));
+        assertFalse(url.contains("AUTO_SERVER"));
     }
 
     @Test

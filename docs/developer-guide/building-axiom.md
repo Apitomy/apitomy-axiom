@@ -119,14 +119,14 @@ Both processes run in the foreground — **Ctrl+C** stops everything.
 | `--skip-ui` | Start backend only, no Vite dev server |
 | `--persist` | Use file-based H2 database (survives restarts) |
 | `--portOffset=N` | Offset both the backend and UI dev server ports by `N` |
-| `--dataDir=PATH` | Store the H2 database in `PATH` (implies `--persist`) |
+| `--dataDir=PATH` | Use `PATH` as the Axiom home; the H2 database lives in `PATH/data` (implies `--persist`) |
 
 ```bash
 ./dev.sh --skip-ui              # Backend only
 ./dev.sh --persist              # Persistent database
 ./dev.sh --persist --skip-ui    # Both flags
 ./dev.sh --portOffset=100       # Backend on 9190, UI on 9291
-./dev.sh --dataDir=/tmp/axiom   # Persistent database in /tmp/axiom
+./dev.sh --dataDir=/tmp/axiom   # Persistent database in /tmp/axiom/data
 ```
 
 ---

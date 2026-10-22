@@ -146,12 +146,15 @@ if [[ "$PERSIST" == true ]]; then
         # axiom.data-url or quarkus.datasource.jdbc.url override still wins.
         JAVA_ARGS+=("-Daxiom.home=$DATA_DIR")
         echo "Using data directory: $DATA_DIR"
+        # The database layout below ($DATA_DIR/data/axiom) is owned by
+        # AxiomDataUrlConfigSourceFactory.dataUrl(); keep the two in lockstep.
         if [[ -f "$DATA_DIR/axiom.mv.db" ]]; then
-            echo "WARNING: the database now lives at $DATA_DIR/data/axiom (Axiom home is $DATA_DIR)."
-            echo "         The old $DATA_DIR/axiom.mv.db is not picked up, and secret.key is"
-            echo "         recreated under $DATA_DIR, so secret values from the old location"
-            echo "         cannot be decrypted. Move the old database manually if you need it:"
-            echo "         mkdir -p $DATA_DIR/data && mv $DATA_DIR/axiom.mv.db $DATA_DIR/data/"
+            echo "WARNING: Axiom home is now $DATA_DIR, so the database lives at"
+            echo "         $DATA_DIR/data/axiom and workspaces, sessions, installed MCP"
+            echo "         servers and secret.key are expected under $DATA_DIR too. The old"
+            echo "         $DATA_DIR/axiom.mv.db is not picked up. To keep it and its secrets:"
+            echo "           mkdir -p $DATA_DIR/data && mv $DATA_DIR/axiom.mv.db $DATA_DIR/data/"
+            echo "           cp ~/.axiom/secret.key $DATA_DIR/secret.key"
         fi
     fi
     echo "Starting backend on http://localhost:$BACKEND_PORT (persistence enabled) ..."

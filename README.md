@@ -101,7 +101,7 @@ Other options:
 ```bash
 ./dev.sh --skip-ui          # backend only (no UI)
 ./dev.sh --persist          # use the persist profile (file-based H2 database in ~/.axiom/data)
-./dev.sh --dataDir=/path    # store the H2 database in /path (implies --persist)
+./dev.sh --dataDir=/path    # use /path as the Axiom home, DB in /path/data (implies --persist)
 ./dev.sh --portOffset=100   # offset both ports (backend 9190, UI 9291)
 ```
 
