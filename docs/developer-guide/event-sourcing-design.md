@@ -41,11 +41,12 @@ stream. No filtering — every detectable event gets recorded.
 
 **Jira event source:**
 - Uses JQL search with changelog expansion (`expand=changelog`)
-- Single query covers all configured projects via `project in (A, B, C)` clause
-- Field-level change detection from changelog entries
+- Single query covers all configured projects via a `project in ("A", "B")` clause (keys are quoted)
+- Field-level change detection from changelog entries; every event carries the issue state as of that event
 - ADF-to-plain-text conversion for description and comment bodies
-- Configuration: `baseUrl` (e.g., `https://myorg.atlassian.net`), `secretName`,
-  `projects` (list of project keys), `pollInterval`
+- Configuration: `baseUrl` (e.g., `https://myorg.atlassian.net`; must start with `http://` or `https://`,
+  a trailing `/` is removed when saved), `secretName`, `projects` (list of project keys matching
+  `^[A-Z][A-Z0-9_]+$`), optional `extraFields` (list of Jira field names), `pollInterval`
 
 **Authentication:** Three-tier fallback for both types: per-event-source secret (by name
 from the secrets store), default provider secret (`GH_TOKEN`/`GITHUB_TOKEN` for GitHub,
@@ -304,10 +305,10 @@ These files are hand-maintained and are the source of truth. The script
 
 `EventSchemaRegistry` loads the files at startup and assembles one self-contained schema per event type
 (envelope + payload + all of `defs.json` copied in as local `$defs`). If the schemas cannot be loaded,
-startup fails. The assembled schemas are served by `GET /api/v1/schemas/events` (summary list of `type` and `description`) and
-`GET /api/v1/schemas/events/{eventType}` (the schema; 404 for an unknown type). The paths use
-`/schemas/events` rather than `/event-schemas` because the code generator groups paths by the first word
-before `-`, which would collide with `/event-sources`.
+startup fails. The assembled schemas are served by `GET /api/v1/schemas/events` (summary list of `type` and
+`description`) and `GET /api/v1/schemas/events/{eventType}` (the schema; 404 for an unknown type). The
+paths use `/schemas/events` rather than `/event-schemas` because the code generator groups paths by the
+first word before `-`, which would collide with `/event-sources`.
 
 `sourceData` (the raw source payload) is not validated; the schemas allow any object there.
 
@@ -451,16 +452,16 @@ All Issue fields plus:
 | Event Type | GitHub Source | Jira Source |
 |------------|--------------|-------------|
 | `issue.created` | `IssuesEvent` / `opened` | Issue `created` timestamp within poll window |
-| `issue.updated` | `IssuesEvent` / `edited` | Changelog: `summary` or `description` change |
-| `issue.closed` | `IssuesEvent` / `closed` | Changelog: status to `Done` category |
-| `issue.reopened` | `IssuesEvent` / `reopened` | Changelog: status from `Done` to non-`Done` |
+| `issue.updated` | `IssuesEvent` / `edited` | Changelog: other tracked field change (see [Jira](#jira)) |
+| `issue.closed` | `IssuesEvent` / `closed` | Changelog: status into the `done` category |
+| `issue.reopened` | `IssuesEvent` / `reopened` | Changelog: status out of the `done` category |
 | `issue.assigned` | `IssuesEvent` / `assigned` | Changelog: `assignee` field set |
 | `issue.unassigned` | `IssuesEvent` / `unassigned` | Changelog: `assignee` field cleared |
 | `issue.labeled` | `IssuesEvent` / `labeled` | Changelog: `labels` (added) |
 | `issue.unlabeled` | `IssuesEvent` / `unlabeled` | Changelog: `labels` (removed) |
 | `issue.comment.created` | `IssueCommentEvent` / `created` | Comment `created` > last poll |
-| `issue.comment.updated` | `IssueCommentEvent` / `edited` | Comment `updated` > `created` and > last poll |
-| `issue.comment.deleted` | `IssueCommentEvent` / `deleted` | Not detectable |
+| `issue.comment.updated` | `IssueCommentEvent` / `edited` | Comment `updated` > `created` and in poll window (one event per edit) |
+| `issue.comment.deleted` | `IssueCommentEvent` / `deleted` | Changelog: `Comment` item with `fromString` and no `toString` |
 
 ## Pull Request Events (GitHub only)
 
@@ -532,30 +533,100 @@ unique index.
 
 ## Jira
 
-**Event detection:** JQL search with `expand=changelog`. Changelog entries are filtered
-by timestamp and classified into normalized event types.
+**Event detection:** JQL search with `expand=changelog`, ordered by `updated`. The search requests the fields
+used for snapshots (`summary`, `description`, `status`, `assignee`, `reporter`, `labels`, `priority`,
+`resolution`, `resolutiondate`, `duedate`, `fixVersions`, `components`, `issuetype`, `project`, `comment`,
+`created`, `updated`, `parent`) plus the IDs of the configured `extraFields`. Truncated changelogs are
+completed with `GET /rest/api/3/issue/{key}/changelog`; incomplete comment lists (`total` greater than the
+number returned) with `GET /rest/api/3/issue/{key}/comment`. A 404/403 on either falls back to the embedded
+data; 5xx, 429 and network errors abort the poll window without advancing the checkpoint.
+
+**Per-poll lookups:** once per event source and poll, `GET /rest/api/3/status` builds a status ID →
+category key map, and (only when `extraFields` is configured) `GET /rest/api/3/field` resolves field names to
+IDs, ignoring case. Unknown `extraFields` names are ignored with a warning. If the status lookup fails, a
+warning is logged and status names `done`, `closed` and `resolved` (case-insensitive) are treated as done.
+In this degraded mode a transition into a custom done status (for example `Shipped`) is emitted as
+`issue.updated` while the snapshot's `state` may already be `closed`.
+
+**Issue state as of each event:** `JiraIssueHistory` sorts the changelog newest first, starts from the current
+issue, and for each entry records the state after that entry and then undoes the entry's items (`to` →
+`from`). What remains is the state at creation, used by `issue.created`. Comment events use the state in
+effect at the comment's timestamp. Tracked: status (name, ID, category → `state`/`stateDetail`), summary,
+description, assignee, labels, resolution and `closedAt`, priority, due date, fix versions, components and
+every configured extra field. `updatedAt` of a snapshot is the timestamp of the entry that produced it
+(`created` for the creation state). `closedAt` is the time of the most recent resolution change to a
+non-null value at or before the snapshot, and null while the resolution is empty.
+
+Limits:
+- Fields without changelog history keep their current values in every snapshot.
+- A rebuilt description is the changelog's plain/wiki text; the current one is converted from ADF.
+- Comment bodies are always the current text (Jira keeps no comment history).
+- Extra-field values from the changelog are Jira's display strings (`toString`); current values are rendered
+  from the field JSON (`value`, `name`, `displayName` or `key` of objects, arrays joined with `, `, integral
+  numbers without a fraction).
+
+**Open/closed:** `state` is `closed` exactly when the status category key is `done`. A status change into
+the `done` category emits `issue.closed`, out of it `issue.reopened`, anything else `issue.updated`.
 
 **Changelog classification:**
 
-| Field | Event Type |
+| Changelog `field` (case-insensitive) | Event Type |
 |-------|------------|
-| `status` to Done category | `issue.closed` |
-| `status` from Done category | `issue.reopened` |
-| `summary` or `description` | `issue.updated` |
-| `assignee` set | `issue.assigned` |
-| `assignee` cleared | `issue.unassigned` |
-| `labels` added | `issue.labeled` |
-| `labels` removed | `issue.unlabeled` |
+| `status` into the done category | `issue.closed` |
+| `status` out of the done category | `issue.reopened` |
+| other `status` changes | `issue.updated` with `change` |
+| `summary`, `description`, `priority`, `resolution`, `duedate`, `Fix Version`, `Component` | `issue.updated` with `change` |
+| a name listed in `configuration.extraFields` | `issue.updated` with `change` |
+| `assignee` set | `issue.assigned` (`assignee.login` = account ID from `to`) |
+| `assignee` cleared | `issue.unassigned` (`assignee.login` = account ID from `from`) |
+| `labels` added | `issue.labeled` (one per label) |
+| `labels` removed | `issue.unlabeled` (one per label) |
+| `Comment` with `fromString` and no `toString` | `issue.comment.deleted` (comment `id` and `author` null, `body` = deleted text; actor = history author) |
 
-**Label diffing:** Jira provides space-separated before/after lists in changelog.
-The sourcer diffs them to emit individual labeled/unlabeled events.
+**`sourceEventId` formats:**
 
-**ADF conversion:** Jira v3 returns description and comment body in Atlassian Document
-Format. The sourcer extracts plain text for normalized fields and preserves raw ADF
-in `sourceData`.
+| Trigger | `sourceEventId` |
+|---|---|
+| Issue created | `{KEY}-created` |
+| Changelog entry producing one event | `{KEY}-{historyId}` |
+| Changelog entry producing several events | `{KEY}-{historyId}-{i}` (item order) |
+| Comment created | `{KEY}-comment-{commentId}` |
+| Comment edited | `{KEY}-comment-{commentId}-updated-{updatedEpochMillis}` (one per edit) |
+
+**Timestamps:** every timestamp in the payload (`createdAt`, `updatedAt`, `closedAt`, comment timestamps) and
+the event `timestamp` are ISO-8601 UTC ending in `Z`.
+
+**`sourceData`** (a selected set, not validated by the event schemas; values follow the snapshot of the
+event where history exists):
+
+```json
+{
+  "jiraId": "7358053",
+  "project": {"key": "APICURIO", "name": "Apicurio"},
+  "issueType": {"name": "Task"},
+  "status": {"name": "Closed", "categoryKey": "done"},
+  "priority": {"name": "Major"},
+  "resolution": {"name": "Done"},
+  "dueDate": "2026-10-30",
+  "components": [{"name": "core"}],
+  "fixVersions": [{"name": "1.2.0"}],
+  "extraFields": {"Story Points": "5"}
+}
+```
+
+`extraFields` is present only when configured; a configured field with no value is `null`.
 
 **`ref` construction:** `{baseUrl}/browse/{issueKey}`
 
-**Deduplication:** Stable `sourceEventId` from `{issueKey}-{changelogEntryId}`,
-`{issueKey}-created`, or `{issueKey}-comment-{commentId}`.
+**Upgrade notes:**
+- Existing events and IDs are kept.
+- A comment edit that already has an old-format `{KEY}-comment-{id}-updated` event gets one more event under
+  the new format after the upgrade (accepted one-time effect).
+- Changelog entries that now produce more events (for example a status change plus a resolution change)
+  use `-{i}` suffixes; such an entry re-read in the first poll window after the upgrade is stored once more
+  under the new IDs (accepted one-time effect, limited to the two-minute query overlap).
+- GitHub and Jira event sources whose `baseUrl` lacks `http://` or `https://` (for example
+  `github.ibm.com/api/v3`) now fail validation when edited or imported and must be updated.
 
+**Verification tool:** `tools/jira-groundtruth.py` compares raw Jira activity with the stored events and
+reports field-quality problems and schema-validation results (see the script's `--help`).
