@@ -357,7 +357,7 @@ class JiraEventSourcePollerTest {
 
         @Override
         public ApiResult fetchIssuesPage(String baseUrl, List<String> projects, Instant since,
-                                         String credentials, String nextPageToken) {
+                                         String credentials, String nextPageToken, List<String> extraFieldIds) {
             tokens.add(nextPageToken == null ? "<first>" : nextPageToken);
             return pages.removeFirst();
         }

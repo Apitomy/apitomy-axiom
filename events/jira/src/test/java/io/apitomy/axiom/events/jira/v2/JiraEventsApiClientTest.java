@@ -39,6 +39,7 @@ class JiraEventsApiClientTest {
     private final List<JsonNode> searchBodies = new ArrayList<>();
     private final List<String> changelogQueries = new ArrayList<>();
     private final List<String> changelogPaths = new ArrayList<>();
+    private final List<String> commentQueries = new ArrayList<>();
     private final Map<String, String> searchResponses = new ConcurrentHashMap<>();
 
     @BeforeEach
@@ -46,6 +47,10 @@ class JiraEventsApiClientTest {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/rest/api/3/search/jql", this::handleSearch);
         server.createContext("/rest/api/3/issue/", this::handleChangelog);
+        server.createContext("/rest/api/3/status", exchange -> respond(exchange, 200,
+                "[{\"id\":\"6\",\"name\":\"Closed\",\"statusCategory\":{\"key\":\"done\"}}]"));
+        server.createContext("/rest/api/3/field", exchange -> respond(exchange, 200,
+                "[{\"id\":\"customfield_10028\",\"name\":\"Story Points\"}]"));
         server.start();
         baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
         client = new JiraEventsApiClient();
@@ -68,12 +73,12 @@ class JiraEventsApiClientTest {
         searchResponses.put("tok2", "{\"issues\":[{\"key\":\"P-2\"}],\"isLast\":true}");
 
         ApiResult first = client.fetchIssuesPage(baseUrl, List.of("P"),
-                Instant.parse("2026-10-01T10:00:00Z"), "a:b", null);
+                Instant.parse("2026-10-01T10:00:00Z"), "a:b", null, List.of());
         assertTrue(first.success());
         assertEquals("tok2", first.data().path("nextPageToken").asText());
 
         ApiResult second = client.fetchIssuesPage(baseUrl, List.of("P"),
-                Instant.parse("2026-10-01T10:00:00Z"), "a:b", "tok2");
+                Instant.parse("2026-10-01T10:00:00Z"), "a:b", "tok2", List.of());
         assertTrue(second.success());
         assertEquals("P-2", second.data().path("issues").get(0).path("key").asText());
 
@@ -87,7 +92,7 @@ class JiraEventsApiClientTest {
         Instant since = Instant.parse("2026-10-01T10:00:00Z");
         long expected = since.minus(JiraEventsApiClient.QUERY_OVERLAP).toEpochMilli();
 
-        client.fetchIssuesPage(baseUrl, List.of("P"), since, "a:b", null);
+        client.fetchIssuesPage(baseUrl, List.of("P"), since, "a:b", null, List.of());
 
         String jql = searchBodies.get(0).path("jql").asText();
         assertTrue(jql.contains("updated >= " + expected), jql);
@@ -111,6 +116,63 @@ class JiraEventsApiClientTest {
         assertEquals(3, changelogQueries.size());
     }
 
+    @Test
+    void fetchIssuesPage_quotesProjectKeysInJql() {
+        client.fetchIssuesPage(baseUrl, List.of("P", "Q_2"), Instant.parse("2026-10-01T10:00:00Z"), "a:b",
+                null, List.of());
+
+        String jql = searchBodies.get(0).path("jql").asText();
+        assertTrue(jql.startsWith("project in (\"P\", \"Q_2\") AND updated >= "), jql);
+    }
+
+    @Test
+    void projectClause_escapesQuotesAndBackslashes() {
+        assertEquals("project in (\"A\\\") OR (x = \\\"y\", \"B\\\\\")",
+                JiraEventsApiClient.projectClause(List.of("A\") OR (x = \"y", "B\\")));
+    }
+
+    @Test
+    void fetchIssuesPage_requestsSnapshotFieldsAndExtraFields() {
+        client.fetchIssuesPage(baseUrl, List.of("P"), Instant.parse("2026-10-01T10:00:00Z"), "a:b", null,
+                List.of("customfield_10028"));
+
+        List<String> fields = new ArrayList<>();
+        searchBodies.get(0).path("fields").forEach(f -> fields.add(f.asText()));
+        for (String required : List.of("project", "resolutiondate", "status", "duedate", "priority",
+                "resolution", "fixVersions", "components", "assignee", "labels", "comment",
+                "customfield_10028")) {
+            assertTrue(fields.contains(required), required + " missing from " + fields);
+        }
+        assertEquals("changelog", searchBodies.get(0).path("expand").asText());
+    }
+
+    @Test
+    void fetchStatuses_returnsStatusArray() {
+        ApiResult result = client.fetchStatuses(baseUrl, "a:b");
+
+        assertTrue(result.success());
+        assertEquals("done", result.data().get(0).path("statusCategory").path("key").asText());
+    }
+
+    @Test
+    void fetchFields_returnsFieldArray() {
+        ApiResult result = client.fetchFields(baseUrl, "a:b");
+
+        assertTrue(result.success());
+        assertEquals("customfield_10028", result.data().get(0).path("id").asText());
+    }
+
+    @Test
+    void fetchIssueComments_followsAllPages() {
+        ApiResult result = client.fetchIssueComments(baseUrl, "P-1", "a:b");
+
+        assertTrue(result.success());
+        assertEquals(250, result.data().size());
+        assertEquals("249", result.data().get(249).path("id").asText());
+        assertEquals(3, commentQueries.size());
+        assertTrue(commentQueries.get(0).contains("orderBy=created"), commentQueries.get(0));
+    }
+
     private void handleSearch(HttpExchange exchange) throws IOException {
         JsonNode body = MAPPER.readTree(exchange.getRequestBody());
         searchBodies.add(body);
@@ -119,6 +181,10 @@ class JiraEventsApiClientTest {
     }
 
     private void handleChangelog(HttpExchange exchange) throws IOException {
+        if (exchange.getRequestURI().getRawPath().endsWith("/comment")) {
+            handleComments(exchange);
+            return;
+        }
         String query = exchange.getRequestURI().getQuery();
         changelogQueries.add(query);
         changelogPaths.add(exchange.getRequestURI().getRawPath());
@@ -138,6 +204,28 @@ class JiraEventsApiClientTest {
         ArrayNode values = page.putArray("values");
         for (int i = startAt; i < end; i++) {
             values.addObject().put("id", String.valueOf(i));
+        }
+        respond(exchange, 200, MAPPER.writeValueAsString(page));
+    }
+
+    private void handleComments(HttpExchange exchange) throws IOException {
+        String query = exchange.getRequestURI().getQuery();
+        commentQueries.add(query);
+        int startAt = 0;
+        for (String part : query.split("&")) {
+            if (part.startsWith("startAt=")) {
+                startAt = Integer.parseInt(part.substring("startAt=".length()));
+            }
+        }
+        int total = 250;
+        int end = Math.min(startAt + 100, total);
+        ObjectNode page = MAPPER.createObjectNode();
+        page.put("startAt", startAt);
+        page.put("maxResults", 100);
+        page.put("total", total);
+        ArrayNode comments = page.putArray("comments");
+        for (int i = startAt; i < end; i++) {
+            comments.addObject().put("id", String.valueOf(i));
         }
         respond(exchange, 200, MAPPER.writeValueAsString(page));
     }

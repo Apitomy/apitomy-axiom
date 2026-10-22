@@ -256,7 +256,8 @@ public class JiraEventSourcePoller {
         String nextPageToken = null;
 
         for (int pageNum = 0; pageNum < maxSearchPages; pageNum++) {
-            ApiResult page = apiClient.fetchIssuesPage(baseUrl, projects, since, credentials, nextPageToken);
+            ApiResult page = apiClient.fetchIssuesPage(baseUrl, projects, since, credentials, nextPageToken,
+                    List.of());
             if (page == null || !page.success()) {
                 String msg = page != null ? page.errorMessage() : "no response";
                 return new WindowResult(false, null, issuesProcessed, totalIngested,
