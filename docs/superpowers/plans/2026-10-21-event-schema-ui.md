@@ -21,8 +21,8 @@ UI" and the user-guide bullet of "Documentation"). Plan 1 contract: `/tmp/axiom-
 
 ## Global Constraints
 
-- Plan 1 is merged: `GET /api/v1/event-schemas` returns `EventSchemaSummary[]` (`{type, description}`) sorted
-  by type; `GET /api/v1/event-schemas/{eventType}` returns a self-contained JSON Schema (only local
+- Plan 1 is merged: `GET /api/v1/schemas/events` returns `EventSchemaSummary[]` (`{type, description}`) sorted
+  by type; `GET /api/v1/schemas/events/{eventType}` returns a self-contained JSON Schema (only local
   `#/$defs/...` refs) or 404; `StreamEvent` has optional `validationErrors: string[]`.
 - Optional schema fields are `{"type": ["string", "null"]}` or `{"anyOf": [{"$ref": "#/$defs/X"}, {"type":
   "null"}]}`; both collapse to the non-null type in the UI.
@@ -314,7 +314,7 @@ Create `ui/src/config/eventSchemaPaths.ts`:
 
 ```ts
 /**
- * Utilities that turn an assembled event JSON Schema (from `GET /event-schemas/{eventType}`) into the flat
+ * Utilities that turn an assembled event JSON Schema (from `GET /schemas/events/{eventType}`) into the flat
  * list of EL paths shown in the subscription filter's Event fields panel and Monaco completion.
  */
 
@@ -736,7 +736,7 @@ In the `StreamEvent` interface, after `processingStates?: StreamEventProcessingS
 Directly after the `fetchStreamEvent` function, add:
 
 ```ts
-/** One event type and its description, from `GET /event-schemas`. */
+/** One event type and its description, from `GET /schemas/events`. */
 export interface EventSchemaSummary {
     type: string;
     description?: string;
@@ -748,7 +748,7 @@ export interface EventSchemaSummary {
  * @returns summaries sorted by type
  */
 export async function fetchEventSchemas(): Promise<EventSchemaSummary[]> {
-    const response = await fetch(`${API}/event-schemas`);
+    const response = await fetch(`${API}/schemas/events`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event schemas"));
     return response.json();
 }
@@ -760,7 +760,7 @@ export async function fetchEventSchemas(): Promise<EventSchemaSummary[]> {
  * @returns the schema
  */
 export async function fetchEventSchema(eventType: string): Promise<JsonSchema> {
-    const response = await fetch(`${API}/event-schemas/${encodeURIComponent(eventType)}`);
+    const response = await fetch(`${API}/schemas/events/${encodeURIComponent(eventType)}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event schema"));
     return response.json();
 }

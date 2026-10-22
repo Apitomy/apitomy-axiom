@@ -288,6 +288,54 @@ system, allowing portable sharing of event system configuration.
 
 # Event Schema
 
+## Event schemas
+
+Every event type has a JSON Schema (draft 2020-12). The schema files live under
+`core/src/main/resources/schemas/events/`:
+
+- `envelope.json` — the common envelope (see below).
+- `defs.json` — shared sub-objects (`actor`, `issue`, `pullRequest`, `comment`, `review`, `label`, `change`).
+- `payloads/<type>.json` — one payload schema per event type, e.g. `payloads/issue.closed.json`.
+
+These files are hand-maintained and are the source of truth. The script
+`tools/generate-event-payload-schemas.py` was used only to bootstrap them; do not re-run it.
+
+`EventSchemaRegistry` loads the files at startup and assembles one self-contained schema per event type
+(envelope + payload + only the local `$defs` it needs). If the schemas cannot be loaded, startup fails. The
+assembled schemas are served by `GET /api/v1/schemas/events` (summary list of `type` and `description`) and
+`GET /api/v1/schemas/events/{eventType}` (the schema; 404 for an unknown type). The paths use
+`/schemas/events` rather than `/event-schemas` because the code generator groups paths by the first word
+before `-`, which would collide with `/event-sources`.
+
+`sourceData` (the raw source payload) is not validated; the schemas allow any object there.
+
+### Runtime validation
+
+`EventStreamService` validates each event against its schema before persisting it. An invalid event is
+still saved, with the validation messages stored in `stream_event.validation_errors` and exposed as
+`validationErrors` on `StreamEvent`. Each invalid event is logged as a warning, and the poll log message
+gets the suffix ` (N failed schema validation)`. If the validator itself throws, the exception is recorded
+as a validation error rather than dropping the event.
+
+### Drift tests and adding an event type
+
+`EventSchemaDriftTest` checks that the `EventType` enum, the payload records registered in
+`@JsonSubTypes`, and the payload schema files stay in sync. `ValidatingGitHubNormalizer` and
+`ValidatingJiraNormalizer` wrap the normalizers in tests and validate every event they produce against the
+schemas, so a normalizer change that breaks a schema fails the build.
+
+To add a new event type:
+
+1. Add the value to the `EventType` enum.
+2. Add a payload record.
+3. Register the record in the `@JsonSubTypes` list.
+4. Add `payloads/<type>.json` under `core/src/main/resources/schemas/events/`.
+
+### Identity and timestamps
+
+Source event IDs are unique per event source: the unique key is (`eventSourceId`, `sourceEventId`)
+(migration `V4__event_schema_validation.sql`). All timestamps are ISO-8601 UTC strings ending in `Z`.
+
 ## Common Event Envelope
 
 Every event in the stream shares this envelope structure.

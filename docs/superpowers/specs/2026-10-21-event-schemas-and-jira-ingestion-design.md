@@ -122,12 +122,15 @@ duplicate keys after the upgrade.
 
 In `common/api/src/main/resources/openapi.json`:
 
-- `GET /event-schemas` returns `EventSchemaSummary[]` (`type`, `description`).
-- `GET /event-schemas/{type}` returns the assembled JSON Schema (untyped object). It returns 404 for an
+- `GET /schemas/events` returns `EventSchemaSummary[]` (`type`, `description`).
+- `GET /schemas/events/{type}` returns the assembled JSON Schema (untyped object). It returns 404 for an
   unknown type.
 - `StreamEvent` gains an optional `validationErrors: string[]`.
 
-A new `EventSchemasResourceImpl` implements the generated interface.
+The paths live under `/schemas/events` rather than `/event-schemas` because apitomy-codegen groups paths
+into resource interfaces by the first word before `-`, so `/event-schemas` would collide with
+`/event-sources`. The endpoints are implemented by `EventSchemasResourceImpl`, which implements the
+generated interface `SchemasResource`.
 
 ### Drift guards (tests)
 
@@ -251,8 +254,8 @@ A selected set of fields, not validated:
 
 ### Data
 
-- A `useEventSchemas` hook uses the generated API client for `GET /event-schemas` and
-  `GET /event-schemas/{type}`, and caches results for the session.
+- A `useEventSchemas` hook uses the generated API client for `GET /schemas/events` and
+  `GET /schemas/events/{type}`, and caches results for the session.
 - A `schemaToPaths(schema)` utility walks the assembled schema and returns rows of
   `{path, type, description, examples}`.
   - It follows `$ref`s.
