@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A label was added to an issue.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "issue"
+  ],
+  "properties": {
+    "type": {
+      "const": "issue.labeled",
+      "description": "Payload type (same as the event type)."
+    },
+    "issue": {
+      "$ref": "#/$defs/NormalizedIssue",
+      "description": "The issue, as of this event."
+    },
+    "label": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NormalizedLabel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The added label."
+    }
+  }
+}

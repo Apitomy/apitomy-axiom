@@ -17,7 +17,7 @@
   ],
   "paths": {
     "x-codegen-contextRoot": "/api/v1",
-    "/system/health": {
+      "/system/health": {
       "get": {
         "tags": [
           "System"
@@ -4566,6 +4566,66 @@
         }
       ]
     },
+    "/schemas/events": {
+      "get": {
+        "tags": [
+          "EventSchemas"
+        ],
+        "summary": "List event types that have a JSON Schema",
+        "operationId": "listEventSchemas",
+        "responses": {
+          "200": {
+            "description": "Event types, sorted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EventSchemaSummary"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schemas/events/{eventType}": {
+      "parameters": [
+        {
+          "name": "eventType",
+          "in": "path",
+          "required": true,
+          "description": "Event type, e.g. issue.closed",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "EventSchemas"
+        ],
+        "summary": "Get the JSON Schema of an event type",
+        "description": "Self-contained JSON Schema (draft 2020-12) for the full event envelope of this type. sourceData is unconstrained.",
+        "operationId": "getEventSchema",
+        "responses": {
+          "200": {
+            "description": "The schema",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventSchemaDocument"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
     "/stream/events": {
       "get": {
         "tags": [
@@ -6975,6 +7035,28 @@
   },
   "components": {
     "schemas": {
+        "EventSchemaSummary": {
+          "type": "object",
+          "required": [
+            "type",
+            "description"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Event type, e.g. issue.closed"
+            },
+            "description": {
+              "type": "string",
+              "description": "What the event means"
+            }
+          }
+        },
+        "EventSchemaDocument": {
+          "type": "object",
+          "additionalProperties": {},
+          "description": "A JSON Schema document"
+        },
       "CompositionMessage": {
         "title": "CompositionMessage",
         "description": "A user message to the composition's agent.",
@@ -11028,6 +11110,13 @@
         ],
         "type": "object",
         "properties": {
+            "validationErrors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Schema validation errors recorded when the event was ingested. Absent when the event was valid or was ingested before validation existed."
+            },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -12881,6 +12970,10 @@
     }
   },
   "tags": [
+    {
+      "name": "EventSchemas",
+      "description": "JSON Schemas of normalized event types"
+    },
     {
       "name": "Expressions",
       "description": "EL expression evaluation for workflow authoring"

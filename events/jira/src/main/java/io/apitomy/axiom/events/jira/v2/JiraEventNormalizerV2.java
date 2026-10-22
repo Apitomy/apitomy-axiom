@@ -318,9 +318,9 @@ public class JiraEventNormalizerV2 {
                 labels,
                 null, // milestone
                 baseUrl + "/browse/" + issueKey,
-                textOrNull(fields, "created"),
-                textOrNull(fields, "updated"),
-                textOrNull(fields, "resolutiondate")
+                isoTimestamp(textOrNull(fields, "created")),
+                isoTimestamp(textOrNull(fields, "updated")),
+                isoTimestamp(textOrNull(fields, "resolutiondate"))
         );
     }
 
@@ -356,8 +356,8 @@ public class JiraEventNormalizerV2 {
                 body,
                 author,
                 url,
-                textOrNull(comment, "created"),
-                textOrNull(comment, "updated")
+                isoTimestamp(textOrNull(comment, "created")),
+                isoTimestamp(textOrNull(comment, "updated"))
         );
     }
 
@@ -511,6 +511,20 @@ public class JiraEventNormalizerV2 {
         }
 
         return source;
+    }
+
+    /**
+     * Converts a Jira timestamp (e.g. {@code 2026-10-21T14:53:07.835+0000}) to ISO-8601 UTC ({@code …Z}).
+     *
+     * @param jiraTimestamp the Jira timestamp, may be null
+     * @return the ISO form, null for null input, or the input unchanged if it cannot be parsed
+     */
+    static String isoTimestamp(String jiraTimestamp) {
+        if (jiraTimestamp == null) {
+            return null;
+        }
+        Instant parsed = parseJiraTimestamp(jiraTimestamp);
+        return parsed != null ? parsed.toString() : jiraTimestamp;
     }
 
     /**

@@ -38,7 +38,7 @@ class JiraEventNormalizerV2Test {
 
     @BeforeEach
     void setUp() {
-        normalizer = new JiraEventNormalizerV2(mapper);
+        normalizer = new ValidatingJiraNormalizer(mapper);
     }
 
     // -- Test 1: New issue produces ISSUE_CREATED ---------------------------------
@@ -471,5 +471,13 @@ class JiraEventNormalizerV2Test {
         for (ObjectNode comment : comments) {
             commentsArray.add(comment);
         }
+    }
+
+    @Test
+    void isoTimestampConvertsJiraOffsetFormat() {
+        assertEquals("2026-10-21T14:53:07.835Z",
+                JiraEventNormalizerV2.isoTimestamp("2026-10-21T14:53:07.835+0000"));
+        assertEquals(null, JiraEventNormalizerV2.isoTimestamp(null));
+        assertEquals("garbage", JiraEventNormalizerV2.isoTimestamp("garbage"));
     }
 }

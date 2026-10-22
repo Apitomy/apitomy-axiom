@@ -34,7 +34,7 @@ class GitHubEventNormalizerV2Test {
 
     @BeforeEach
     void setUp() {
-        normalizer = new GitHubEventNormalizerV2(mapper);
+        normalizer = new ValidatingGitHubNormalizer(mapper);
     }
 
     // ── Test 1: IssuesEvent/opened ──────────────────────────────────────────

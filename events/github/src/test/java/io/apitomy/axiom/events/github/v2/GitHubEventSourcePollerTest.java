@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.EventStreamService;
+import io.apitomy.axiom.events.core.IngestTally;
+import io.apitomy.axiom.events.core.PersistOutcome;
 import io.apitomy.axiom.events.github.v2.GitHubEventsApiClient.EventsPollResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,6 +62,32 @@ class GitHubEventSourcePollerTest {
 
         assertEquals(2, poll());
         assertEquals(List.of("101", "102"), List.copyOf(stream.ids));
+    }
+
+    @Test
+    void invalidEventsAreCountedForPollLog() {
+        stream.invalidIds.add("101");
+        api.pages.add(EventsPollResult.ok(events(issueOpened("102"), issueOpened("101")), "\"e1\"", 60));
+        IngestTally tally = new IngestTally();
+
+        int ingested = poller.pollRepository(SOURCE_ID, "owner", "repo", "token",
+                "https://api.github.com", "https://github.com", new StringBuilder(), tally);
+
+        assertEquals(2, ingested);
+        assertEquals(1, tally.invalid());
+        assertEquals("Polled 1 repositories (1 failed schema validation)",
+                GitHubEventSourcePoller.successMessage(1, tally));
+        assertEquals("Polled 1 repositories with errors (1 failed schema validation)",
+                GitHubEventSourcePoller.errorMessage(1, tally));
+    }
+
+    @Test
+    void pollLogMessagesHaveNoSuffixWhenAllValid() {
+        IngestTally tally = new IngestTally();
+        tally.record(PersistOutcome.PERSISTED);
+
+        assertEquals("Polled 2 repositories", GitHubEventSourcePoller.successMessage(2, tally));
+        assertEquals("Polled 2 repositories with errors", GitHubEventSourcePoller.errorMessage(2, tally));
     }
 
     @Test
@@ -225,11 +253,12 @@ class GitHubEventSourcePollerTest {
     /** In-memory event stream that dedupes by sourceEventId like the real service. */
     static class RecordingStream extends EventStreamService {
         final Set<String> ids = new LinkedHashSet<>();
+        final Set<String> invalidIds = new HashSet<>();
         String failOn;
         int lookups;
 
         @Override
-        public Set<String> existingSourceEventIds(Collection<String> sourceEventIds) {
+        public Set<String> existingSourceEventIds(String eventSourceId, Collection<String> sourceEventIds) {
             lookups++;
             Set<String> found = new HashSet<>(sourceEventIds);
             found.retainAll(ids);
@@ -237,11 +266,15 @@ class GitHubEventSourcePollerTest {
         }
 
         @Override
-        public boolean persistEvent(NormalizedEvent event) {
+        public PersistOutcome persistEvent(NormalizedEvent event) {
             if (event.sourceEventId().equals(failOn)) {
                 throw new IllegalStateException("db down");
             }
-            return ids.add(event.sourceEventId());
+            if (!ids.add(event.sourceEventId())) {
+                return PersistOutcome.DUPLICATE;
+            }
+            return invalidIds.contains(event.sourceEventId())
+                    ? PersistOutcome.PERSISTED_INVALID : PersistOutcome.PERSISTED;
         }
     }
 }

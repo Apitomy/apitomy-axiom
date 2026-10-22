@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "sourceEventId", "source", "eventSourceId", "type", "ref", "timestamp", "payload"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Axiom-assigned unique ID (UUID) of the event.",
+      "examples": ["04f96ff3-6a2c-4766-aa84-27da50fb366f"]
+    },
+    "sourceEventId": {
+      "type": "string",
+      "description": "ID of the event in the source system; unique within one event source.",
+      "examples": ["APICURIO-137-93654267", "45623198765"]
+    },
+    "source": {
+      "type": "string",
+      "description": "Source system that produced the event.",
+      "examples": ["github", "jira"]
+    },
+    "eventSourceId": {
+      "type": "string",
+      "description": "Slug of the Axiom event source that ingested the event.",
+      "examples": ["my-jira"]
+    },
+    "type": {
+      "type": "string",
+      "description": "Normalized event type."
+    },
+    "ref": {
+      "type": "string",
+      "description": "Full URL identifying the subject of the event.",
+      "examples": ["https://redhat.atlassian.net/browse/APICURIO-137"]
+    },
+    "timestamp": {
+      "$ref": "#/$defs/Timestamp",
+      "description": "When the action happened in the source system (ISO-8601 UTC)."
+    },
+    "actor": {
+      "anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}],
+      "description": "Who performed the action."
+    },
+    "payload": {
+      "description": "Replaced at assembly time with the payload schema of the event type."
+    },
+    "sourceData": {
+      "description": "Source-specific data. Not validated; contents vary by source."
+    }
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "$defs": {
+    "Timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+      "description": "ISO-8601 UTC timestamp ending in Z.",
+      "examples": ["2026-10-21T14:53:07.835Z"]
+    },
+    "NullableTimestamp": {
+      "anyOf": [{"$ref": "#/$defs/Timestamp"}, {"type": "null"}]
+    },
+    "Actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A user in the source system.",
+      "properties": {
+        "login": {"type": ["string", "null"], "description": "Stable user ID (GitHub login, Jira accountId).", "examples": ["octocat", "70121:6eabb14f-d93c-473b-b21c-9ad32a24b460"]},
+        "displayName": {"type": ["string", "null"], "description": "Human-readable name.", "examples": ["Eric Wittmann"]},
+        "avatarUrl": {"type": ["string", "null"], "description": "Avatar image URL."},
+        "url": {"type": ["string", "null"], "description": "Profile URL (null for Jira)."}
+      }
+    },
+    "Change": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A single field change.",
+      "properties": {
+        "field": {"type": ["string", "null"], "description": "Changed field.", "examples": ["status", "summary", "priority"]},
+        "from": {"type": ["string", "null"], "description": "Previous value.", "examples": ["In Progress"]},
+        "to": {"type": ["string", "null"], "description": "New value.", "examples": ["Closed"]},
+        "author": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "Who made the change."}
+      }
+    },
+    "CommitAuthor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Git author identity.",
+      "properties": {
+        "name": {"type": ["string", "null"], "description": "Author name."},
+        "email": {"type": ["string", "null"], "description": "Author email."}
+      }
+    },
+    "Commit": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A pushed commit.",
+      "properties": {
+        "sha": {"type": ["string", "null"], "description": "Commit SHA."},
+        "message": {"type": ["string", "null"], "description": "Commit message."},
+        "author": {"anyOf": [{"$ref": "#/$defs/CommitAuthor"}, {"type": "null"}], "description": "Git author."},
+        "url": {"type": ["string", "null"], "description": "Commit URL."}
+      }
+    },
+    "NormalizedLabel": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A label.",
+      "properties": {
+        "name": {"type": ["string", "null"], "description": "Label name.", "examples": ["bug"]},
+        "color": {"type": ["string", "null"], "description": "Label color (GitHub only)."},
+        "description": {"type": ["string", "null"], "description": "Label description (GitHub only)."}
+      }
+    },
+    "NormalizedComment": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A comment.",
+      "properties": {
+        "id": {"type": ["string", "null"], "description": "Comment ID (null for deleted Jira comments)."},
+        "body": {"type": ["string", "null"], "description": "Comment text."},
+        "author": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "Comment author."},
+        "url": {"type": ["string", "null"], "description": "Comment URL."},
+        "createdAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Creation time."},
+        "updatedAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Last edit time."}
+      }
+    },
+    "NormalizedIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "title", "state", "url"],
+      "description": "An issue, as of the event.",
+      "properties": {
+        "number": {"type": "string", "description": "Issue number (GitHub) or key (Jira).", "examples": ["123", "PROJ-456"]},
+        "title": {"type": "string", "description": "Issue title.", "examples": ["Fix login bug"]},
+        "body": {"type": ["string", "null"], "description": "Issue description as plain text."},
+        "state": {"enum": ["open", "closed"], "description": "Normalized state.", "examples": ["open"]},
+        "stateDetail": {"type": ["string", "null"], "description": "Source-specific state (GitHub state_reason, Jira status name).", "examples": ["In Progress"]},
+        "author": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "Issue author or reporter."},
+        "assignees": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Actor"}, "description": "Assignees."},
+        "labels": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Label names.", "examples": [["bug"]]},
+        "milestone": {"type": ["string", "null"], "description": "Milestone title (GitHub only)."},
+        "url": {"type": "string", "description": "Issue URL."},
+        "createdAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Creation time."},
+        "updatedAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Last update time as of the event."},
+        "closedAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Close (resolution) time."}
+      }
+    },
+    "NormalizedPullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number", "title", "state", "url"],
+      "description": "A pull request.",
+      "properties": {
+        "number": {"type": "string", "description": "PR number.", "examples": ["42"]},
+        "title": {"type": "string", "description": "PR title."},
+        "body": {"type": ["string", "null"], "description": "PR description."},
+        "state": {"enum": ["open", "closed"], "description": "Normalized state."},
+        "stateDetail": {"type": ["string", "null"], "description": "Source-specific detail."},
+        "author": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "PR author."},
+        "assignees": {"type": ["array", "null"], "items": {"$ref": "#/$defs/Actor"}, "description": "Assignees."},
+        "labels": {"type": ["array", "null"], "items": {"type": "string"}, "description": "Label names."},
+        "milestone": {"type": ["string", "null"], "description": "Milestone title."},
+        "url": {"type": "string", "description": "PR URL."},
+        "createdAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Creation time."},
+        "updatedAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Last update time."},
+        "closedAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Close time."},
+        "headBranch": {"type": ["string", "null"], "description": "Source branch.", "examples": ["feature/x"]},
+        "baseBranch": {"type": ["string", "null"], "description": "Target branch.", "examples": ["main"]},
+        "headSha": {"type": ["string", "null"], "description": "Head commit SHA."},
+        "isDraft": {"type": ["boolean", "null"], "description": "Draft PR."},
+        "isMerged": {"type": ["boolean", "null"], "description": "Merged."},
+        "mergedAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Merge time."},
+        "mergedBy": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "Who merged."},
+        "additions": {"type": ["integer", "null"], "description": "Lines added."},
+        "deletions": {"type": ["integer", "null"], "description": "Lines deleted."},
+        "changedFiles": {"type": ["integer", "null"], "description": "Files changed."}
+      }
+    },
+    "NormalizedReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A PR review.",
+      "properties": {
+        "id": {"type": ["string", "null"], "description": "Review ID."},
+        "state": {"type": ["string", "null"], "description": "Review state.", "examples": ["approved", "changes_requested"]},
+        "body": {"type": ["string", "null"], "description": "Review text."},
+        "author": {"anyOf": [{"$ref": "#/$defs/Actor"}, {"type": "null"}], "description": "Reviewer."},
+        "url": {"type": ["string", "null"], "description": "Review URL."},
+        "submittedAt": {"$ref": "#/$defs/NullableTimestamp", "description": "Submission time."}
+      }
+    }
+  }
+}

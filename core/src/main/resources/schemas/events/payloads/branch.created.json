@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A branch was created.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "const": "branch.created",
+      "description": "Payload type (same as the event type)."
+    },
+    "ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Branch name.",
+      "examples": [
+        "feature/x"
+      ]
+    },
+    "defaultBranch": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Repository default branch.",
+      "examples": [
+        "main"
+      ]
+    }
+  }
+}

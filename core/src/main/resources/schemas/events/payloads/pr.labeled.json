@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A label was added to a pull request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "pullRequest"
+  ],
+  "properties": {
+    "type": {
+      "const": "pr.labeled",
+      "description": "Payload type (same as the event type)."
+    },
+    "pullRequest": {
+      "$ref": "#/$defs/NormalizedPullRequest",
+      "description": "The pull request, as of this event."
+    },
+    "label": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NormalizedLabel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The added label."
+    }
+  }
+}

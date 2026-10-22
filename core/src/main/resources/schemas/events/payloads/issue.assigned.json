@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A user was assigned to an issue.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "issue"
+  ],
+  "properties": {
+    "type": {
+      "const": "issue.assigned",
+      "description": "Payload type (same as the event type)."
+    },
+    "issue": {
+      "$ref": "#/$defs/NormalizedIssue",
+      "description": "The issue, as of this event."
+    },
+    "assignee": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Actor"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The assigned user."
+    }
+  }
+}

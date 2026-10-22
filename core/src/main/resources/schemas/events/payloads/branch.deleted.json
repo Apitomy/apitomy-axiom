@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A branch was deleted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "const": "branch.deleted",
+      "description": "Payload type (same as the event type)."
+    },
+    "ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Branch name.",
+      "examples": [
+        "feature/x"
+      ]
+    }
+  }
+}
