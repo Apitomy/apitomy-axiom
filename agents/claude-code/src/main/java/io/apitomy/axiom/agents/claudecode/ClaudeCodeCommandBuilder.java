@@ -74,8 +74,15 @@ public class ClaudeCodeCommandBuilder {
         return this;
     }
 
+    /**
+     * Sets the plugin directories passed to the CLI as repeated
+     * {@code --plugin-dir} flags, in the given order.
+     *
+     * @param pluginDirs the plugin paths; {@code null} means none
+     * @return this builder
+     */
     public ClaudeCodeCommandBuilder pluginDirs(List<String> pluginDirs) {
-        this.pluginDirs = pluginDirs;
+        this.pluginDirs = pluginDirs == null ? List.of() : List.copyOf(pluginDirs);
         return this;
     }
 
@@ -163,11 +170,9 @@ public class ClaudeCodeCommandBuilder {
             cmd.add(mcpConfigFile.toAbsolutePath().toString());
         }
 
-        if (pluginDirs != null && !pluginDirs.isEmpty()) {
-            for (String pluginDir : pluginDirs) {
-                cmd.add("--plugin-dir");
-                cmd.add(pluginDir);
-            }
+        for (String pluginDir : pluginDirs) {
+            cmd.add("--plugin-dir");
+            cmd.add(pluginDir);
         }
 
         return cmd;

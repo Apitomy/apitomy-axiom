@@ -52,8 +52,13 @@ public class ClaudeCodeAgent implements Agent {
     @ConfigProperty(name = "axiom.agent.claude-code.available-models", defaultValue = "")
     String availableModels;
 
-    @ConfigProperty(name = "axiom.agent.claude-code.plugin-dirs", defaultValue = "")
-    String pluginDirs;
+    /*
+     * Optional rather than defaultValue = "": MicroProfile Config treats an
+     * empty string as a missing value, so an empty default makes the property
+     * required and fails bean creation when it is not configured.
+     */
+    @ConfigProperty(name = "axiom.agent.claude-code.plugin-dirs")
+    Optional<String> pluginDirs;
 
     @Inject
     ClaudeCodeMcpManager mcpManager;
@@ -98,7 +103,7 @@ public class ClaudeCodeAgent implements Agent {
      */
     @PostConstruct
     void initPluginDirs() {
-        configuredPluginDirs = parsePluginDirs(pluginDirs);
+        configuredPluginDirs = parsePluginDirs(pluginDirs.orElse(null));
         if (!configuredPluginDirs.isEmpty()) {
             LOG.infof("Claude Code plugin dirs: %s", configuredPluginDirs);
         }
