@@ -294,15 +294,17 @@ Every event type has a JSON Schema (draft 2020-12). The schema files live under
 `core/src/main/resources/schemas/events/`:
 
 - `envelope.json` — the common envelope (see below).
-- `defs.json` — shared sub-objects (`actor`, `issue`, `pullRequest`, `comment`, `review`, `label`, `change`).
+- `defs.json` — shared `$defs` (`Timestamp`, `NullableTimestamp`, `Actor`, `Change`, `CommitAuthor`,
+  `Commit`, `NormalizedLabel`, `NormalizedComment`, `NormalizedIssue`, `NormalizedPullRequest`,
+  `NormalizedReview`).
 - `payloads/<type>.json` — one payload schema per event type, e.g. `payloads/issue.closed.json`.
 
 These files are hand-maintained and are the source of truth. The script
 `tools/generate-event-payload-schemas.py` was used only to bootstrap them; do not re-run it.
 
 `EventSchemaRegistry` loads the files at startup and assembles one self-contained schema per event type
-(envelope + payload + only the local `$defs` it needs). If the schemas cannot be loaded, startup fails. The
-assembled schemas are served by `GET /api/v1/schemas/events` (summary list of `type` and `description`) and
+(envelope + payload + all of `defs.json` copied in as local `$defs`). If the schemas cannot be loaded,
+startup fails. The assembled schemas are served by `GET /api/v1/schemas/events` (summary list of `type` and `description`) and
 `GET /api/v1/schemas/events/{eventType}` (the schema; 404 for an unknown type). The paths use
 `/schemas/events` rather than `/event-schemas` because the code generator groups paths by the first word
 before `-`, which would collide with `/event-sources`.
@@ -327,8 +329,8 @@ schemas, so a normalizer change that breaks a schema fails the build.
 To add a new event type:
 
 1. Add the value to the `EventType` enum.
-2. Add a payload record.
-3. Register the record in the `@JsonSubTypes` list.
+2. Add a payload record in `core/src/main/java/io/apitomy/axiom/core/events/model/payloads/`.
+3. Register the record in the `@JsonSubTypes` list in `EventPayload.java`.
 4. Add `payloads/<type>.json` under `core/src/main/resources/schemas/events/`.
 
 ### Identity and timestamps

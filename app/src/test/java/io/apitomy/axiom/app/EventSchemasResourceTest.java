@@ -14,6 +14,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.empty;
 
 @QuarkusTest
@@ -40,7 +41,8 @@ class EventSchemasResourceTest {
         given().when().get("/api/v1/schemas/events/issue.closed").then()
                 .statusCode(200)
                 .body("title", equalTo("issue.closed"))
-                .body("properties.payload.properties.type.const", equalTo("issue.closed"));
+                .body("properties.payload.properties.type.const", equalTo("issue.closed"))
+                .body("$defs", notNullValue());
     }
 
     @Test
