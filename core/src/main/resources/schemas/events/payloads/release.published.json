@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A release was published.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "const": "release.published",
+      "description": "Payload type (same as the event type)."
+    },
+    "tagName": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Release tag.",
+      "examples": [
+        "v1.2.0"
+      ]
+    },
+    "name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Release name."
+    },
+    "body": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Release notes."
+    },
+    "isDraft": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Draft release."
+    },
+    "isPrerelease": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Pre-release."
+    },
+    "author": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Actor"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Release author."
+    },
+    "url": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Release URL."
+    },
+    "createdAt": {
+      "$ref": "#/$defs/NullableTimestamp",
+      "description": "Creation time."
+    },
+    "publishedAt": {
+      "$ref": "#/$defs/NullableTimestamp",
+      "description": "Publication time."
+    }
+  }
+}

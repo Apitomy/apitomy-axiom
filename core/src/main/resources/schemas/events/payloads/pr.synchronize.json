@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "New commits were pushed to a pull request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "pullRequest"
+  ],
+  "properties": {
+    "type": {
+      "const": "pr.synchronize",
+      "description": "Payload type (same as the event type)."
+    },
+    "pullRequest": {
+      "$ref": "#/$defs/NormalizedPullRequest",
+      "description": "The pull request, as of this event."
+    },
+    "before": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Head SHA before the push."
+    },
+    "after": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Head SHA after the push."
+    }
+  }
+}

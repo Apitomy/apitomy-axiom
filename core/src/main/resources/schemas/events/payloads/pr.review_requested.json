@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A review was requested on a pull request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "pullRequest"
+  ],
+  "properties": {
+    "type": {
+      "const": "pr.review_requested",
+      "description": "Payload type (same as the event type)."
+    },
+    "pullRequest": {
+      "$ref": "#/$defs/NormalizedPullRequest",
+      "description": "The pull request, as of this event."
+    },
+    "requestedReviewer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Actor"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The requested reviewer."
+    }
+  }
+}

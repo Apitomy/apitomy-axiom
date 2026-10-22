@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A tag was created.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "const": "tag.created",
+      "description": "Payload type (same as the event type)."
+    },
+    "ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Tag name.",
+      "examples": [
+        "v1.2.0"
+      ]
+    },
+    "defaultBranch": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Repository default branch.",
+      "examples": [
+        "main"
+      ]
+    }
+  }
+}

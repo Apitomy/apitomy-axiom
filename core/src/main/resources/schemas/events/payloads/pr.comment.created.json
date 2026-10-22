@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A comment was added to a pull request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "pullRequest"
+  ],
+  "properties": {
+    "type": {
+      "const": "pr.comment.created",
+      "description": "Payload type (same as the event type)."
+    },
+    "pullRequest": {
+      "$ref": "#/$defs/NormalizedPullRequest",
+      "description": "The pull request, as of this event."
+    },
+    "comment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NormalizedComment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The comment."
+    }
+  }
+}

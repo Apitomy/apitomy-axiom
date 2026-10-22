@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Commits were pushed to a branch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "const": "push",
+      "description": "Payload type (same as the event type)."
+    },
+    "ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Full Git ref.",
+      "examples": [
+        "refs/heads/main"
+      ]
+    },
+    "branch": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Branch name.",
+      "examples": [
+        "main"
+      ]
+    },
+    "beforeSha": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "SHA before the push."
+    },
+    "afterSha": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "SHA after the push."
+    },
+    "forced": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Force push."
+    },
+    "commits": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/Commit"
+      },
+      "description": "Pushed commits."
+    }
+  }
+}
