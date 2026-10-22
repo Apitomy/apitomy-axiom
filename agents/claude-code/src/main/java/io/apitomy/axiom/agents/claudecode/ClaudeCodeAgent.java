@@ -99,6 +99,9 @@ public class ClaudeCodeAgent implements Agent {
     @PostConstruct
     void initPluginDirs() {
         configuredPluginDirs = parsePluginDirs(pluginDirs);
+        if (!configuredPluginDirs.isEmpty()) {
+            LOG.infof("Claude Code plugin dirs: %s", configuredPluginDirs);
+        }
     }
 
     /**
@@ -217,9 +220,7 @@ public class ClaudeCodeAgent implements Agent {
     private CompletableFuture<AgentResult> executeInternal(AgentRequest request,
                                                             String jsonSchema) {
         LOG.infof("Executing via Claude Code (executionId=%s)", request.getExecutionId());
-        if (LOG.isDebugEnabled()) {
-            LOG.debugf("Plugin dirs applied to this execution: %s", configuredPluginDirs);
-        }
+        LOG.debugf("Plugin dirs applied to this execution: %s", configuredPluginDirs);
 
         ExecutionLogBuilder logBuilder = new ExecutionLogBuilder();
         logBuilder.header(0, "agent", Instant.now());

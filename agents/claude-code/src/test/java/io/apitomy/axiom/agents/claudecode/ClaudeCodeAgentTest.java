@@ -64,4 +64,13 @@ class ClaudeCodeAgentTest {
         String existing = System.getProperty("java.io.tmpdir");
         assertEquals(List.of(existing), ClaudeCodeAgent.parsePluginDirs(existing));
     }
+
+    /**
+     * An entry that cannot be parsed as a path at all is skipped with a
+     * warning instead of throwing out of bean creation.
+     */
+    @Test
+    void skipsUnparseableEntries() {
+        assertEquals(List.of(), ClaudeCodeAgent.parsePluginDirs("bad\u0000dir"));
+    }
 }
