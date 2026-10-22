@@ -367,7 +367,7 @@ public class JiraEventNormalizerV2 {
      * Extracts text from a Jira description field. If the value is an ADF object,
      * recursively collects all text nodes. If it is a plain string, returns it directly.
      */
-    String extractDescription(JsonNode descriptionNode) {
+    static String extractDescription(JsonNode descriptionNode) {
         if (descriptionNode == null || descriptionNode.isMissingNode() || descriptionNode.isNull()) {
             return null;
         }
@@ -384,7 +384,7 @@ public class JiraEventNormalizerV2 {
         return descriptionNode.toString();
     }
 
-    private void extractAdfText(JsonNode node, StringBuilder sb) {
+    private static void extractAdfText(JsonNode node, StringBuilder sb) {
         if (node.isTextual()) {
             sb.append(node.asText());
             return;
@@ -414,7 +414,7 @@ public class JiraEventNormalizerV2 {
     /**
      * Parses space-separated label strings from Jira changelog entries.
      */
-    Set<String> parseSpaceSeparatedLabels(String labelString) {
+    static Set<String> parseSpaceSeparatedLabels(String labelString) {
         if (labelString == null || labelString.trim().isEmpty()) {
             return new LinkedHashSet<>();
         }
