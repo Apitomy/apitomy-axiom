@@ -40,6 +40,8 @@ public class ConfigItemValidationService {
     private static final String WORKFLOW_FORMAT_HINT = "Node types are lowercase (start, end, action, "
             + "human-task, receive-event, wait); edges use id/source/target/condition/priority/isDefault (and isTimeout for a receive-event timeout edge).";
     private static final Pattern GITHUB_REPOSITORY = Pattern.compile("[^/\\s]+/[^/\\s]+");
+    private static final Pattern JIRA_PROJECT_KEY = Pattern.compile("^[A-Z][A-Z0-9_]+$");
+    private static final Pattern HTTP_BASE_URL = Pattern.compile("^https?://\\S+$");
     private static final Pattern SECRET_REFERENCE = Pattern.compile("\\$\\{secret:([^}]+)}");
     private static final Pattern FILTER_EVENT_TYPE = Pattern.compile(
             "event\\.type\\s*==\\s*['\"]([^'\"]+)['\"]");
@@ -205,12 +207,16 @@ public class ConfigItemValidationService {
             validateStringList(configuration.path("repositories"), "configuration.repositories",
                     GITHUB_REPOSITORY, "an 'owner/repo' string", problems);
         } else if ("jira".equals(sourceType)) {
-            validateStringList(configuration.path("projects"), "configuration.projects",
-                    null, "a non-blank project key", problems);
+            validateStringList(configuration.path("projects"), "configuration.projects", JIRA_PROJECT_KEY,
+                    "a Jira project key matching ^[A-Z][A-Z0-9_]+$ (e.g. PROJ)", problems);
+            validateExtraFields(configuration.path("extraFields"), problems);
         }
 
         String baseUrl = item.path("baseUrl").asText("");
-        if ("github".equals(sourceType) && !baseUrl.isBlank()) {
+        if (!baseUrl.isBlank() && !HTTP_BASE_URL.matcher(baseUrl.trim()).matches()) {
+            problems.add(ConfigProblem.error("baseUrl", "INVALID_BASE_URL",
+                    "'baseUrl' must start with http:// or https://, got: '" + baseUrl + "'."));
+        } else if ("github".equals(sourceType) && !baseUrl.isBlank()) {
             try {
                 GitHubUrls.resolve(baseUrl);
             } catch (IllegalArgumentException e) {
@@ -401,6 +407,28 @@ public class ConfigItemValidationService {
             }
         }
         return -1;
+    }
+
+    /**
+     * Validates the optional Jira {@code configuration.extraFields}: when present, a list of non-blank field
+     * names.
+     */
+    private static void validateExtraFields(JsonNode extraFields, List<ConfigProblem> problems) {
+        if (extraFields.isMissingNode() || extraFields.isNull()) {
+            return;
+        }
+        if (!extraFields.isArray()) {
+            problems.add(ConfigProblem.error("configuration.extraFields", "INVALID_CONFIGURATION",
+                    "'configuration.extraFields' must be an array of Jira field names."));
+            return;
+        }
+        for (int i = 0; i < extraFields.size(); i++) {
+            JsonNode entry = extraFields.get(i);
+            if (!entry.isTextual() || entry.asText().isBlank()) {
+                problems.add(ConfigProblem.error("configuration.extraFields[" + i + "]", "INVALID_CONFIGURATION",
+                        "Entry must be a non-blank Jira field name, got: " + entry + "."));
+            }
+        }
     }
 
     private static void validateStringList(JsonNode list, String path, Pattern pattern, String expected,

@@ -85,7 +85,7 @@ class ConfigItemValidationServiceTest {
     @Test
     void githubEventSourceAcceptsApiAndRepositoryUrls() throws Exception {
         for (String url : List.of("https://api.github.com", "https://github.com/Apicurio/apicurio-registry",
-                "https://github.ibm.com/", "github.ibm.com/api/v3")) {
+                "https://github.ibm.com/", "https://github.example.com/api/v3")) {
             List<ConfigProblem> problems = service.validate(ConfigItemType.EVENT_SOURCE, json("""
                 {"id": "gh", "name": "GH", "sourceType": "github", "baseUrl": "%s",
                  "configuration": {"repositories": ["o/r"]}}
@@ -396,5 +396,53 @@ class ConfigItemValidationServiceTest {
         assertEquals(1, shadows.size());
         assertEquals("Output 'subject' of node 'Lookup' overwrites the workflow input 'subject' for later nodes.",
                 shadows.get(0).message());
+    }
+
+    private List<ConfigProblem> jira(String baseUrl, String configuration) throws Exception {
+        return service.validate(ConfigItemType.EVENT_SOURCE, json("""
+            {"id": "jira-prod", "name": "Jira", "sourceType": "jira", "baseUrl": "%s",
+             "configuration": %s}
+            """.formatted(baseUrl, configuration)), ValidationContext.unchecked());
+    }
+
+    private static List<String> errorPaths(List<ConfigProblem> problems) {
+        return problems.stream().filter(ConfigProblem::isError).map(ConfigProblem::path).toList();
+    }
+
+    @Test
+    void jiraProjectKeysMustBeUppercaseProjectKeys() throws Exception {
+        List<ConfigProblem> problems = jira("https://x.atlassian.net",
+                "{\"projects\": [\"PROJ\", \"AB_2\", \"proj\", \"A\", \"PROJ-1\", \"P\\\" OR x\"]}");
+        assertEquals(List.of("configuration.projects[2]", "configuration.projects[3]",
+                "configuration.projects[4]", "configuration.projects[5]"), errorPaths(problems));
+        assertTrue(problems.get(0).message().contains("^[A-Z][A-Z0-9_]+$"), problems.get(0).message());
+    }
+
+    @Test
+    void jiraExtraFieldsAreOptionalNonBlankStrings() throws Exception {
+        assertEquals(List.of(), errorPaths(jira("https://x.atlassian.net", "{\"projects\": [\"PROJ\"]}")));
+        assertEquals(List.of(), errorPaths(jira("https://x.atlassian.net",
+                "{\"projects\": [\"PROJ\"], \"extraFields\": [\"Story Points\", \"Team\"]}")));
+        assertEquals(List.of("configuration.extraFields"), errorPaths(jira("https://x.atlassian.net",
+                "{\"projects\": [\"PROJ\"], \"extraFields\": \"Story Points\"}")));
+        assertEquals(List.of("configuration.extraFields[1]", "configuration.extraFields[2]"),
+                errorPaths(jira("https://x.atlassian.net",
+                        "{\"projects\": [\"PROJ\"], \"extraFields\": [\"Story Points\", \" \", 5]}")));
+    }
+
+    @Test
+    void baseUrlMustStartWithHttpOrHttps() throws Exception {
+        List<ConfigProblem> jiraProblems = jira("x.atlassian.net", "{\"projects\": [\"PROJ\"]}");
+        assertTrue(jiraProblems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_BASE_URL")
+                && p.path().equals("baseUrl")), jiraProblems.toString());
+
+        List<ConfigProblem> githubProblems = service.validate(ConfigItemType.EVENT_SOURCE, json("""
+            {"id": "gh", "name": "GH", "sourceType": "github", "baseUrl": "github.ibm.com/api/v3",
+             "configuration": {"repositories": ["o/r"]}}
+            """), ValidationContext.unchecked());
+        assertTrue(githubProblems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_BASE_URL")),
+                githubProblems.toString());
+
+        assertEquals(List.of(), errorPaths(jira("https://x.atlassian.net/", "{\"projects\": [\"PROJ\"]}")));
     }
 }
