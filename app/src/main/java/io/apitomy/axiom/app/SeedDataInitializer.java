@@ -51,7 +51,10 @@ public class SeedDataInitializer {
         seedToolset("Read-Only Tools",
                 "Read-only file and git tools for analysis tasks",
                 String.join(",",
-                        "Read", "Glob", "Grep",
+                        // Recent Claude Code builds dropped the Glob and Grep tools
+                        // (2.1.117, native macOS and Linux builds); file search goes
+                        // through Bash instead.
+                        "Read", "Bash(grep *)",
                         "Bash(ls *)", "Bash(cat *)", "Bash(head *)", "Bash(tail *)",
                         "Bash(find *)", "Bash(wc *)", "Bash(file *)",
                         "Bash(git log *)", "Bash(git diff *)", "Bash(git show *)",

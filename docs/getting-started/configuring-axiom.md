@@ -69,6 +69,24 @@ CLI). Set the default agent used for tasks
 | `axiom.agent.claude-code.timeout-seconds` | `600` | Subprocess timeout |
 | `axiom.agent.claude-code.available-models` | *(see `application.properties`)* | Comma-separated model list for the UI model picker |
 
+Claude Code 2.1.117 replaced the `Glob` and `Grep` tools with search through
+`Bash` on native macOS and Linux builds
+([anthropics/claude-code#52004](https://github.com/anthropics/claude-code/issues/52004)),
+and under Axiom's headless `--bare` mode the built-in tool set is exactly
+`Bash`, `Edit` and `Read`. Allowlists and toolsets should therefore use
+`Bash(grep *)` and `Bash(find *)` for file search; names the CLI does not
+recognize are silently ignored, which is why the built-in Read-Only Tools
+toolset lists those two Bash patterns. If your installation seeded that toolset
+before this change, edit it by hand in the UI and replace `Glob` and `Grep`
+with `Bash(grep *)`; seeded toolsets are only written to an empty database, so
+upgrades keep the old entries.
+
+A skill loaded from a plugin directory can only use tools that the action type's
+allowlist grants. An action type without an allowlist runs with
+`--permission-mode acceptEdits`, under which the headless CLI denies every tool
+call that is not an edit, so action types that invoke skills must declare an
+allowlist.
+
 #### OpenCode Settings
 
 | Property | Default | Description |
