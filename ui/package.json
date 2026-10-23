@@ -12,7 +12,7 @@
     },
     "dependencies": {
         "@apitomy/common-ui-components": "4.1.2",
-        "@apitomy/flow-ui": "^3.0.4",
+        "@apitomy/flow-ui": "3.0.4",
         "@patternfly/react-charts": "8.7.0",
         "@patternfly/react-code-editor": "6.7.0",
         "@patternfly/react-core": "6.7.0",
