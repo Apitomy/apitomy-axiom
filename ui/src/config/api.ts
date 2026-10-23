@@ -1,3 +1,5 @@
+import type { JsonSchema } from "./eventSchemaPaths";
+
 /**
  * Returns the base URL for the Axiom API.
  *
@@ -2139,6 +2141,8 @@ export interface StreamEvent {
     matchedSubscriptions?: number;
     /** Per-state ledger counts; absent when the event has no ledger entries. */
     processingStates?: StreamEventProcessingStates;
+    /** Schema validation errors recorded at ingestion; absent or empty when the event is valid. */
+    validationErrors?: string[];
 }
 
 /** Counts of an event's event/subscription pairs in the processing ledger, by state. */
@@ -2171,6 +2175,35 @@ export async function fetchStreamEvents(
 export async function fetchStreamEvent(eventId: string): Promise<StreamEvent> {
     const response = await fetch(`${API}/stream/events/${encodeURIComponent(eventId)}`);
     if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch stream event"));
+    return response.json();
+}
+
+/** One event type and its description, from `GET /schemas/events`. */
+export interface EventSchemaSummary {
+    type: string;
+    description?: string;
+}
+
+/**
+ * Lists every event type that has a schema.
+ *
+ * @returns summaries sorted by type
+ */
+export async function fetchEventSchemas(): Promise<EventSchemaSummary[]> {
+    const response = await fetch(`${API}/schemas/events`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event schemas"));
+    return response.json();
+}
+
+/**
+ * Fetches the assembled, self-contained JSON Schema for one event type.
+ *
+ * @param eventType the normalized event type, e.g. `issue.created`
+ * @returns the schema
+ */
+export async function fetchEventSchema(eventType: string): Promise<JsonSchema> {
+    const response = await fetch(`${API}/schemas/events/${encodeURIComponent(eventType)}`);
+    if (!response.ok) throw new Error(await extractErrorMessage(response, "Failed to fetch event schema"));
     return response.json();
 }
 

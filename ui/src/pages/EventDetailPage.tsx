@@ -148,6 +148,21 @@ export function EventDetailPage() {
                 </Alert>
             )}
 
+            {event.validationErrors && event.validationErrors.length > 0 && (
+                <Alert variant="warning" isInline style={{ marginBottom: "16px" }}
+                    title={`This event does not match the ${event.type} schema`}>
+                    <p>
+                        Axiom stored the event anyway. Subscription filters that use the fields named in the
+                        errors below may not behave as expected.
+                    </p>
+                    <ul>
+                        {event.validationErrors.map((error, index) => (
+                            <li key={index}><code>{error}</code></li>
+                        ))}
+                    </ul>
+                </Alert>
+            )}
+
             <DescriptionList isHorizontal isCompact style={{ marginBottom: "24px" }}>
                 <DescriptionListGroup>
                     <DescriptionListTerm>Source</DescriptionListTerm>
