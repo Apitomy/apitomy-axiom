@@ -52,6 +52,27 @@ function renderPage() {
 }
 
 describe("EventDetailPage", () => {
+    it("warns about schema validation errors", async () => {
+        vi.mocked(api.fetchStreamEvent).mockResolvedValue({
+            id: EVENT_ID, type: "issue.opened", source: "github", eventSourceId: 1,
+            timestamp: "2026-10-01T00:00:00Z",
+            validationErrors: ["$.payload.issue.state: must be one of [open, closed]", "$.timestamp: bad format"],
+        } as never);
+        renderPage();
+        expect(await screen.findByText("This event does not match the issue.opened schema")).toBeInTheDocument();
+        expect(screen.getByText("$.payload.issue.state: must be one of [open, closed]")).toBeInTheDocument();
+        expect(screen.getByText("$.timestamp: bad format")).toBeInTheDocument();
+    });
+
+    it("shows no validation warning when there are no errors", async () => {
+        vi.mocked(api.fetchStreamEvent).mockResolvedValue({
+            id: EVENT_ID, type: "issue.opened", source: "github", eventSourceId: 1,
+            timestamp: "2026-10-01T00:00:00Z", validationErrors: [],
+        } as never);
+        renderPage();
+        await screen.findByRole("button", { name: "Run workflow…" });
+        expect(screen.queryByText(/does not match the .* schema/)).toBeNull();
+    });
     it("shows a Run workflow… button that opens the modal", async () => {
         renderPage();
         await userEvent.click(await screen.findByRole("button", { name: "Run workflow…" }));

@@ -132,6 +132,12 @@ The event detail page shows the full typed payload (**Event** tab), how subscrip
 published workflow with the event, listing suggested workflows first; such runs get the label
 `trigger:manual`.
 
+Axiom checks every incoming event against the schema for its type. An event that does not match is still
+stored and processed, and its detail page shows a warning listing each problem with the JSON path of the
+field (for example `$.payload.issue.state: must be one of [open, closed]`). Subscription filters that use
+those fields may not behave as expected for that event. Events recorded before schema validation existed
+show no warning.
+
 ### Workbench
 
 The **Workbench** (`/workbench`) lists compositions. Open one to design a workflow together with its
