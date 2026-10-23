@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * HTTP client for the Jira Cloud REST API (v2 - multi-project with changelog).
@@ -41,6 +42,13 @@ public class JiraEventsApiClient {
     private static final int SEARCH_PAGE_SIZE = 100;
     private static final int CHANGELOG_PAGE_SIZE = 100;
     private static final int MAX_CHANGELOG_PAGES = 50;
+    private static final int COMMENT_PAGE_SIZE = 100;
+    private static final int MAX_COMMENT_PAGES = 50;
+
+    /** Fields requested by the search; the configured extra field IDs are appended. */
+    static final List<String> SEARCH_FIELDS = List.of("summary", "status", "assignee", "reporter", "labels",
+            "priority", "created", "updated", "comment", "resolution", "resolutiondate", "description",
+            "issuetype", "components", "fixVersions", "duedate", "parent", "project");
 
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -54,26 +62,23 @@ public class JiraEventsApiClient {
      *
      * <p>The JQL lower bound is the given {@code since} minus a two-minute buffer (covering
      * modest clock skew), expressed in epoch milliseconds so it is independent of the Jira
-     * user's profile timezone. Duplicates resulting from
-     * the overlap are removed by source-event de-duplication downstream.</p>
+     * user's profile timezone. Project keys are quoted. Duplicates resulting from the overlap
+     * are removed by source-event de-duplication downstream.</p>
      *
      * @param baseUrl       Jira Cloud base URL (e.g., https://myorg.atlassian.net)
      * @param projects      list of project keys to search
      * @param since         only return issues updated at or after (approximately) this time
      * @param credentials   email:api_token for Basic auth
      * @param nextPageToken the page token from the previous page, or {@code null} for the first page
+     * @param extraFieldIds field IDs of the configured extra fields to request in addition to
+     *                      {@link #SEARCH_FIELDS}
      * @return API result with one page of the search response
      */
     public ApiResult fetchIssuesPage(String baseUrl, List<String> projects, Instant since,
-                                     String credentials, String nextPageToken) {
+                                     String credentials, String nextPageToken, List<String> extraFieldIds) {
         Instant bufferedSince = since.minus(QUERY_OVERLAP);
-
-        // Build JQL: project in (A, B, C) AND updated >= <epochMillis>. Epoch milliseconds are
-        // timezone-free, unlike "yyyy-MM-dd HH:mm" which Jira reads in the user's profile zone.
-        String projectList = String.join(", ", projects);
-        String jql = "project in (" + projectList + ") AND updated >= "
-                + bufferedSince.toEpochMilli() + " ORDER BY updated ASC";
-
+        String jql = projectClause(projects) + " AND updated >= " + bufferedSince.toEpochMilli()
+                + " ORDER BY updated ASC";
         String url = baseUrl + "/rest/api/3/search/jql";
 
         try {
@@ -84,12 +89,11 @@ public class JiraEventsApiClient {
             if (nextPageToken != null && !nextPageToken.isBlank()) {
                 body.put("nextPageToken", nextPageToken);
             }
-            body.putArray("fields")
-                    .add("summary").add("status").add("assignee").add("reporter")
-                    .add("labels").add("priority").add("created").add("updated")
-                    .add("comment").add("resolution").add("description")
-                    .add("issuetype").add("components").add("fixVersions")
-                    .add("duedate").add("parent");
+            ArrayNode fields = body.putArray("fields");
+            SEARCH_FIELDS.forEach(fields::add);
+            if (extraFieldIds != null) {
+                extraFieldIds.stream().filter(id -> !SEARCH_FIELDS.contains(id)).forEach(fields::add);
+            }
 
             String jsonBody = objectMapper.writeValueAsString(body);
             return doPost(url, jsonBody, credentials);
@@ -97,6 +101,41 @@ public class JiraEventsApiClient {
             LOG.errorf(e, "Failed to build Jira search request");
             return ApiResult.exception(e, "POST", url, null);
         }
+    }
+
+    /**
+     * Builds the JQL project clause with every key quoted ({@code "} and {@code \} escaped).
+     *
+     * @param projects project keys
+     * @return e.g. {@code project in ("A", "B")}
+     */
+    static String projectClause(List<String> projects) {
+        return projects.stream()
+                .map(key -> "\"" + key.replace("\\", "\\\\").replace("\"", "\\\"") + "\"")
+                .collect(Collectors.joining(", ", "project in (", ")"));
+    }
+
+    /**
+     * Fetches all statuses visible to the user ({@code GET /rest/api/3/status}), used to map status IDs to
+     * status categories.
+     *
+     * @param baseUrl     Jira Cloud base URL
+     * @param credentials email:api_token for Basic auth
+     * @return API result whose data is the array of statuses
+     */
+    public ApiResult fetchStatuses(String baseUrl, String credentials) {
+        return doGet(baseUrl + "/rest/api/3/status", credentials);
+    }
+
+    /**
+     * Fetches all fields ({@code GET /rest/api/3/field}), used to resolve configured extra field names to IDs.
+     *
+     * @param baseUrl     Jira Cloud base URL
+     * @param credentials email:api_token for Basic auth
+     * @return API result whose data is the array of fields
+     */
+    public ApiResult fetchFields(String baseUrl, String credentials) {
+        return doGet(baseUrl + "/rest/api/3/field", credentials);
     }
 
     /**
@@ -150,16 +189,39 @@ public class JiraEventsApiClient {
     }
 
     /**
-     * Fetches comments for a specific issue.
+     * Fetches all comments of an issue, following {@code startAt} pagination of
+     * {@code /rest/api/3/issue/{key}/comment}. Used when the comment list embedded in search results is
+     * incomplete.
      *
      * @param baseUrl     Jira Cloud base URL
      * @param issueKey    issue key (e.g., PROJ-123)
      * @param credentials email:api_token for Basic auth
-     * @return API result with comments array
+     * @return API result whose data is an array of all comments (oldest first), or the failing page's result
      */
     public ApiResult fetchIssueComments(String baseUrl, String issueKey, String credentials) {
-        String url = baseUrl + "/rest/api/3/issue/" + issueKey + "/comment?orderBy=created&maxResults=100";
-        return doGet(url, credentials);
+        ArrayNode comments = objectMapper.createArrayNode();
+        String commentUrl = baseUrl + "/rest/api/3/issue/"
+                + URLEncoder.encode(issueKey, StandardCharsets.UTF_8).replace("+", "%20") + "/comment";
+        int startAt = 0;
+        for (int pages = 0; pages < MAX_COMMENT_PAGES; pages++) {
+            ApiResult page = doGet(commentUrl + "?orderBy=created&startAt=" + startAt
+                    + "&maxResults=" + COMMENT_PAGE_SIZE, credentials);
+            if (!page.success()) {
+                return page;
+            }
+            JsonNode values = page.data().path("comments");
+            int fetched = values.isArray() ? values.size() : 0;
+            if (fetched > 0) {
+                values.forEach(comments::add);
+            }
+            startAt += fetched;
+            if (fetched == 0 || startAt >= page.data().path("total").asInt(0)) {
+                return ApiResult.ok(comments, "GET", commentUrl, null, null);
+            }
+        }
+        LOG.warnf("Comments of %s exceed %d pages; only the first %d are used",
+                issueKey, MAX_COMMENT_PAGES, comments.size());
+        return ApiResult.ok(comments, "GET", commentUrl, null, null);
     }
 
     private ApiResult doPost(String url, String jsonBody, String credentials) {

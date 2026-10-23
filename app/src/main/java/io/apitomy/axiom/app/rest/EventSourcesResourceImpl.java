@@ -12,6 +12,7 @@ import io.apitomy.axiom.api.beans.EventSourceStatus;
 import io.apitomy.axiom.api.beans.Configuration;
 import io.apitomy.axiom.api.beans.NewEventSource;
 import io.apitomy.axiom.app.EventSourceHealthService;
+import io.apitomy.axiom.app.LineageService;
 import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigItemValidationService;
 import io.apitomy.axiom.app.validation.ConfigProblem;
@@ -19,6 +20,7 @@ import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.core.entities.EventSourcePollLogEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
+import io.apitomy.axiom.events.core.BaseUrls;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -106,11 +108,11 @@ public class EventSourcesResourceImpl implements EventResource {
     public EventSource createEventSource(NewEventSource data) {
         String slug = data.getId();
         if (slug != null && slug.length() > SLUG_MAX_LENGTH) {
-            throw new WebApplicationException(INVALID_ID_MESSAGE, 400);
+            throw LineageService.error(400, INVALID_ID_MESSAGE);
         }
         if (slug != null && RESERVED_ID_HEALTH.equalsIgnoreCase(slug.trim())) {
-            throw new WebApplicationException(
-                    "Invalid event source id: 'health' is reserved (it is used by /event-sources/health)", 400);
+            throw LineageService.error(400,
+                    "Invalid event source id: 'health' is reserved (it is used by /event-sources/health)");
         }
         validate(data, slug);
 
@@ -145,7 +147,7 @@ public class EventSourcesResourceImpl implements EventResource {
                 contextFactory.databaseOnly());
         problems.stream().filter(ConfigProblem::isError).findFirst().ifPresent(p -> {
             String message = "id".equals(p.path()) ? INVALID_ID_MESSAGE : p.message();
-            throw new WebApplicationException(message, 400);
+            throw LineageService.error(400, message);
         });
     }
 
@@ -279,7 +281,7 @@ public class EventSourcesResourceImpl implements EventResource {
         entity.description = data.getDescription();
         entity.sourceType = data.getSourceType() != null ? data.getSourceType().value() : "github";
         entity.enabled = data.getEnabled() != null ? data.getEnabled() : false;
-        entity.baseUrl = data.getBaseUrl();
+        entity.baseUrl = BaseUrls.normalize(data.getBaseUrl());
         entity.secretName = data.getSecretName();
         entity.pollInterval = data.getPollInterval();
         if (data.getConfiguration() != null) {

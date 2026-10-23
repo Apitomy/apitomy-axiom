@@ -145,7 +145,7 @@ class JiraEventNormalizerV2Test {
                 "2026-09-17T08:00:00.000+0000", "2026-09-18T10:00:00.000+0000");
         addChangelog(issue,
                 buildHistory("5004", "2026-09-18T10:00:00.000+0000", "user1", "User One",
-                        buildItem("assignee", null, "John Doe")));
+                        buildItem("assignee", null, null, "acct-john", "John Doe")));
 
         List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
@@ -157,6 +157,7 @@ class JiraEventNormalizerV2Test {
         assertInstanceOf(IssueAssignedPayload.class, event.payload());
         IssueAssignedPayload payload = (IssueAssignedPayload) event.payload();
         assertEquals("John Doe", payload.assignee().displayName());
+        assertEquals("acct-john", payload.assignee().login());
     }
 
     // -- Test 6: Assignee cleared produces ISSUE_UNASSIGNED -----------------------
@@ -167,7 +168,7 @@ class JiraEventNormalizerV2Test {
                 "2026-09-17T08:00:00.000+0000", "2026-09-18T10:00:00.000+0000");
         addChangelog(issue,
                 buildHistory("5005", "2026-09-18T10:00:00.000+0000", "user1", "User One",
-                        buildItem("assignee", "John Doe", null)));
+                        buildItem("assignee", "acct-john", "John Doe", null, null)));
 
         List<NormalizedEvent> events = normalizer.normalizeIssue(issue, SINCE, EVENT_SOURCE_ID, BASE_URL);
 
@@ -177,6 +178,9 @@ class JiraEventNormalizerV2Test {
         assertEquals(1, unassignedEvents.size());
         NormalizedEvent event = unassignedEvents.get(0);
         assertInstanceOf(IssueUnassignedPayload.class, event.payload());
+        IssueUnassignedPayload payload = (IssueUnassignedPayload) event.payload();
+        assertEquals("acct-john", payload.assignee().login());
+        assertEquals("John Doe", payload.assignee().displayName());
     }
 
     // -- Test 7: Label added produces ISSUE_LABELED with correct label ------------
@@ -424,6 +428,13 @@ class JiraEventNormalizerV2Test {
         history.set("items", itemsArray);
 
         return history;
+    }
+
+    private ObjectNode buildItem(String field, String from, String fromString, String to, String toString) {
+        ObjectNode item = buildItem(field, fromString, toString);
+        item.put("from", from);
+        item.put("to", to);
+        return item;
     }
 
     private ObjectNode buildItem(String field, String fromString, String toString) {

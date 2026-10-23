@@ -9,6 +9,7 @@ import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.events.core.ApiResult;
+import io.apitomy.axiom.events.core.BaseUrls;
 import io.apitomy.axiom.events.core.EventStreamService;
 import io.apitomy.axiom.events.core.IngestTally;
 import io.apitomy.axiom.events.core.PersistOutcome;
@@ -22,6 +23,7 @@ import org.jboss.logging.Logger;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -134,6 +136,7 @@ public class JiraEventSourcePoller {
 
         String credentials = resolveCredentials(eventSource);
         List<String> projects;
+        List<String> extraFieldNames;
         try {
             JsonNode config = objectMapper.readTree(eventSource.configuration);
             JsonNode projectsNode = config.path("projects");
@@ -146,6 +149,15 @@ public class JiraEventSourcePoller {
             projects = new ArrayList<>();
             for (JsonNode p : projectsNode) {
                 projects.add(p.asText());
+            }
+            extraFieldNames = new ArrayList<>();
+            JsonNode extraFieldsNode = config.path("extraFields");
+            if (extraFieldsNode.isArray()) {
+                for (JsonNode field : extraFieldsNode) {
+                    if (field.isTextual() && !field.asText().isBlank()) {
+                        extraFieldNames.add(field.asText().trim());
+                    }
+                }
             }
         } catch (Exception e) {
             LOG.warnf(e, "Failed to parse configuration for event source %s", eventSource.id);
@@ -160,9 +172,12 @@ public class JiraEventSourcePoller {
         Instant windowStart = Instant.now();
         recordAttempt(eventSource.id, windowStart);
 
+        String baseUrl = BaseUrls.normalize(eventSource.baseUrl);
+        // Status and field lookups are built once per poll and shared by every issue in the window.
+        JiraNormalizationContext context = buildContext(baseUrl, credentials, extraFieldNames);
         IngestTally tally = new IngestTally();
-        WindowResult result = ingestWindow(eventSource.id, eventSource.baseUrl, projects,
-                since, credentials, windowStart, tally);
+        WindowResult result = ingestWindow(eventSource.id, baseUrl, projects,
+                since, credentials, windowStart, context, tally);
         long duration = System.currentTimeMillis() - startMs;
 
         if (result.checkpoint() != null) {
@@ -210,6 +225,37 @@ public class JiraEventSourcePoller {
     }
 
     /**
+     * Same as {@link #ingestWindow(String, String, List, Instant, String, Instant, JiraNormalizationContext,
+     * IngestTally)} with no status lookup, no extra fields and a fresh tally.
+     */
+    WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
+                              Instant since, String credentials, Instant windowStart) {
+        return ingestWindow(eventSourceId, baseUrl, projects, since, credentials, windowStart,
+                JiraNormalizationContext.defaults(), new IngestTally());
+    }
+
+    /**
+     * Same as {@link #ingestWindow(String, String, List, Instant, String, Instant, JiraNormalizationContext,
+     * IngestTally)} with no status lookup and no extra fields.
+     */
+    WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
+                              Instant since, String credentials, Instant windowStart, IngestTally tally) {
+        return ingestWindow(eventSourceId, baseUrl, projects, since, credentials, windowStart,
+                JiraNormalizationContext.defaults(), tally);
+    }
+
+    /**
+     * Same as {@link #ingestWindow(String, String, List, Instant, String, Instant, JiraNormalizationContext,
+     * IngestTally)} with a fresh tally.
+     */
+    WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
+                              Instant since, String credentials, Instant windowStart,
+                              JiraNormalizationContext context) {
+        return ingestWindow(eventSourceId, baseUrl, projects, since, credentials, windowStart,
+                context, new IngestTally());
+    }
+
+    /**
      * Fetches all pages of changed issues since {@code since} and ingests their events.
      * The checkpoint is only advanced (to {@code windowStart}) when the whole window was
      * ingested. On API failure, persistence failure or shutdown, the checkpoint is left
@@ -224,30 +270,13 @@ public class JiraEventSourcePoller {
      * @param since         the current (last successful) checkpoint
      * @param credentials   email:api_token credentials
      * @param windowStart   time captured before the first request of this window
-     * @return the window outcome
-     */
-    WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
-                              Instant since, String credentials, Instant windowStart) {
-        return ingestWindow(eventSourceId, baseUrl, projects, since, credentials, windowStart,
-                new IngestTally());
-    }
-
-    /**
-     * Ingests one window, recording each persist outcome in the given tally.
-     *
-     * @param eventSourceId the event source id
-     * @param baseUrl       Jira base URL
-     * @param projects      project keys
-     * @param since         the current (last successful) checkpoint
-     * @param credentials   email:api_token credentials
-     * @param windowStart   time captured before the first request of this window
+     * @param context       status categories and extra fields for this poll
      * @param tally         collects persist outcomes for the poll log
      * @return the window outcome
-     * @see #ingestWindow(String, String, List, Instant, String, Instant)
      */
     WindowResult ingestWindow(String eventSourceId, String baseUrl, List<String> projects,
                               Instant since, String credentials, Instant windowStart,
-                              IngestTally tally) {
+                              JiraNormalizationContext context, IngestTally tally) {
         // Normalizer cutoff overlaps the previous window to tolerate clock skew and
         // boundary timestamps; duplicates are dropped by source-event de-duplication.
         Instant normalizeSince = since.minus(JiraEventsApiClient.QUERY_OVERLAP);
@@ -256,7 +285,8 @@ public class JiraEventSourcePoller {
         String nextPageToken = null;
 
         for (int pageNum = 0; pageNum < maxSearchPages; pageNum++) {
-            ApiResult page = apiClient.fetchIssuesPage(baseUrl, projects, since, credentials, nextPageToken);
+            ApiResult page = apiClient.fetchIssuesPage(baseUrl, projects, since, credentials, nextPageToken,
+                    context.extraFieldIds());
             if (page == null || !page.success()) {
                 String msg = page != null ? page.errorMessage() : "no response";
                 return new WindowResult(false, null, issuesProcessed, totalIngested,
@@ -276,8 +306,13 @@ public class JiraEventSourcePoller {
                             return new WindowResult(false, null, issuesProcessed, totalIngested,
                                     "Failed to fetch changelog for " + issue.path("key").asText());
                         }
+                        JsonNode withComments = withAllComments(baseUrl, completeIssue, credentials);
+                        if (withComments == null) {
+                            return new WindowResult(false, null, issuesProcessed, totalIngested,
+                                    "Failed to fetch comments for " + issue.path("key").asText());
+                        }
                         List<NormalizedEvent> events = normalizer.normalizeIssue(
-                                completeIssue, normalizeSince, eventSourceId, baseUrl);
+                                withComments, normalizeSince, eventSourceId, baseUrl, context);
                         for (NormalizedEvent event : events) {
                             PersistOutcome outcome = eventStreamService.persistEvent(event);
                             tally.record(outcome);
@@ -348,8 +383,91 @@ public class JiraEventSourcePoller {
     }
 
     /**
-     * Resolves Jira credentials (email:api_token format) using the same
-     * three-tier fallback as the existing JiraPoller.
+     * Returns the issue with its complete comment list, fetching all comments when the embedded list is
+     * incomplete ({@code total} greater than the number returned). A 404 or 403 falls back to the embedded
+     * comments with a warning.
+     *
+     * @return the (possibly augmented) issue, or {@code null} if the comment fetch failed with a transient
+     *         error (5xx, 429, network) and the window must be retried
+     */
+    JsonNode withAllComments(String baseUrl, JsonNode issue, String credentials) {
+        JsonNode comment = issue.path("fields").path("comment");
+        JsonNode embedded = comment.path("comments");
+        int total = comment.path("total").asInt(0);
+        int count = embedded.isArray() ? embedded.size() : 0;
+        if (total <= count) {
+            return issue;
+        }
+        String key = issue.path("key").asText();
+        ApiResult all = apiClient.fetchIssueComments(baseUrl, key, credentials);
+        if (all != null && !all.success() && (all.statusCode() == 404 || all.statusCode() == 403)) {
+            LOG.warnf("Comment fetch for Jira issue %s returned %d; using the embedded comments",
+                    key, all.statusCode());
+            return issue;
+        }
+        if (all == null || !all.success()) {
+            return null;
+        }
+        ObjectNode copy = ((ObjectNode) issue).deepCopy();
+        ObjectNode newComment = ((ObjectNode) copy.get("fields")).putObject("comment");
+        newComment.put("startAt", 0);
+        newComment.put("maxResults", all.data().size());
+        newComment.put("total", all.data().size());
+        newComment.set("comments", all.data());
+        return copy;
+    }
+
+    /**
+     * Builds the per-poll normalization context: the status-category lookup and the configured extra
+     * fields resolved to field IDs. A failed status lookup falls back to status-name matching; a failed
+     * field lookup keeps the names without IDs (changelog events still work); names unknown to Jira are
+     * ignored.
+     *
+     * @param baseUrl         Jira base URL without trailing slash
+     * @param credentials     email:api_token credentials
+     * @param extraFieldNames configured {@code extraFields}
+     * @return the context
+     */
+    JiraNormalizationContext buildContext(String baseUrl, String credentials, List<String> extraFieldNames) {
+        JiraStatusCategories categories;
+        ApiResult statuses = apiClient.fetchStatuses(baseUrl, credentials);
+        if (statuses != null && statuses.success()) {
+            categories = JiraStatusCategories.fromStatuses(statuses.data());
+        } else {
+            LOG.warnf("Jira status-category lookup failed for %s (%s); falling back to status-name matching",
+                    baseUrl, statuses != null ? statuses.errorMessage() : "no response");
+            categories = JiraStatusCategories.empty();
+        }
+
+        Map<String, String> extraFields = new LinkedHashMap<>();
+        if (extraFieldNames != null && !extraFieldNames.isEmpty()) {
+            ApiResult fields = apiClient.fetchFields(baseUrl, credentials);
+            if (fields != null && fields.success()) {
+                JiraFieldCatalog catalog = JiraFieldCatalog.fromFields(fields.data());
+                for (String name : extraFieldNames) {
+                    String id = catalog.idFor(name);
+                    if (id != null) {
+                        extraFields.put(name, id);
+                    } else {
+                        LOG.warnf("Jira field '%s' in extraFields is unknown on %s; ignored", name, baseUrl);
+                    }
+                }
+            } else {
+                LOG.warnf("Jira field lookup failed for %s (%s); extra field values are taken from the "
+                        + "changelog only", baseUrl, fields != null ? fields.errorMessage() : "no response");
+                extraFieldNames.forEach(name -> extraFields.put(name, null));
+            }
+        }
+        return new JiraNormalizationContext(categories, extraFields);
+    }
+
+    /**
+     * Resolves Jira credentials in {@code email:api_token} form, in this order: the secret named by the
+     * event source's {@code secretName}, the {@code JIRA_API_TOKEN} secret, then the
+     * {@code JIRA_API_TOKEN} environment variable.
+     *
+     * @param eventSource the event source
+     * @return the decrypted credentials, or null when none is configured
      */
     private String resolveCredentials(EventSourceEntity eventSource) {
         // Per-event-source secret

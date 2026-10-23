@@ -1,0 +1,5 @@
+[
+  {"id": "summary", "name": "Summary", "custom": false},
+  {"id": "customfield_10028", "name": "Story Points", "custom": true},
+  {"id": "customfield_10986", "name": "Intelligence Requested", "custom": true}
+]

@@ -29,6 +29,7 @@ import io.apitomy.axiom.app.validation.SubscriptionRoutingResolver;
 import io.apitomy.axiom.app.validation.ValidationContext;
 import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.app.validation.WorkflowPublisher;
+import io.apitomy.axiom.events.core.BaseUrls;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -931,7 +932,7 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.sourceType = item.path("sourceType").asText("github");
             entity.enabled = item.path("enabled").asBoolean(false);
-            entity.baseUrl = item.path("baseUrl").asText("");
+            entity.baseUrl = BaseUrls.normalize(item.path("baseUrl").asText(""));
             entity.secretName = textOrNull(item, "secretName");
             entity.pollInterval = item.has("pollInterval") ? item.path("pollInterval").asInt() : null;
             entity.configuration = jsonOrNull(item, "configuration");
@@ -986,7 +987,7 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.sourceType = item.path("sourceType").asText("github");
             entity.enabled = item.path("enabled").asBoolean(false);
-            entity.baseUrl = item.path("baseUrl").asText("");
+            entity.baseUrl = BaseUrls.normalize(item.path("baseUrl").asText(""));
             entity.secretName = textOrNull(item, "secretName");
             entity.pollInterval = item.has("pollInterval") ? item.path("pollInterval").asInt() : null;
             entity.configuration = jsonOrNull(item, "configuration");

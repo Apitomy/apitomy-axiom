@@ -245,4 +245,70 @@ class EventSourcesResourceTest {
                     .statusCode(400);
         }
     }
+
+    @Test
+    void testInvalidJiraProjectKeyReturns400WithErrorBody() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "id": "jira-bad-key",
+                    "name": "Bad Jira",
+                    "sourceType": "jira",
+                    "enabled": false,
+                    "baseUrl": "https://x.atlassian.net",
+                    "configuration": { "projects": ["bad key"] }
+                }
+                """)
+            .when()
+                .post(EVENT_SOURCES_PATH)
+            .then()
+                .statusCode(400)
+                .contentType(ContentType.JSON)
+                .body("message", containsString("Jira project key"))
+                .body("errorCode", equalTo(400));
+    }
+
+    @Test
+    void testReservedIdReturns400WithErrorBody() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "id": "health",
+                    "name": "Reserved",
+                    "sourceType": "github",
+                    "baseUrl": "https://api.github.com",
+                    "configuration": { "repositories": ["o/r"] }
+                }
+                """)
+            .when()
+                .post(EVENT_SOURCES_PATH)
+            .then()
+                .statusCode(400)
+                .contentType(ContentType.JSON)
+                .body("message", containsString("reserved"));
+    }
+
+    @Test
+    void testBaseUrlTrailingSlashIsStripped() {
+        given()
+            .contentType(ContentType.JSON)
+            .body("""
+                {
+                    "id": "jira-trailing-slash",
+                    "name": "Jira",
+                    "sourceType": "jira",
+                    "enabled": false,
+                    "baseUrl": "https://x.atlassian.net/",
+                    "configuration": { "projects": ["PROJ"], "extraFields": ["Story Points"] }
+                }
+                """)
+            .when()
+                .post(EVENT_SOURCES_PATH)
+            .then()
+                .statusCode(200)
+                .body("baseUrl", equalTo("https://x.atlassian.net"))
+                .body("configuration.extraFields", hasItem("Story Points"));
+    }
 }

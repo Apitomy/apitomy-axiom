@@ -286,6 +286,96 @@ class JiraEventSourcePollerTest {
 
     // -- helpers ----------------------------------------------------------------
 
+    @Test
+    void statusLookup_usesCategoriesFromJira() {
+        api.statuses = ApiResult.ok(JiraFixtures.load("jira-statuses.json"), "GET", "status", null, null);
+
+        JiraNormalizationContext context = poller.buildContext(BASE_URL, "a:b", List.of());
+
+        assertTrue(context.statusCategories().isDone("10500", "Shipped"));
+        assertEquals(0, api.fieldCalls);
+    }
+
+    @Test
+    void statusLookupFailure_fallsBackToNameMatching() {
+        api.statuses = ApiResult.httpError(500, "GET", "status", null, "down");
+
+        JiraNormalizationContext context = poller.buildContext(BASE_URL, "a:b", List.of());
+
+        assertTrue(context.statusCategories().isEmpty());
+        assertTrue(context.statusCategories().isDone(null, "Closed"));
+    }
+
+    @Test
+    void extraFields_areResolvedToIds_andUnknownNamesIgnored() {
+        api.fields = ApiResult.ok(JiraFixtures.load("jira-fields.json"), "GET", "field", null, null);
+
+        JiraNormalizationContext context = poller.buildContext(BASE_URL, "a:b",
+                List.of("Story Points", "No Such Field"));
+
+        assertEquals(Map.of("Story Points", "customfield_10028"), context.extraFields());
+    }
+
+    @Test
+    void fieldLookupFailure_keepsNamesWithoutIds() {
+        api.fields = ApiResult.httpError(500, "GET", "field", null, "down");
+
+        JiraNormalizationContext context = poller.buildContext(BASE_URL, "a:b", List.of("Story Points"));
+
+        assertTrue(context.extraFields().containsKey("Story Points"));
+        assertNull(context.extraFields().get("Story Points"));
+        assertEquals(List.of(), context.extraFieldIds());
+    }
+
+    @Test
+    void extraFieldIds_arePassedToSearch() {
+        api.pages.add(page(issues(0, 1, "2026-10-01T10:01:00.000+0000"), null));
+
+        poller.ingestWindow(SOURCE_ID, BASE_URL, List.of("P"), SINCE, "a:b", WINDOW_START,
+                new JiraNormalizationContext(JiraStatusCategories.empty(), Map.of("Story Points", "customfield_10028")));
+
+        assertEquals(List.of("customfield_10028"), api.extraFieldIdRequests.get(0));
+    }
+
+    @Test
+    void incompleteCommentList_fetchesAllComments() {
+        api.pages.add(page(List.of(JiraFixtures.load("ipt-1001-issue.json")), null));
+        api.comments.put("IPT-1001", ApiResult.ok(JiraFixtures.load("ipt-1001-comments.json").path("comments"),
+                "GET", "comment", null, null));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertTrue(result.complete());
+        assertTrue(stream.ids.containsAll(List.of("IPT-1001-comment-3001", "IPT-1001-comment-3002",
+                "IPT-1001-comment-3003",
+                "IPT-1001-comment-3002-updated-" + Instant.parse("2026-10-20T09:35:00Z").toEpochMilli())),
+                stream.ids.toString());
+    }
+
+    @Test
+    void commentFetchServerError_abortsWindow() {
+        api.pages.add(page(List.of(JiraFixtures.load("ipt-1001-issue.json")), null));
+        api.comments.put("IPT-1001", ApiResult.httpError(503, "GET", "comment", null, "down"));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertFalse(result.complete());
+        assertNull(result.checkpoint());
+        assertTrue(result.errorMessage().contains("comments"), result.errorMessage());
+    }
+
+    @Test
+    void commentFetchNotFound_usesEmbeddedComments() {
+        api.pages.add(page(List.of(JiraFixtures.load("ipt-1001-issue.json")), null));
+        api.comments.put("IPT-1001", ApiResult.httpError(404, "GET", "comment", null, "gone"));
+
+        JiraEventSourcePoller.WindowResult result = ingest();
+
+        assertTrue(result.complete());
+        assertTrue(stream.ids.contains("IPT-1001-comment-3001"));
+        assertFalse(stream.ids.contains("IPT-1001-comment-3002"));
+    }
+
     private JiraEventSourcePoller.WindowResult ingest() {
         return poller.ingestWindow(SOURCE_ID, BASE_URL, List.of("P"), SINCE, "a:b", WINDOW_START);
     }
@@ -354,10 +444,32 @@ class JiraEventSourcePollerTest {
         final Deque<ApiResult> pages = new ArrayDeque<>();
         final Map<String, ApiResult> changelogs = new HashMap<>();
         final List<String> tokens = new ArrayList<>();
+        final Map<String, ApiResult> comments = new HashMap<>();
+        final List<List<String>> extraFieldIdRequests = new ArrayList<>();
+        ApiResult statuses = ApiResult.ok(MAPPER.createArrayNode(), "GET", "status", null, null);
+        ApiResult fields = ApiResult.ok(MAPPER.createArrayNode(), "GET", "field", null, null);
+        int fieldCalls;
+
+        @Override
+        public ApiResult fetchIssueComments(String baseUrl, String issueKey, String credentials) {
+            return comments.get(issueKey);
+        }
+
+        @Override
+        public ApiResult fetchStatuses(String baseUrl, String credentials) {
+            return statuses;
+        }
+
+        @Override
+        public ApiResult fetchFields(String baseUrl, String credentials) {
+            fieldCalls++;
+            return fields;
+        }
 
         @Override
         public ApiResult fetchIssuesPage(String baseUrl, List<String> projects, Instant since,
-                                         String credentials, String nextPageToken) {
+                                         String credentials, String nextPageToken, List<String> extraFieldIds) {
+            extraFieldIdRequests.add(extraFieldIds);
             tokens.add(nextPageToken == null ? "<first>" : nextPageToken);
             return pages.removeFirst();
         }
