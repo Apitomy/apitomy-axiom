@@ -73,6 +73,7 @@ describe("EventDetailPage", () => {
         await screen.findByRole("button", { name: "Run workflow…" });
         expect(screen.queryByText(/does not match the .* schema/)).toBeNull();
     });
+
     it("shows a Run workflow… button that opens the modal", async () => {
         renderPage();
         await userEvent.click(await screen.findByRole("button", { name: "Run workflow…" }));
