@@ -45,6 +45,13 @@ import type * as Monaco from "monaco-editor";
 import { ObjectSelect } from "@apitomy/common-ui-components";
 import { LabelInput } from "../components/LabelInput";
 import { StreamEventDetailModal } from "../components/StreamEventDetailModal";
+import { EventFieldsPanel } from "../components/EventFieldsPanel";
+import {
+    type CompletionNode,
+    type EventFieldRow,
+    appendPath,
+    pathsToCompletionTree,
+} from "../config/eventSchemaPaths";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     type NewSubscription,
@@ -240,6 +247,58 @@ const MATCH_BG_DARK = "rgba(56, 134, 53, 0.2)";
 const EL_LANGUAGE_ID = "axiom-el";
 let elLanguageRegistered = false;
 
+/** Top-level event envelope fields, offered by completion even before (or without) any event schema. */
+const EL_ENVELOPE_TREE: CompletionNode = {
+    event: {
+        id: "Event ID",
+        sourceEventId: "Source system's event ID",
+        source: "Source system (e.g., \"github\", \"jira\")",
+        eventSourceId: "Event source slug (e.g., \"github-com\")",
+        type: "Normalized event type (e.g., \"issue.created\", \"pr.merged\")",
+        ref: "Full URL of the event subject",
+        timestamp: "When the event occurred (ISO-8601)",
+        actor: {},
+        payload: {},
+        sourceData: "Source-specific raw data",
+    },
+};
+
+/** Completion tree for the EL editor: envelope fields merged with the Event fields panel's selected type. */
+let elCompletionTree: CompletionNode = EL_ENVELOPE_TREE;
+
+/** Deep-merges `overlay` onto `base`; object nodes from the overlay replace string leaves. */
+function mergeCompletionTrees(base: CompletionNode, overlay: CompletionNode): CompletionNode {
+    const merged: CompletionNode = { ...base };
+    for (const [key, value] of Object.entries(overlay)) {
+        const existing = merged[key];
+        if (typeof value === "object" && typeof existing === "object") {
+            merged[key] = mergeCompletionTrees(existing, value);
+        } else if (typeof value === "object" || existing === undefined) {
+            merged[key] = value;
+        }
+    }
+    return merged;
+}
+
+/**
+ * Replaces the schema-derived EL completion fields, keeping the envelope fields. Monaco providers are
+ * registered once per page load, so the provider reads this module-level tree on every request.
+ *
+ * @param rows field rows of the selected event type; an empty list leaves only the envelope fields
+ */
+export function setElCompletionFields(rows: EventFieldRow[]): void {
+    elCompletionTree = mergeCompletionTrees(EL_ENVELOPE_TREE, pathsToCompletionTree(rows));
+}
+
+/**
+ * Returns the current EL completion tree.
+ *
+ * @returns the envelope fields merged with the latest schema-derived fields
+ */
+export function getElCompletionTree(): CompletionNode {
+    return elCompletionTree;
+}
+
 /**
  * Registers a custom Monaco language for EL filter expressions.
  * Uses the Monarch tokenizer for declarative syntax highlighting.
@@ -321,112 +380,8 @@ function registerElLanguage(monaco: typeof Monaco) {
 
     // ── Context-aware code completion ────────────────────────────
 
-    type SchemaNode = { [key: string]: SchemaNode | string };
-
-    const actorFields: SchemaNode = {
-        login: "Username or account ID",
-        displayName: "Display name",
-        avatarUrl: "Profile image URL",
-        url: "Profile URL",
-    };
-
-    const issueFields: SchemaNode = {
-        number: "Issue number or key (e.g., \"123\", \"PROJ-456\")",
-        title: "Issue title",
-        body: "Issue description",
-        state: "Normalized state: \"open\" or \"closed\"",
-        stateDetail: "Source-specific state (e.g., \"In Progress\")",
-        author: actorFields,
-        assignees: "Current assignees (array)",
-        labels: "Label names (array)",
-        milestone: "Milestone or sprint name",
-        url: "HTML URL to the issue",
-        createdAt: "Creation timestamp (ISO-8601)",
-        updatedAt: "Last update timestamp",
-        closedAt: "Closure timestamp",
-    };
-
-    const pullRequestFields: SchemaNode = {
-        ...issueFields,
-        headBranch: "Source branch name",
-        baseBranch: "Target branch name",
-        headSha: "Latest commit SHA on head",
-        isDraft: "Whether the PR is a draft",
-        isMerged: "Whether the PR has been merged",
-        mergedAt: "Merge timestamp",
-        mergedBy: actorFields,
-        additions: "Lines added",
-        deletions: "Lines deleted",
-        changedFiles: "Number of changed files",
-    };
-
-    const commentFields: SchemaNode = {
-        id: "Comment ID",
-        body: "Comment body text",
-        author: actorFields,
-        url: "HTML URL to the comment",
-        createdAt: "Creation timestamp",
-        updatedAt: "Last edit timestamp",
-    };
-
-    const reviewFields: SchemaNode = {
-        id: "Review ID",
-        state: "Review state: \"approved\", \"changes_requested\", \"commented\", \"dismissed\"",
-        body: "Review body text",
-        author: actorFields,
-        url: "HTML URL to the review",
-        submittedAt: "Submission timestamp",
-    };
-
-    const labelFields: SchemaNode = {
-        name: "Label name",
-        color: "Hex color code",
-        description: "Label description",
-    };
-
-    const changeFields: SchemaNode = {
-        field: "Which field changed",
-        from: "Previous value",
-        to: "New value",
-        author: actorFields,
-    };
-
-    const payloadFields: SchemaNode = {
-        issue: issueFields,
-        pullRequest: pullRequestFields,
-        comment: commentFields,
-        review: reviewFields,
-        label: labelFields,
-        assignee: actorFields,
-        change: changeFields,
-        requestedReviewer: actorFields,
-        ref: "Git ref (push/branch/tag events)",
-        branch: "Branch name (push events)",
-        beforeSha: "SHA before push",
-        afterSha: "SHA after push",
-        forced: "Whether push was forced",
-        commits: "Commits array (push events)",
-        tagName: "Tag name (release events)",
-        name: "Release name (release events)",
-        body: "Release notes (release events)",
-        before: "Previous head SHA (pr.synchronize)",
-        after: "New head SHA (pr.synchronize)",
-    };
-
-    const completionSchema: SchemaNode = {
-        event: {
-            type: "Normalized event type (e.g., \"issue.created\", \"pr.merged\")",
-            source: "Source system: \"github\" or \"jira\"",
-            eventSourceId: "Event source slug (e.g., \"github-com\")",
-            ref: "Full URL of the event subject",
-            timestamp: "When the event occurred (ISO-8601)",
-            actor: actorFields,
-            payload: payloadFields,
-        },
-    };
-
-    function resolveSchema(path: string[]): SchemaNode | null {
-        let node: SchemaNode = completionSchema;
+    function resolveSchema(path: string[]): CompletionNode | null {
+        let node: CompletionNode = elCompletionTree;
         for (const segment of path) {
             const child = node[segment];
             if (child == null || typeof child === "string") return null;
@@ -450,7 +405,7 @@ function registerElLanguage(monaco: typeof Monaco) {
             const pathStr = match ? match[1] : "";
             const path = pathStr ? pathStr.split(".") : [];
 
-            const node = path.length > 0 ? resolveSchema(path) : completionSchema;
+            const node = path.length > 0 ? resolveSchema(path) : elCompletionTree;
             if (!node) return { suggestions: [] };
 
             const word = model.getWordUntilPosition(position);
@@ -481,7 +436,7 @@ function registerElLanguage(monaco: typeof Monaco) {
             // Add string method suggestions when the path resolves to a string field
             const lastSegment = path[path.length - 1];
             const parentPath = path.slice(0, -1);
-            const parent = parentPath.length > 0 ? resolveSchema(parentPath) : completionSchema;
+            const parent = parentPath.length > 0 ? resolveSchema(parentPath) : elCompletionTree;
             if (parent && lastSegment && typeof parent[lastSegment] === "string") {
                 const methods = [
                     { name: "startsWith", detail: "String prefix match", snippet: "startsWith('$1')" },
@@ -603,6 +558,11 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
                     padding: { top: 8, bottom: 8 },
                 }}
             />
+            <EventFieldsPanel
+                filterExpression={filterExpression}
+                onSelectPath={(path) => setFilterExpression(appendPath(filterExpression, path))}
+                onRowsChange={setElCompletionFields}
+            />
 
             {/* Summary stats */}
             <Flex style={{ marginTop: "24px", marginBottom: "8px", gap: "24px" }}
@@ -720,12 +680,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
             <StreamEventDetailModal
                 event={selectedEvent}
                 onClose={() => setSelectedEvent(null)}
-                onSelectPath={(path) => {
-                    // Insert the path at the end of the current expression,
-                    // adding a space separator if the expression is non-empty
-                    const separator = filterExpression && !filterExpression.endsWith(" ") ? " " : "";
-                    setFilterExpression(filterExpression + separator + path);
-                }}
+                onSelectPath={(path) => setFilterExpression(appendPath(filterExpression, path))}
             />
 
             {/* Help modal */}
@@ -744,31 +699,10 @@ function FilterHelpModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
                 <Title headingLevel="h4" size="md" style={{ marginBottom: "12px" }}>
                     Available Fields
                 </Title>
-                <Table aria-label="Available fields" variant="compact">
-                    <Thead>
-                        <Tr>
-                            <Th>Field</Th>
-                            <Th>Description</Th>
-                            <Th>Example Values</Th>
-                        </Tr>
-                    </Thead>
-                    <Tbody>
-                        <Tr><Td><code>event.type</code></Td><Td>Normalized event type</Td><Td><code>"issue.created"</code>, <code>"pr.merged"</code>, <code>"push"</code></Td></Tr>
-                        <Tr><Td><code>event.source</code></Td><Td>Source system</Td><Td><code>"github"</code>, <code>"jira"</code></Td></Tr>
-                        <Tr><Td><code>event.eventSourceId</code></Td><Td>Event source slug</Td><Td><code>"github-com"</code>, <code>"jira-prod"</code></Td></Tr>
-                        <Tr><Td><code>event.ref</code></Td><Td>Full URL of the event subject</Td><Td><code>"https://github.com/owner/repo/issues/123"</code></Td></Tr>
-                        <Tr><Td><code>event.timestamp</code></Td><Td>When the event occurred</Td><Td>ISO-8601 string</Td></Tr>
-                        <Tr><Td><code>event.actor.login</code></Td><Td>Actor username or account ID</Td><Td><code>"octocat"</code></Td></Tr>
-                        <Tr><Td><code>event.actor.displayName</code></Td><Td>Actor display name</Td><Td><code>"Octo Cat"</code></Td></Tr>
-                        <Tr><Td><code>event.payload.issue.title</code></Td><Td>Issue title (issue events)</Td><Td><code>"Fix login bug"</code></Td></Tr>
-                        <Tr><Td><code>event.payload.issue.state</code></Td><Td>Issue state (issue events)</Td><Td><code>"open"</code>, <code>"closed"</code></Td></Tr>
-                        <Tr><Td><code>event.payload.issue.number</code></Td><Td>Issue number or key</Td><Td><code>"123"</code>, <code>"PROJ-456"</code></Td></Tr>
-                        <Tr><Td><code>event.payload.pullRequest.baseBranch</code></Td><Td>PR target branch (PR events)</Td><Td><code>"main"</code></Td></Tr>
-                        <Tr><Td><code>event.payload.pullRequest.isDraft</code></Td><Td>Whether the PR is a draft</Td><Td><code>true</code>, <code>false</code></Td></Tr>
-                        <Tr><Td><code>event.payload.label.name</code></Td><Td>Label name (labeled/unlabeled events)</Td><Td><code>"bug"</code></Td></Tr>
-                        <Tr><Td><code>event.payload.review.state</code></Td><Td>Review state (review events)</Td><Td><code>"approved"</code>, <code>"changes_requested"</code></Td></Tr>
-                    </Tbody>
-                </Table>
+                <p>
+                    The fields depend on the event type. Use the <strong>Event fields</strong> panel below the
+                    expression editor to browse the fields of each type and click a path to insert it.
+                </p>
 
                 <Title headingLevel="h4" size="md" style={{ marginTop: "24px", marginBottom: "12px" }}>
                     Operators

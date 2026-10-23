@@ -116,6 +116,17 @@ The **Events** section covers the event pipeline described in
 | **Subscriptions** | Filtered, routed views over the event stream (`create-workflow` and `workflow-dispatch` rules) — create, edit, and preview filter expressions here |
 | **Event Stream** | Every normalized event Axiom has recorded from its event sources. Filter chips narrow it by **Event Type**, **Event Source**, **Ref** and **Actor** (exact login, case-insensitive); clicking a type, source or actor in a row adds it as a filter. Click a row to open the event. |
 
+On a subscription's **Filter** tab, the **Event fields** panel below the expression editor lists the fields
+you can use in a filter expression, built from the event schemas Axiom validates events against. Each row
+shows the EL path (for example `event.payload.issue.state`), its type, a description and an example value.
+Click a path to append it to the expression; the editor's autocompletion uses the same fields.
+
+The panel shows the event types your expression compares `event.type` to with `==` (for example
+`event.type == 'issue.closed'`). If the expression names no type, pick one from the **Event type** list; it
+starts on `issue.created`. Array elements appear as `[0]` (for example
+`event.payload.issue.assignees[0].login`), and `event.sourceData` is listed once as source-specific because
+its shape depends on the event source.
+
 The event detail page shows the full typed payload (**Event** tab), how subscriptions processed it
 (**Processing** tab), and the runs started from it (**Runs** tab). **Run workflow…** starts a run of any
 published workflow with the event, listing suggested workflows first; such runs get the label
