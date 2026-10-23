@@ -385,10 +385,11 @@ public class TaskExecutionService {
                 && !actionTypeEntity.allowedTools.isBlank()) {
             return toolsetResolver.resolve(actionTypeEntity.allowedTools);
         }
-        // Fallback: minimal read-only tools
+        // Fallback: minimal read-only tools. Recent Claude Code builds dropped the Glob and Grep
+        // tools (2.1.117, native macOS and Linux builds); file search goes through Bash instead.
         LOG.warnf("No allowed tools configured for action type '%s', using minimal read-only defaults",
                 actionType);
-        return List.of("Read", "Glob", "Grep");
+        return List.of("Read", "Bash(grep *)", "Bash(find *)");
     }
 
     /**

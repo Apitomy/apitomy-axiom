@@ -16,8 +16,7 @@ import { fetchSdkToolValues } from "../config/sdkTools";
  */
 const BUILTIN_TOOLS = [
     "Read",
-    "Glob",
-    "Grep",
+    "Bash(grep *)",
     "Edit",
     "Write",
     "Bash(ls *)",
