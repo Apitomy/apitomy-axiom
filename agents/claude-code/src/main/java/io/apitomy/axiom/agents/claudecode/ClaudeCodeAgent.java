@@ -173,42 +173,40 @@ public class ClaudeCodeAgent implements Agent {
         List<AgentCheckResult> results = new ArrayList<>();
 
         try {
-            ProcessBuilder pb = new ProcessBuilder(executable, "-p", "Reply with exactly: AXIOM_OK",
-                    "--bare", "--output-format", "text", "--max-turns", "1");
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
+            Path outputFile = Files.createTempFile("axiom-claude-code-check-", ".txt");
+            try {
+                ProcessBuilder pb = new ProcessBuilder(executable, "-p",
+                        "Reply with exactly: AXIOM_OK",
+                        "--bare", "--output-format", "text", "--max-turns", "1");
+                pb.redirectErrorStream(true);
+                pb.redirectOutput(outputFile.toFile());
+                Process process = pb.start();
 
-            boolean completed = process.waitFor(30, TimeUnit.SECONDS);
-            if (!completed) {
-                process.destroyForcibly();
-                results.add(new AgentCheckResult(
-                        "Claude Code CLI",
-                        "error",
-                        "Claude Code CLI check timed out after 30 seconds. "
-                                + "Ensure that the 'claude' command is on your PATH and that "
-                                + "your Anthropic API key is configured correctly."
-                ));
-                return results;
-            }
+                boolean completed;
+                try {
+                    completed = process.waitFor(30, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    process.destroyForcibly();
+                    results.add(new AgentCheckResult(
+                            "Claude Code CLI",
+                            "error",
+                            "Claude Code CLI check was interrupted."
+                    ));
+                    return results;
+                }
 
-            String output = new String(process.getInputStream().readAllBytes());
-            int exitCode = process.exitValue();
-
-            if (exitCode == 0 && output.contains("AXIOM_OK")) {
-                results.add(new AgentCheckResult(
-                        "Claude Code CLI",
-                        "ok",
-                        "Claude Code CLI is available and working."
-                ));
-            } else {
-                results.add(new AgentCheckResult(
-                        "Claude Code CLI",
-                        "error",
-                        "Claude Code CLI returned exit code " + exitCode + ". "
-                                + "Ensure that the 'claude' command is installed, on your PATH, "
-                                + "and that ANTHROPIC_API_KEY is set in your environment. "
-                                + "Install Claude Code: npm install -g @anthropic-ai/claude-code"
-                ));
+                String output = "";
+                int exitCode = -1;
+                if (completed) {
+                    output = Files.readString(outputFile);
+                    exitCode = process.exitValue();
+                } else {
+                    process.destroyForcibly();
+                }
+                results.add(probeResult(completed, exitCode, output, hasServerApiKey()));
+            } finally {
+                Files.deleteIfExists(outputFile);
             }
         } catch (Exception e) {
             results.add(new AgentCheckResult(
@@ -220,6 +218,109 @@ public class ClaudeCodeAgent implements Agent {
         }
 
         return results;
+    }
+
+    /**
+     * Returns true when {@code ANTHROPIC_API_KEY} is set to a non-blank value
+     * in this JVM's environment.
+     */
+    static boolean hasServerApiKey() {
+        String apiKey = System.getenv("ANTHROPIC_API_KEY");
+        return apiKey != null && !apiKey.isBlank();
+    }
+
+    /**
+     * Builds the check result for one probe attempt. The probe runs with the
+     * JVM environment only, while an agent run also receives the action
+     * type's declared Environment, and the CLI can authenticate by other
+     * means than {@code ANTHROPIC_API_KEY} (stored credentials, for example).
+     * A probe that ran the CLI but did not answer as expected is therefore
+     * conclusive only when the server environment carries an API key: then a
+     * failure is a misconfiguration and reports an error. Without that key
+     * the same failure reports a warning that quotes the CLI output, so the
+     * real cause stays visible, and the UI is not locked on an install that
+     * may be perfectly usable. A CLI that cannot be started at all is
+     * reported by the exception path of {@link #healthCheck()} and always
+     * reports an error.
+     *
+     * @param completed whether the probe finished within the timeout
+     * @param exitCode the CLI exit code, meaningful only when completed
+     * @param output the combined CLI output, empty for a timed-out probe
+     * @param serverApiKey whether ANTHROPIC_API_KEY is set in the server environment
+     * @return the check result for the probe
+     */
+    static AgentCheckResult probeResult(boolean completed, int exitCode, String output,
+            boolean serverApiKey) {
+        if (!completed) {
+            if (serverApiKey) {
+                return new AgentCheckResult(
+                        "Claude Code CLI",
+                        "error",
+                        "Claude Code CLI check timed out after 30 seconds. "
+                                + "Ensure that the 'claude' command is on your PATH and that "
+                                + "your Anthropic API key is configured correctly."
+                );
+            }
+            return new AgentCheckResult(
+                    "Claude Code CLI",
+                    "warning",
+                    "Claude Code CLI check timed out after 30 seconds. ANTHROPIC_API_KEY "
+                            + "is not set to a usable value in the server environment, so "
+                            + "this check cannot be conclusive: the CLI may authenticate by "
+                            + "other means, and agent action types can declare their own "
+                            + "ANTHROPIC_API_KEY."
+            );
+        }
+
+        if (exitCode == 0 && output.contains("AXIOM_OK")) {
+            return new AgentCheckResult(
+                    "Claude Code CLI",
+                    "ok",
+                    "Claude Code CLI is available and working."
+            );
+        }
+
+        String detail = "Claude Code CLI probe failed with exit code " + exitCode
+                + excerptSuffix(output) + " ";
+        if (serverApiKey) {
+            return new AgentCheckResult(
+                    "Claude Code CLI",
+                    "error",
+                    detail
+                            + "ANTHROPIC_API_KEY is set in the server environment, so check "
+                            + "the key, the configured model, and network access."
+            );
+        }
+        return new AgentCheckResult(
+                "Claude Code CLI",
+                "warning",
+                detail
+                        + "ANTHROPIC_API_KEY is not set to a usable value in the server "
+                        + "environment, so this check cannot be conclusive: the CLI may "
+                        + "authenticate by other means, and agent action types can declare "
+                        + "their own ANTHROPIC_API_KEY. Set ANTHROPIC_API_KEY in the server "
+                        + "environment and restart Axiom to make it conclusive."
+        );
+    }
+
+    /**
+     * Formats the combined probe output as a quoted, single-line excerpt for
+     * a check message, or an empty string when the output has no printable
+     * content. The excerpt is capped so a chatty failure cannot flood the
+     * check list. It quotes the CLI's own failure output verbatim and is
+     * operator-visible in the server log and the UI, so it must stay an
+     * operator-facing diagnostic.
+     */
+    static String excerptSuffix(String output) {
+        if (output == null) {
+            return "";
+        }
+        String flat = output.replaceAll("\\s+", " ").trim();
+        if (flat.isEmpty()) {
+            return "";
+        }
+        String excerpt = flat.length() <= 200 ? flat : flat.substring(0, 200) + "...";
+        return ": \"" + excerpt + "\"";
     }
 
     private CompletableFuture<AgentResult> executeInternal(AgentRequest request,
