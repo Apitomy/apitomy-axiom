@@ -74,6 +74,72 @@ class ShellContextTest {
     }
 
     @Test
+    void apostropheInCommentDoesNotQuoteFollowingLines() {
+        String s = "# sync-target's flag\nX1 {{inputs.x}}\n";
+        assertEquals(UNQUOTED, at(s, "X1"));
+        assertEquals(UNQUOTED, at(s, "{{inputs.x}}"));
+    }
+
+    @Test
+    void commentEndsAtNewlineAndQuoteStateIsUnchanged() {
+        String s = "# don't stop\nX1 'z1'\n# said \"go\"\nX2 \"z2\"\nX3";
+        assertEquals(UNQUOTED, at(s, "X1"));
+        assertEquals(SINGLE, at(s, "z1"));
+        assertEquals(UNQUOTED, at(s, "X2"));
+        assertEquals(DOUBLE, at(s, "z2"));
+        assertEquals(UNQUOTED, at(s, "X3"));
+    }
+
+    @Test
+    void commentStartsOnlyAtWordStart() {
+        String s = ";#'a\n&#'b\n|#'c\n(#'d\n)#'e\n>#'f\n<#'g\nX1";
+        assertEquals(UNQUOTED, at(s, "X1"));
+    }
+
+    @Test
+    void hashGluedToAWordIsNotAComment() {
+        String s = "echo ${#var} a#b 'x'#y\nX1\n";
+        assertEquals(UNQUOTED, at(s, "${#var}"));
+        assertEquals(UNQUOTED, at(s, "a#b"));
+        assertEquals(UNQUOTED, at(s, "'x'#y"));
+        assertEquals(UNQUOTED, at(s, "X1"));
+    }
+
+    @Test
+    void hashInsideQuotesIsNotAComment() {
+        String s = "X1 '#p' X2 \"#q\" X3 {{inputs.x}}";
+        assertEquals(SINGLE, at(s, "#p"));
+        assertEquals(DOUBLE, at(s, "#q"));
+        assertEquals(UNQUOTED, at(s, "X1"));
+        assertEquals(UNQUOTED, at(s, "X3"));
+        assertEquals(UNQUOTED, at(s, "{{inputs.x}}"));
+    }
+
+    @Test
+    void hashInsideArithmeticIsLiteral() {
+        String s = "X1=$(( 2#10 ))\nX2=$(( 3 << 1 ))\nX3";
+        assertEquals(UNQUOTED, at(s, "2#10"));
+        assertEquals(UNQUOTED, at(s, "3 << 1"));
+        assertEquals(UNQUOTED, at(s, "X2"));
+        assertEquals(UNQUOTED, at(s, "X3"));
+    }
+
+    @Test
+    void hashInsideHeredocBodiesIsBodyText() {
+        String s = "cat <<A\n# not a comment X1\nA\ncat <<'B'\n# still body X2\nB\nX3";
+        assertEquals(HEREDOC, at(s, "# not a comment"));
+        assertEquals(QUOTED_HEREDOC, at(s, "# still body"));
+        assertEquals(UNQUOTED, at(s, "X3"));
+    }
+
+    @Test
+    void heredocOperatorLineCanCarryAComment() {
+        String s = "cat <<EOF # body follows, don't worry\nX1\nEOF\nX2";
+        assertEquals(HEREDOC, at(s, "X1"));
+        assertEquals(UNQUOTED, at(s, "X2"));
+    }
+
+    @Test
     void heredocOperatorInsideQuotesIsIgnored() {
         String s = "echo \"<<EOF\"\nX1";
         assertEquals(UNQUOTED, at(s, "X1"));
