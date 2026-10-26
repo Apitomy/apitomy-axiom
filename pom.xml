@@ -50,7 +50,7 @@
 
         <!-- Plugins -->
         <compiler-plugin.version>3.16.0</compiler-plugin.version>
-        <surefire-plugin.version>3.6.0</surefire-plugin.version>
+        <surefire-plugin.version>3.6.1</surefire-plugin.version>
         <!-- Tests tagged "live-cli" launch a real opencode/claude CLI and may consume tokens.
              They are excluded by default; enable with -Plive-cli-tests. -->
         <surefire.excludedGroups>live-cli</surefire.excludedGroups>
