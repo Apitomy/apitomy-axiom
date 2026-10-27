@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { CompositionTestRun } from "../../config/compositions";
 import { runSummary, TestOutputStrip } from "./TestOutputStrip";
 
@@ -113,5 +113,47 @@ describe("TestOutputStrip with Tests and Runs tabs", () => {
         expect(screen.queryByRole("button", { name: "greet" })).toBeNull();
         fireEvent.click(screen.getByRole("tab", { name: /Tests/ }));
         expect(onSelect).toHaveBeenCalledWith("tests");
+    });
+
+    it("removes a finished run or suggestion but not a running one", () => {
+        const onRemoveRun = vi.fn();
+        const running: CompositionTestRun = { id: "r", itemId: 13, itemType: "tool", itemName: "busy", author: "user",
+            status: "running", startedAt: "2026-10-13T10:02:00Z" };
+        render(<TestOutputStrip runs={[running, ...runs]} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()}
+            onRemoveRun={onRemoveRun} />);
+        expect(screen.queryByRole("button", { name: "Remove the busy test run" })).toBeNull();
+        fireEvent.click(screen.getByRole("button", { name: "Remove the greet test run" }));
+        expect(onRemoveRun).toHaveBeenCalledWith(runs[0]);
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("hides remove buttons and Clear all without handlers", () => {
+        render(<TestOutputStrip runs={runs} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()} />);
+        expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
+    });
+
+    it("clears all after confirmation", () => {
+        const onClearRuns = vi.fn();
+        render(<TestOutputStrip runs={runs} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()}
+            onClearRuns={onClearRuns} />);
+        fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+        expect(screen.getByText("Clear all tests?")).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+        expect(onClearRuns).not.toHaveBeenCalled();
+        expect(screen.queryByText("Clear all tests?")).toBeNull();
+        fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+        const dialog: HTMLElement = screen.getByRole("dialog");
+        fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
+        expect(onClearRuns).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("disables Clear all when only running entries remain", () => {
+        const running: CompositionTestRun = { id: "r", itemId: 13, itemType: "tool", itemName: "busy", author: "user",
+            status: "running", startedAt: "2026-10-13T10:02:00Z" };
+        render(<TestOutputStrip runs={[running]} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()}
+            onClearRuns={vi.fn()} />);
+        expect((screen.getByRole("button", { name: "Clear all" }) as HTMLButtonElement).disabled).toBe(true);
     });
 });

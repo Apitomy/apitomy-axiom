@@ -347,6 +347,12 @@ export interface CompositionTestRunEvent {
     run: CompositionTestRun;
 }
 
+/** SSE payload of a "composition-test-runs-removed" event. */
+export interface CompositionTestRunsRemovedEvent {
+    compositionId: number;
+    runIds: string[];
+}
+
 /**
  * Test-runs a draft action type or tool and returns the finished run. `environment` applies to tools only (an
  * action type uses its own); values may reference secrets as `${secret:NAME}`.
@@ -360,6 +366,16 @@ export function testItem(id: number, itemId: number,
 /** Lists a composition's recent test runs, newest first. */
 export function listTestRuns(id: number): Promise<CompositionTestRun[]> {
     return request("GET", `${c(id)}/test-runs`);
+}
+
+/** Removes one finished test run or suggestion (a running one is rejected with 409). */
+export function deleteTestRun(id: number, runId: string): Promise<void> {
+    return request("DELETE", `${c(id)}/test-runs/${encodeURIComponent(runId)}`);
+}
+
+/** Removes every test run and suggestion of a composition that isn't running. */
+export function clearTestRuns(id: number): Promise<void> {
+    return request("DELETE", `${c(id)}/test-runs`);
 }
 
 const MAX_TEST_RUNS: number = 50;
@@ -393,6 +409,17 @@ export function mergeTestRuns(current: CompositionTestRun[], loaded: Composition
     return [...current].reverse().reduce((acc, run) => mergeTestRun(acc, run), loaded.slice(0, MAX_TEST_RUNS));
 }
 
+/**
+ * Drops removed runs from a list.
+ * @param runs the current runs
+ * @param runIds the ids of the removed runs
+ * @returns the remaining runs (the same list when nothing was removed)
+ */
+export function removeTestRuns(runs: CompositionTestRun[], runIds: string[]): CompositionTestRun[] {
+    const removed: Set<string> = new Set(runIds);
+    return runs.some((r) => removed.has(r.id)) ? runs.filter((r) => !removed.has(r.id)) : runs;
+}
+
 // ── SSE ───────────────────────────────────────────────────────────
 
 /** Handlers for composition SSE events. */
@@ -401,6 +428,7 @@ export interface CompositionEventHandlers {
     turn?: (event: CompositionTurnEvent) => void;
     changeSet?: (event: CompositionChangeSetEvent) => void;
     testRun?: (event: CompositionTestRunEvent) => void;
+    testRunsRemoved?: (event: CompositionTestRunsRemovedEvent) => void;
 }
 
 /**
@@ -427,6 +455,9 @@ export function subscribeComposition(compositionId: number, handlers: Compositio
                 break;
             case "composition-test-run":
                 handlers.testRun?.(event.data as unknown as CompositionTestRunEvent);
+                break;
+            case "composition-test-runs-removed":
+                handlers.testRunsRemoved?.(event.data as unknown as CompositionTestRunsRemovedEvent);
                 break;
         }
     });

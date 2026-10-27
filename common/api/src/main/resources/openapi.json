@@ -6586,6 +6586,22 @@
           }
         }
       },
+      "delete": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Clear test runs",
+        "description": "Removes every test run and suggestion of the composition that isn't running. Running entries are kept.",
+        "operationId": "clearCompositionTestRuns",
+        "responses": {
+          "204": {
+            "description": "The entries were removed"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
       "parameters": [
         {
           "name": "compositionId",
@@ -6594,6 +6610,46 @@
           "schema": {
             "format": "int64",
             "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/test-runs/{runId}": {
+      "delete": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Remove a test run",
+        "description": "Removes one test run or suggestion. A running entry cannot be removed (409).",
+        "operationId": "deleteCompositionTestRun",
+        "responses": {
+          "204": {
+            "description": "The entry was removed"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The run is still running"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
           }
         }
       ]
