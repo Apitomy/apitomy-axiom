@@ -20,7 +20,7 @@ vi.mock("./useWorkbench", () => ({
             scriptTemplate: "echo {{who}}" } }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent, replaceItem: () => {}, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
-        testRuns, testRunsLoaded, runTest,
+        testRuns, testRunsLoaded, runTest, removeTestRun: async () => {}, clearTestRuns: async () => {},
     }),
 }));
 

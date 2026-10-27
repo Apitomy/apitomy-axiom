@@ -165,6 +165,45 @@ describe("test runs", () => {
     });
 });
 
+describe("removing test runs", () => {
+    it("removes one run on the server and from state", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("a", "passed"), run("b", "suggested")]);
+        const del = vi.spyOn(c, "deleteTestRun").mockResolvedValue(undefined);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(2));
+        await act(async () => { await result.current.removeTestRun("b"); });
+        expect(del).toHaveBeenCalledWith(1, "b");
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["a"]);
+    });
+
+    it("keeps the run when the server rejects the removal", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("a", "passed")]);
+        vi.spyOn(c, "deleteTestRun").mockRejectedValue(new Error("running"));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(1));
+        await act(async () => { await expect(result.current.removeTestRun("a")).rejects.toThrow("running"); });
+        expect(result.current.testRuns).toHaveLength(1);
+    });
+
+    it("clears every run that isn't running", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("r", "running"), run("a", "passed"), run("s", "suggested")]);
+        const clear = vi.spyOn(c, "clearTestRuns").mockResolvedValue(undefined);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(3));
+        await act(async () => { await result.current.clearTestRuns(); });
+        expect(clear).toHaveBeenCalledWith(1);
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["r"]);
+    });
+
+    it("drops runs removed in another view (SSE)", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("a", "passed"), run("b", "failed")]);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(2));
+        act(() => sse.testRunsRemoved?.({ compositionId: 1, runIds: ["a"] }));
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["b"]);
+    });
+});
+
 describe("test runs during load", () => {
     it("keeps runs that start while the history loads", async () => {
         let resolve: (runs: c.CompositionTestRun[]) => void = () => {};

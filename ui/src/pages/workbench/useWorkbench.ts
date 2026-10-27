@@ -10,9 +10,12 @@ import {
     deleteItem,
     fetchItem,
     listItems,
+    clearTestRuns,
+    deleteTestRun,
     listTestRuns,
     mergeTestRun,
     mergeTestRuns,
+    removeTestRuns,
     testItem,
     subscribeComposition,
     validateComposition,
@@ -62,6 +65,10 @@ export interface WorkbenchState {
      */
     runTest(itemId: number, inputs: Record<string, unknown>, subjectId?: number, runId?: string,
             environment?: Record<string, string>): Promise<CompositionTestRun>;
+    /** Removes one finished test run or suggestion on the server and from `testRuns`. */
+    removeTestRun(runId: string): Promise<void>;
+    /** Removes every test run and suggestion that isn't running, on the server and from `testRuns`. */
+    clearTestRuns(): Promise<void>;
 }
 
 const VALIDATE_DEBOUNCE_MS: number = 800;
@@ -221,6 +228,7 @@ export function useWorkbench(compositionId: number): WorkbenchState {
     useEffect(() => {
         const unsubscribe = subscribeComposition(compositionId, {
             testRun: (ev) => setTestRuns((prev) => mergeTestRun(prev, ev.run)),
+            testRunsRemoved: (ev) => setTestRuns((prev) => removeTestRuns(prev, ev.runIds)),
             itemChanged: (ev) => {
                 void refreshItems().catch(console.error);
                 const loaded = revisionsRef.current[ev.itemId];
@@ -358,8 +366,19 @@ export function useWorkbench(compositionId: number): WorkbenchState {
         return run;
     }, [compositionId]);
 
+    const removeTestRun = useCallback(async (runId: string) => {
+        await deleteTestRun(compositionId, runId);
+        setTestRuns((prev) => removeTestRuns(prev, [runId]));
+    }, [compositionId]);
+
+    const clearAllTestRuns = useCallback(async () => {
+        await clearTestRuns(compositionId);
+        setTestRuns((prev) => prev.filter((r) => r.status === "running"));
+    }, [compositionId]);
+
     return {
         testRuns, testRunsLoaded: testRunsLoadedFor === compositionId, runTest,
+        removeTestRun, clearTestRuns: clearAllTestRuns,
         composition, items, contents, revisions, problems, pending, lastCompletedTurnId, sessionError,
         loadContent, refreshItems, refreshComposition, setContent, replaceItem, removeItem, markPendingHandled, retrySession: () => startSession(),
     };

@@ -84,4 +84,32 @@ class CompositionTestRunsFailureTest {
         given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of("who", "b")))
                 .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200);
     }
+
+    @Test
+    void runningRunsCannotBeRemovedAndSurviveClear() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(runner.runActionType(any(), any(), any())).thenAnswer(inv -> {
+            started.countDown();
+            release.await(10, TimeUnit.SECONDS);
+            return new DraftTestRunner.Result("passed", Map.of(), "", "", 0, 1, List.of(), null, null);
+        });
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = CompositionTestRunsResourceTest.scriptActionType(id);
+        String runId = "running-run-1";
+        CompletableFuture<Void> run = CompletableFuture.runAsync(() -> given().contentType(ContentType.JSON)
+                .body(Map.of("inputs", Map.of("who", "b"), "runId", runId))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200));
+        try {
+            assertTrue(started.await(10, TimeUnit.SECONDS));
+            given().delete(BASE + "/{id}/test-runs/{runId}", id, runId).then().statusCode(409);
+            given().delete(BASE + "/{id}/test-runs", id).then().statusCode(204);
+            given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
+                    .body("[0].id", equalTo(runId)).body("[0].status", equalTo("running"));
+        } finally {
+            release.countDown();
+        }
+        run.get(10, TimeUnit.SECONDS);
+        given().delete(BASE + "/{id}/test-runs/{runId}", id, runId).then().statusCode(204);
+    }
 }

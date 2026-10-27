@@ -630,6 +630,10 @@ export function WorkbenchPage() {
                     onOpenItem={openItem}
                     onRunSuggestion={(run) => void runSuggestion(run)}
                     onSendToAi={(run) => askAi(sendTestRunToAiPrefill(run))}
+                    onRemoveRun={(run) => void wb.removeTestRun(run.id).catch((e: unknown) =>
+                        setTestError({ title: `Could not remove the test: ${e instanceof Error ? e.message : String(e)}` }))}
+                    onClearRuns={() => void wb.clearTestRuns().catch((e: unknown) =>
+                        setTestError({ title: `Could not clear the tests: ${e instanceof Error ? e.message : String(e)}` }))}
                     bottomTabs={{
                         active: prefs.bottomPanelTab,
                         onSelect: (tab) => updatePrefs({ bottomPanelTab: tab }),

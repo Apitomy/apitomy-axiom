@@ -45,6 +45,7 @@ import io.apitomy.axiom.app.composition.CompositionNotFoundException;
 import io.apitomy.axiom.app.composition.CompositionPublisher;
 import io.apitomy.axiom.app.composition.CompositionService;
 import io.apitomy.axiom.app.composition.CompositionTestRuns;
+import io.apitomy.axiom.app.composition.TestRunRunningException;
 import io.apitomy.axiom.app.composition.TooManyTestRunsException;
 import io.apitomy.axiom.app.composition.CompositionTurns;
 import io.apitomy.axiom.app.composition.CompositionValidator;
@@ -432,6 +433,20 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     /** {@inheritDoc} */
     @Override
+    public void clearCompositionTestRuns(long compositionId) {
+        service.get(compositionId);
+        testRuns.clear(compositionId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void deleteCompositionTestRun(long compositionId, String runId) {
+        service.get(compositionId);
+        testRuns.remove(compositionId, runId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public CompositionTestRun suggestAgentTest(long compositionId, AgentTestSuggestion data) {
         requireToken(compositionId);
         String type = data.getType().value();
@@ -620,6 +635,15 @@ public class CompositionsResourceImpl implements CompositionsResource {
     @ServerExceptionMapper
     public Response mapTooManyTestRuns(TooManyTestRunsException e) {
         return error(429, e.getMessage());
+    }
+
+    /**
+     * @param e the exception
+     * @return 409 when a test run to remove is still running
+     */
+    @ServerExceptionMapper
+    public Response mapTestRunRunning(TestRunRunningException e) {
+        return error(409, e.getMessage());
     }
 
     /**

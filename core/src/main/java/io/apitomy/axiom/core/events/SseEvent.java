@@ -256,4 +256,19 @@ public record SseEvent(
         return new SseEvent("composition-test-run",
                 "{\"compositionId\":" + compositionId + ",\"run\":" + runJson + "}");
     }
+
+    /**
+     * Creates a composition-test-runs-removed event, emitted when test runs or suggestions are removed.
+     *
+     * @param compositionId the composition id
+     * @param runIds        the ids of the removed runs
+     * @return the SSE event
+     */
+    public static SseEvent compositionTestRunsRemoved(long compositionId, java.util.List<String> runIds) {
+        String ids = runIds.stream()
+                .map(id -> "\"" + escapeJson(id) + "\"")
+                .collect(java.util.stream.Collectors.joining(","));
+        return new SseEvent("composition-test-runs-removed",
+                "{\"compositionId\":" + compositionId + ",\"runIds\":[" + ids + "]}");
+    }
 }
