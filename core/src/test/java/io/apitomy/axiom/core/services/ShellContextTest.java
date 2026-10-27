@@ -144,4 +144,40 @@ class ShellContextTest {
         String s = "echo \"<<EOF\"\nX1";
         assertEquals(UNQUOTED, at(s, "X1"));
     }
+
+    @Test
+    void hashAfterCommandOrArithmeticSubstitutionIsGluedToTheWord() {
+        // bash: echo $(echo d)#'X Y' prints "d#X Y"; the substitution is part of the word.
+        assertEquals(SINGLE, at("echo $(date)#'X1'\nX2", "X1"));
+        assertEquals(UNQUOTED, at("echo $(date)#'X1'\nX2", "X2"));
+        assertEquals(SINGLE, at("echo $((1+2))#'X1'", "X1"));
+        assertEquals(SINGLE, at("echo $(echo $(date))#'X1'", "X1"));
+    }
+
+    @Test
+    void hashAfterSubshellStartsAComment() {
+        // bash: (echo sub)#it's ... is a comment; a plain subshell ends the word.
+        String s = "(echo sub)#it's\nX1";
+        assertEquals(UNQUOTED, at(s, "X1"));
+        String nested = "(echo $(date))#it's\nX1";
+        assertEquals(UNQUOTED, at(nested, "X1"));
+    }
+
+    @Test
+    void lineContinuationGluesHashToThePrecedingWord() {
+        // bash removes backslash-newline, so "a\<nl>#'X'" is the word a#X.
+        assertEquals(SINGLE, at("echo a\\\n#'X1'", "X1"));
+        assertEquals(SINGLE, at("echo $(date)\\\n#'X1'", "X1"));
+        // A blank before the continuation still ends the word, so the '#' starts a comment.
+        assertEquals(UNQUOTED, at("echo a \\\n#it's\nX1", "X1"));
+        // An escaped backslash is not a continuation.
+        assertEquals(UNQUOTED, at("echo a\\\\\n#it's\nX1", "X1"));
+    }
+
+    @Test
+    void hashGluedToParameterExpansionsStaysLiteral() {
+        assertEquals(SINGLE, at("echo $#'X1'", "X1"));
+        assertEquals(SINGLE, at("echo ${v#p}'X1'", "X1"));
+        assertEquals(SINGLE, at("a=#'X1'", "X1"));
+    }
 }
