@@ -135,6 +135,8 @@ export interface Task {
     createdOn: string;
     completedOn?: string;
     sessionId?: string;
+    /** The AI model the agent engine reported it actually ran. */
+    actualModel?: string;
     traceId?: string;
     workflowRunId?: number;
     nodeId?: string;

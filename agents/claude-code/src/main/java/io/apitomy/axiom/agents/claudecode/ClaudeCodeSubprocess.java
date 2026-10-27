@@ -274,13 +274,33 @@ public class ClaudeCodeSubprocess {
         }
     }
 
-    private void logStreamEvent(String line) {
+    /**
+     * Returns the model reported by the Claude Code stream, or {@code null} if none was seen yet.
+     *
+     * @return the reported model ID, or null
+     */
+    String getStreamModel() {
+        return streamModel;
+    }
+
+    /**
+     * Parses one stream-json line, recording log entries and reported metadata.
+     *
+     * @param line the raw stream-json line
+     */
+    void logStreamEvent(String line) {
         try {
             JsonNode node = MAPPER.readTree(line);
             String type = node.path("type").asText("");
 
             switch (type) {
                 case "assistant" -> {
+                    if (streamModel == null) {
+                        String messageModel = node.path("message").path("model").asText(null);
+                        if (messageModel != null && !messageModel.isBlank()) {
+                            streamModel = messageModel;
+                        }
+                    }
                     JsonNode content = node.path("message").path("content");
                     if (content.isArray()) {
                         for (JsonNode block : content) {

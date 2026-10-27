@@ -310,6 +310,22 @@ public class OpenCodeAgent implements Agent {
     }
 
     /**
+     * Returns the model OpenCode reports it actually used, as {@code providerID/modelID} (the same
+     * form used to request a model), or just {@code modelID} when no provider is reported.
+     *
+     * @param info the {@code info} node of an OpenCode message response
+     * @return the reported model, or null if none is reported
+     */
+    static String reportedModel(JsonNode info) {
+        String modelId = info.path("modelID").asText(null);
+        if (modelId == null || modelId.isBlank()) {
+            return null;
+        }
+        String providerId = info.path("providerID").asText(null);
+        return providerId == null || providerId.isBlank() ? modelId : providerId + "/" + modelId;
+    }
+
+    /**
      * Parses the OpenCode server response into an AgentResult.
      * The response structure is:
      * <pre>
@@ -322,7 +338,7 @@ public class OpenCodeAgent implements Agent {
      * }
      * </pre>
      */
-    private AgentResult parseResponse(JsonNode response, String sessionId,
+    AgentResult parseResponse(JsonNode response, String sessionId,
                                       String resolvedModel) {
         try {
             // Extract text from parts
@@ -371,8 +387,8 @@ public class OpenCodeAgent implements Agent {
                 }
             }
 
-            String actualModel = info.path("modelID").asText(null);
-            if (actualModel == null || actualModel.isBlank()) {
+            String actualModel = reportedModel(info);
+            if (actualModel == null) {
                 actualModel = resolvedModel;
             }
 

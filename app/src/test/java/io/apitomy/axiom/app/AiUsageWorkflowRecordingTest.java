@@ -16,6 +16,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * AI usage recorded for a task carries the task's workflow run and that run's workflow definition.
@@ -64,6 +65,19 @@ class AiUsageWorkflowRecordingTest {
         assertNotNull(usage);
         assertNull(usage.workflowRunId);
         assertNull(usage.workflowDefinitionId);
+    }
+
+    /** The model the engine reported is persisted on the task and noted in its execution log (#524). */
+    @Test
+    void taskRecordsActualModel() {
+        long subjectId = TestFixtures.createSubject("ai-rec-" + UUID.randomUUID());
+        long taskId = createTask(subjectId, null);
+
+        taskExecutionService.onTaskCompleted(taskId, usageResult());
+
+        TaskEntity task = QuarkusTransaction.requiringNew().call(() -> TaskEntity.<TaskEntity>findById(taskId));
+        assertEquals("test-model", task.actualModel);
+        assertTrue(task.executionLog.contains("Actual: test-model"), task.executionLog);
     }
 
     private static AgentResult usageResult() {
