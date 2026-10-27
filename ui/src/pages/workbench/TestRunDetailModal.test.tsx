@@ -108,4 +108,21 @@ describe("TestRunDetailModal", () => {
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(onRunSuggestion).toHaveBeenCalledWith(suggested);
     });
+
+    it("offers Send to AI for finished runs only", () => {
+        const onSendToAi = vi.fn();
+        const onClose = vi.fn();
+        const { unmount } = render(<TestRunDetailModal run={run} onClose={onClose} onOpenItem={vi.fn()}
+            onSendToAi={onSendToAi} />);
+        fireEvent.click(screen.getByRole("button", { name: "Send to AI" }));
+        expect(onClose).toHaveBeenCalled();
+        expect(onSendToAi).toHaveBeenCalledWith(run);
+        unmount();
+        for (const status of ["running", "suggested"] as const) {
+            const view = render(<TestRunDetailModal run={{ ...run, status }} onClose={vi.fn()} onOpenItem={vi.fn()}
+                onSendToAi={onSendToAi} />);
+            expect(screen.queryByRole("button", { name: "Send to AI" })).toBeNull();
+            view.unmount();
+        }
+    });
 });

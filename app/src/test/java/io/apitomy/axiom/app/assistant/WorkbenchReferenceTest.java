@@ -51,6 +51,7 @@ class WorkbenchReferenceTest {
     void templateAllowsSuggestingButNotRunningTests() throws Exception {
         String tools = template().path("allowedTools").toString();
         assertTrue(tools.contains("mcp__workbench__suggest_test"));
+        assertTrue(tools.contains("\"mcp__workbench__get_test_run\""));
         assertFalse(tools.contains("test_action_type"));
         assertFalse(tools.contains("test_tool"));
     }
@@ -79,6 +80,7 @@ class WorkbenchReferenceTest {
                         + "until the user reports a passing run.",
                 "For each node or script action type and each tool you create or change, call suggest_test with "
                         + "realistic sample inputs.",
+                "- When the user references a test run, read it with get_test_run before answering.",
                 "Receive-event nodes must correlate",
                 "- Declare in an action type's environment every secret it, or a tool it allows, needs (e.g. "
                         + "GH_TOKEN=${secret:GH_TOKEN}); secrets are never injected automatically.",
@@ -148,6 +150,14 @@ class WorkbenchReferenceTest {
         for (String code : List.of("target-missing", "duplicate-id", "edge-endpoint-missing", "malformed", "stale")) {
             assertTrue(reference.contains(code), code);
         }
+    }
+
+    @Test
+    void referenceExplainsReadingSharedTestRuns() {
+        String reference = new AssistantReferenceGenerator().generateChangeSetReference();
+        assertTrue(reference.contains("# Test runs in the workbench"));
+        assertTrue(reference.contains("get_test_run(runId)"));
+        assertTrue(reference.contains("secret values redacted"));
     }
 
     @Test

@@ -443,6 +443,15 @@ public class CompositionsResourceImpl implements CompositionsResource {
         return testRuns.suggest(compositionId, item, testValues(data.getInputs()), turns.currentTurnId(compositionId));
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public CompositionTestRun getAgentTestRun(long compositionId, String runId) {
+        requireToken(compositionId);
+        return testRuns.agentView(compositionId, runId)
+                .orElseThrow(() -> new CompositionNotFoundException(
+                        "No test run " + runId + " in composition " + compositionId));
+    }
+
     private static Map<String, Object> testValues(CompositionTestValues values) {
         return values == null ? Map.of() : values.getAdditionalProperties();
     }

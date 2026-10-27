@@ -9,6 +9,8 @@ import io.apitomy.axiom.app.DraftTestRunner;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -22,6 +24,7 @@ import java.util.Date;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -46,6 +49,12 @@ public class CompositionTestRuns {
     private final Map<Long, Deque<CompositionTestRun>> runs = new ConcurrentHashMap<>();
 
     private final Map<Long, Semaphore> permits = new ConcurrentHashMap<>();
+
+    /** The raw (unresolved) environment of each run, by composition and run id; never sent to the UI. */
+    private final Map<Long, Map<String, Map<String, String>>> environments = new ConcurrentHashMap<>();
+
+    @Inject
+    EnvironmentResolver environmentResolver;
 
     @Inject
     CompositionService service;
@@ -175,6 +184,7 @@ public class CompositionTestRuns {
         CompositionTestRun finished = copyStart(run);
         try {
             JsonNode content = service.contentOf(item);
+            rememberEnvironment(compositionId, runId, tool ? environment : environmentOf(content));
             DraftTestRunner.Result result = tool
                     ? runner.runTool(content, values, environment, subject)
                     : runner.runActionType(content, values, subject);
@@ -218,6 +228,75 @@ public class CompositionTestRuns {
     }
 
     /**
+     * Gets one of a composition's recent runs.
+     *
+     * @param compositionId the composition id
+     * @param runId         the run id
+     * @return the run, or empty when the composition has no such run
+     */
+    public Optional<CompositionTestRun> get(long compositionId, String runId) {
+        return list(compositionId).stream().filter(r -> r.getId().equals(runId)).findFirst();
+    }
+
+    /**
+     * Gets a run as it is shared with the workbench AI: secrets redacted and logs truncated (see
+     * {@link TestRunRedactor}).
+     *
+     * @param compositionId the composition id
+     * @param runId         the run id
+     * @return the redacted run, or empty when the composition has no such run
+     */
+    public Optional<CompositionTestRun> agentView(long compositionId, String runId) {
+        return get(compositionId, runId).map(run -> {
+            Map<String, String> environment = environments.getOrDefault(compositionId, Map.of()).get(runId);
+            return TestRunRedactor.redact(run, environment, secretValues(environment));
+        });
+    }
+
+    /** Resolves the secrets an environment references, skipping any that cannot be resolved. */
+    private List<String> secretValues(Map<String, String> environment) {
+        List<String> values = new ArrayList<>();
+        for (String name : TestRunRedactor.referencedSecrets(environment)) {
+            try {
+                String json = mapper.writeValueAsString(Map.of("v", "${secret:" + name + "}"));
+                values.add(environmentResolver.resolve(json).get("v"));
+            } catch (JsonProcessingException | MissingSecretException e) {
+                LOG.debugf("Secret %s not resolved for redaction: %s", name, e.getMessage());
+            }
+        }
+        return values;
+    }
+
+    /** The environment of an action type draft as a map, or an empty map. */
+    private Map<String, String> environmentOf(JsonNode content) {
+        JsonNode env = content.path("environment");
+        try {
+            if (env.isTextual() && !env.asText().isBlank()) {
+                env = mapper.readTree(env.asText());
+            }
+            if (env.isObject()) {
+                Map<String, String> result = new java.util.LinkedHashMap<>();
+                env.fields().forEachRemaining(e -> result.put(e.getKey(), e.getValue().asText()));
+                return result;
+            }
+        } catch (JsonProcessingException e) {
+            LOG.debugf("Unreadable action type environment: %s", e.getMessage());
+        }
+        return Map.of();
+    }
+
+    private void rememberEnvironment(long compositionId, String runId, Map<String, String> environment) {
+        Map<String, Map<String, String>> byRun = environments.computeIfAbsent(compositionId,
+                k -> new ConcurrentHashMap<>());
+        byRun.put(runId, new java.util.HashMap<>(environment));
+        if (byRun.size() > MAX_RUNS) {
+            java.util.Set<String> kept = new java.util.HashSet<>();
+            list(compositionId).forEach(r -> kept.add(r.getId()));
+            byRun.keySet().retainAll(kept);
+        }
+    }
+
+    /**
      * Drops the runs of a deleted composition.
      *
      * @param compositionId the composition id
@@ -225,6 +304,7 @@ public class CompositionTestRuns {
     public void forget(long compositionId) {
         runs.remove(compositionId);
         permits.remove(compositionId);
+        environments.remove(compositionId);
     }
 
     private void remember(long compositionId, CompositionTestRun run) {

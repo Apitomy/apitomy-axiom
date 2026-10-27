@@ -219,4 +219,42 @@ class CompositionTestRunsResourceTest {
         given().contentType(ContentType.JSON).body(Map.of("inputs", Map.of("who", "bob"), "subjectId", 999999))
                 .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(400);
     }
+
+    @Test
+    void agentTestRunRouteRedactsSecrets() {
+        QuarkusTransaction.requiringNew().run(() -> {
+            SecretEntity secret = new SecretEntity();
+            secret.name = "CTR_TOKEN";
+            secret.encryptedValue = encryptionService.encrypt("s3cret");
+            secret.persist();
+        });
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = envTool(id);
+        String runId = given().contentType(ContentType.JSON)
+                .body(Map.of("inputs", Map.of(), "environment",
+                        Map.of("TOKEN", "${secret:CTR_TOKEN}", "CTR_TOKEN", "literal-value")))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("stdout", containsString("token=s3cret ctr=literal-value"))
+                .extract().jsonPath().getString("id");
+        given().header("X-Axiom-Session-Token", "good")
+                .get(BASE + "/{id}/agent/test-runs/{runId}", id, runId).then().statusCode(200)
+                .body("id", equalTo(runId))
+                .body("status", equalTo("passed"))
+                .body("itemName", equalTo("env-tool"))
+                .body("stdout", containsString("token=[redacted]"))
+                .body("stdout", not(containsString("s3cret")))
+                .body("resolvedScript", notNullValue())
+                .body("environment.TOKEN", equalTo("${secret:CTR_TOKEN}"))
+                .body("environment.CTR_TOKEN", equalTo("[redacted]"));
+        given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
+                .body("[0]", not(hasKey("environment")));
+    }
+
+    @Test
+    void agentTestRunRouteRequiresTheSessionTokenAndAKnownRun() {
+        long id = CompositionsResourceTest.createComposition();
+        given().get(BASE + "/{id}/agent/test-runs/{runId}", id, "nope-1234").then().statusCode(401);
+        given().header("X-Axiom-Session-Token", "good")
+                .get(BASE + "/{id}/agent/test-runs/{runId}", id, "nope-1234").then().statusCode(404);
+    }
 }

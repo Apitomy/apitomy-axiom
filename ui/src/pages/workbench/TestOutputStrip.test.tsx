@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import type { CompositionTestRun } from "../../config/compositions";
-import { runSummary, TestOutputStrip } from "./TestOutputStrip";
+import { isFinishedRun, runSummary, sendTestRunToAiPrefill, TestOutputStrip } from "./TestOutputStrip";
 
 const runs: CompositionTestRun[] = [
     { id: "b", itemId: 11, itemType: "action-type", itemName: "greet", author: "ai", status: "failed",
@@ -113,5 +113,41 @@ describe("TestOutputStrip with Tests and Runs tabs", () => {
         expect(screen.queryByRole("button", { name: "greet" })).toBeNull();
         fireEvent.click(screen.getByRole("tab", { name: /Tests/ }));
         expect(onSelect).toHaveBeenCalledWith("tests");
+    });
+
+    it("offers Send to AI only on finished runs and shares the clicked run", () => {
+        const onSendToAi = vi.fn();
+        const pending: CompositionTestRun[] = [
+            { id: "r", itemId: 1, itemType: "tool", itemName: "busy", author: "user", status: "running",
+                startedAt: "2026-10-13T10:02:00Z" },
+            { id: "s", itemId: 2, itemType: "tool", itemName: "idea", author: "ai", status: "suggested",
+                startedAt: "2026-10-13T10:01:00Z" },
+        ];
+        render(<TestOutputStrip runs={[...pending, ...runs]} collapsed={false} onToggle={vi.fn()}
+            onOpenItem={vi.fn()} onSendToAi={onSendToAi} />);
+        expect(screen.getAllByRole("button", { name: /^Send the .* test run to the AI$/ })).toHaveLength(2);
+        expect(screen.queryByRole("button", { name: "Send the busy test run to the AI" })).toBeNull();
+        expect(screen.queryByRole("button", { name: "Send the idea test run to the AI" })).toBeNull();
+        fireEvent.click(screen.getByRole("button", { name: "Send the greet test run to the AI" }));
+        expect(onSendToAi).toHaveBeenCalledWith(runs[0]);
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("offers Send to AI in the details dialog of a finished run", () => {
+        const onSendToAi = vi.fn();
+        render(<TestOutputStrip runs={runs} collapsed={false} onToggle={vi.fn()} onOpenItem={vi.fn()}
+            onSendToAi={onSendToAi} />);
+        fireEvent.click(screen.getByRole("button", { name: "Show details of the list-labels test run" }));
+        fireEvent.click(screen.getByRole("button", { name: "Send to AI" }));
+        expect(onSendToAi).toHaveBeenCalledWith(runs[1]);
+        expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("builds the Send to AI prefill from item type and name, status and run id", () => {
+        expect(sendTestRunToAiPrefill(runs[0])).toBe("Test run `b` of action type `greet` (status: failed): ");
+        expect(sendTestRunToAiPrefill(runs[1])).toBe("Test run `a` of tool `list-labels` (status: passed): ");
+        expect(isFinishedRun(runs[0])).toBe(true);
+        expect(isFinishedRun({ ...runs[0], status: "running" })).toBe(false);
+        expect(isFinishedRun({ ...runs[0], status: "suggested" })).toBe(false);
     });
 });

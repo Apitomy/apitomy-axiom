@@ -24,7 +24,7 @@ import { ItemTab, type ItemTabHandle } from "./ItemTab";
 import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
 import type { WorkbenchToolActions } from "./WorkbenchToolCards";
-import { TestOutputStrip } from "./TestOutputStrip";
+import { sendTestRunToAiPrefill, TestOutputStrip } from "./TestOutputStrip";
 import { RunsList } from "./RunsList";
 import { RunDetailDialog } from "./RunDetailDialog";
 import { runAnalysisPrefill } from "./runAnalysis";
@@ -629,6 +629,7 @@ export function WorkbenchPage() {
                     onToggle={() => updatePrefs({ testStripCollapsed: !prefs.testStripCollapsed })}
                     onOpenItem={openItem}
                     onRunSuggestion={(run) => void runSuggestion(run)}
+                    onSendToAi={(run) => askAi(sendTestRunToAiPrefill(run))}
                     bottomTabs={{
                         active: prefs.bottomPanelTab,
                         onSelect: (tab) => updatePrefs({ bottomPanelTab: tab }),

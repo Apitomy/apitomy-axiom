@@ -30,6 +30,10 @@ export interface TestOutputStripProps {
     actions?: ReactNode;
     /** Called when the user chooses to run an AI-suggested test. */
     onRunSuggestion?(run: CompositionTestRun): void;
+    /** Called when the user chooses to share a finished run with the AI (prefills the chat). */
+    onSendToAi?(run: CompositionTestRun): void;
+    /** Disables Send to AI (e.g. while the AI is working). */
+    isSendToAiDisabled?: boolean;
     /** Id of the run whose details dialog is open; when given (with `onSelectRun`) the selection is controlled. */
     selectedRunId?: string | null;
     /** Called when the details dialog of a run opens (id) or closes (null). */
@@ -51,6 +55,25 @@ function StatusIcon({ status }: { status: CompositionTestRun["status"] }) {
         default:
             return <ExclamationTriangleIcon aria-label="error" color="var(--pf-t--global--icon--color--status--warning--default)" />;
     }
+}
+
+/**
+ * Whether a run has finished, so its results can be shared with the AI.
+ * @param run the run
+ * @returns true for passed, failed and error runs
+ */
+export function isFinishedRun(run: CompositionTestRun): boolean {
+    return run.status !== "running" && run.status !== "suggested";
+}
+
+/**
+ * Chat prefill that refers the AI to a finished test run; the AI reads its details with get_test_run.
+ * @param run the run
+ * @returns the prefill text
+ */
+export function sendTestRunToAiPrefill(run: CompositionTestRun): string {
+    const kind: string = run.itemType === "tool" ? "tool" : "action type";
+    return `Test run \`${run.id}\` of ${kind} \`${run.itemName}\` (status: ${run.status}): `;
 }
 
 /**
@@ -93,7 +116,8 @@ export function runSummary(run: CompositionTestRun): string {
  * Collapsible list of the composition's recent test runs, by the user and the AI.
  */
 export function TestOutputStrip(props: TestOutputStripProps) {
-    const { runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion, bottomTabs } = props;
+    const { runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion, onSendToAi, isSendToAiDisabled,
+        bottomTabs } = props;
     const runsTab: boolean = bottomTabs?.active === "runs";
     const [ownSelectedId, setOwnSelectedId] = useState<string | null>(null);
     const controlled: boolean = props.selectedRunId !== undefined && props.onSelectRun !== undefined;
@@ -173,6 +197,14 @@ export function TestOutputStrip(props: TestOutputStripProps) {
                                                 onRunSuggestion?.(run);
                                             }}>Run…</Button>
                                     )}
+                                    {onSendToAi && isFinishedRun(run) && (
+                                        <Button variant="link" isInline size="sm" isDisabled={isSendToAiDisabled}
+                                            aria-label={`Send the ${run.itemName} test run to the AI`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onSendToAi(run);
+                                            }}>Send to AI</Button>
+                                    )}
                                 </div>
                             </li>
                         ))}
@@ -181,7 +213,8 @@ export function TestOutputStrip(props: TestOutputStripProps) {
             )}
             {selected && (
                 <TestRunDetailModal run={selected} onClose={() => setSelectedId(null)} onOpenItem={onOpenItem}
-                    onRunSuggestion={onRunSuggestion} />
+                    onRunSuggestion={onRunSuggestion} onSendToAi={onSendToAi}
+                    isSendToAiDisabled={isSendToAiDisabled} />
             )}
         </section>
     );
