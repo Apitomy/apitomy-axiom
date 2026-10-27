@@ -10653,6 +10653,16 @@
               "$ref": "#/components/schemas/ActiveBranch"
             }
           },
+          "joinArrivals": {
+            "description": "Per AND-join node id, the incoming edge ids whose branches have arrived but not yet fired",
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
           "startedOn": {
             "format": "date-time",
             "type": "string"
