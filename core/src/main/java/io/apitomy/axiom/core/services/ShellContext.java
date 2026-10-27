@@ -10,8 +10,12 @@ import java.util.Deque;
  * placeholders where bash never expands anything (quoted heredoc bodies).
  *
  * <p>Handles single and double quotes, backslash escapes, heredocs ({@code <<WORD}, {@code <<-WORD}, with a
- * quoted or unquoted delimiter, several per line), and ignores {@code <<<} here-strings and {@code <<} inside
- * arithmetic ({@code $(( ))}, {@code (( ))}). It is a pragmatic scanner for templates, not a full bash parser.</p>
+ * quoted or unquoted delimiter, several per line), and comments: an unquoted {@code #} at the start of a word
+ * starts a comment that runs to the end of the line without changing quote state. It ignores {@code <<<}
+ * here-strings and treats {@code #} inside arithmetic ({@code $(( ))}, {@code (( ))}) as literal. A {@code #}
+ * right after a closing {@code $( )} or {@code $(( ))}, or after a backslash-newline that joins it to the
+ * preceding word, is glued to that word and does not start a comment. It is a
+ * pragmatic scanner for templates, not a full bash parser.</p>
  */
 public final class ShellContext {
 
@@ -32,6 +36,14 @@ public final class ShellContext {
     private record PendingHeredoc(String delimiter, boolean quoted, boolean stripTabs) {
     }
 
+    /** The characters where bash ends one word and can start another. */
+    private static final String SHELL_WORD_BOUNDARIES = ";|&<>()";
+
+    /** True where bash ends one word and can start another: whitespace or a shell metacharacter. */
+    private static boolean isShellWordBoundary(char c) {
+        return Character.isWhitespace(c) || SHELL_WORD_BOUNDARIES.indexOf(c) >= 0;
+    }
+
     private ShellContext() {
     }
 
@@ -47,7 +59,13 @@ public final class ShellContext {
         Arrays.fill(contexts, Context.UNQUOTED);
         Deque<PendingHeredoc> pending = new ArrayDeque<>();
         char quote = 0;
-        int arithmeticDepth = 0;
+        // One entry per open "((" / "(": true when it was opened with '$', i.e. it is an expansion
+        // that stays part of the surrounding word once closed.
+        Deque<Boolean> arithmetic = new ArrayDeque<>();
+        Deque<Boolean> parens = new ArrayDeque<>();
+        // Index at which a '#' is glued to the preceding word even though the previous character is
+        // a word boundary: right after a closing $( ) or $(( )), or after a line continuation.
+        int gluedAt = -1;
         int i = 0;
         while (i < n) {
             char c = script.charAt(i);
@@ -76,7 +94,23 @@ public final class ShellContext {
             }
             // Unquoted
             if (c == '\\' && i + 1 < n) {
+                // bash removes a backslash-newline before splitting words, so whatever follows
+                // continues the word that preceded the backslash.
+                if (script.charAt(i + 1) == '\n'
+                        && (gluedAt == i || (i > 0 && !isShellWordBoundary(script.charAt(i - 1))))) {
+                    gluedAt = i + 2;
+                }
                 i += 2;
+                continue;
+            }
+            // A '#' at the start of a word comments out the rest of the line; bash never sees
+            // quotes inside it, so quote state must not change. Inside arithmetic a '#' is a
+            // literal (base notation, operators), not a comment.
+            if (c == '#' && arithmetic.isEmpty() && i != gluedAt && startsComment(script, i)) {
+                i++;
+                while (i < n && script.charAt(i) != '\n') {
+                    i++;
+                }
                 continue;
             }
             if (c == '\'' || c == '"') {
@@ -84,21 +118,29 @@ public final class ShellContext {
                 i++;
                 continue;
             }
+            boolean dollar = i > 0 && script.charAt(i - 1) == '$';
             if (c == '(' && i + 1 < n && script.charAt(i + 1) == '(') {
-                arithmeticDepth++;
+                arithmetic.push(dollar);
                 i += 2;
                 continue;
             }
-            if (c == ')' && arithmeticDepth > 0 && i + 1 < n && script.charAt(i + 1) == ')') {
-                arithmeticDepth--;
+            if (c == ')' && !arithmetic.isEmpty() && i + 1 < n && script.charAt(i + 1) == ')') {
+                if (arithmetic.pop()) {
+                    gluedAt = i + 2;
+                }
                 i += 2;
                 continue;
+            }
+            if (c == '(') {
+                parens.push(dollar);
+            } else if (c == ')' && !parens.isEmpty() && parens.pop()) {
+                gluedAt = i + 1;
             }
             if (script.startsWith("<<<", i)) {
                 i += 3;
                 continue;
             }
-            if (c == '<' && arithmeticDepth == 0 && script.startsWith("<<", i)) {
+            if (c == '<' && arithmetic.isEmpty() && script.startsWith("<<", i)) {
                 i = parseHeredocOperator(script, i + 2, pending);
                 continue;
             }
@@ -109,6 +151,13 @@ public final class ShellContext {
             i++;
         }
         return contexts;
+    }
+
+    /** True when the {@code #} at {@code i} starts a comment: it must open a word, that is, sit at the
+     * start of the text or right after a word boundary. A {@code #} glued to a preceding word or closing
+     * quote is literal ({@code a#b}, {@code 'x'#y}, {@code ${#var}}). */
+    private static boolean startsComment(String script, int i) {
+        return i == 0 || isShellWordBoundary(script.charAt(i - 1));
     }
 
     /** Parses {@code [-][blanks]WORD} after {@code <<}; returns the index after the word. */
@@ -148,7 +197,7 @@ public final class ShellContext {
                 i += 2;
                 continue;
             }
-            if (Character.isWhitespace(c) || ";|&<>()".indexOf(c) >= 0) {
+            if (isShellWordBoundary(c)) {
                 break;
             }
             delimiter.append(c);

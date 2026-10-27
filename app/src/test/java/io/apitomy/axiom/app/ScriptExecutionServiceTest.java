@@ -234,6 +234,19 @@ class ScriptExecutionServiceTest {
     }
 
     @Test
+    void apostropheInsideCommentDoesNotQuoteLaterPlaceholder() {
+        Map<String, String> env = new LinkedHashMap<>();
+
+        String resolved = substitute("# sync-target's flag\n{{inputs.title}}\n", "1", env);
+
+        // An apostrophe in a comment starts no quote region, so the placeholder on the
+        // next line resolves in the unquoted form, not the single-quote break-out form
+        // that would arrive as literal quote characters.
+        assertEquals("# sync-target's flag\n\"${AXIOM_INPUT_title}\"\n", resolved);
+        assertEquals("1", env.get("AXIOM_INPUT_title"));
+    }
+
+    @Test
     void whitespaceValueInDoubleQuotesStaysSingleArgument()
             throws IOException, InterruptedException {
         Map<String, String> env = new LinkedHashMap<>();
