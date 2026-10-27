@@ -225,6 +225,34 @@ function compactJson(value) {
 }
 
 /**
+ * Formats a workbench test run (already redacted by the backend) for the AI.
+ * @param {object} run the CompositionTestRun agent view
+ * @returns {string} the formatted run
+ */
+function formatTestRun(run) {
+    const head = `Test run ${run.id}: ${run.itemType} ${run.itemName} ${run.status}`
+        + (run.exitCode !== undefined && run.exitCode !== null ? ` (exit ${run.exitCode})` : "")
+        + (run.durationMs !== undefined && run.durationMs !== null ? ` in ${run.durationMs}ms` : "")
+        + `, by ${run.author}, started ${run.startedAt}`
+        + (run.executionMode ? `, mode ${run.executionMode}` : "")
+        + (run.subjectId ? `, subject ${run.subjectId}` : "");
+    const lines = [head];
+    if (run.message) lines.push(`Message: ${run.message}`);
+    lines.push(`Inputs: ${JSON.stringify(run.inputs || {})}`);
+    if (run.environment && Object.keys(run.environment).length > 0) {
+        lines.push(`Environment (secrets redacted): ${JSON.stringify(run.environment)}`);
+    }
+    if (run.outputs) lines.push(`Outputs: ${JSON.stringify(truncateDeep(run.outputs))}`);
+    if (run.problems && run.problems.length > 0) {
+        lines.push("Problems:\n" + run.problems.map(p => `- ${p}`).join("\n"));
+    }
+    if (run.stdout) lines.push("stdout:\n" + run.stdout);
+    if (run.stderr) lines.push("stderr:\n" + run.stderr);
+    if (run.resolvedScript) lines.push("Script that ran:\n" + run.resolvedScript);
+    return lines.join("\n");
+}
+
+/**
  * Formats workflow runs, one line each.
  * @param {Array<object>} runs the run summaries (newest first)
  * @returns {string} the lines joined by newlines
@@ -425,6 +453,21 @@ const TOOLS = [
             await axiomApi("POST", `${agentBase()}/test-suggestions`, body);
             return `Suggested a test of ${body.type} ${body.name} with inputs ${JSON.stringify(body.inputs)}. `
                 + "The user can run it from the Test output strip; ask them to tell you the result.";
+        },
+    },
+    {
+        name: "get_test_run",
+        description: "Get a workbench test run by id (e.g. one the user sent you from the Tests tab): status, inputs, "
+            + "environment (secrets redacted), outputs, problems, stdout/stderr (truncated) and the script that ran. "
+            + "Read-only.",
+        parameters: [
+            { name: "runId", type: "string", description: "The test run id", required: true },
+        ],
+        handler: async (args) => {
+            const run = await axiomApi("GET", `${agentBase()}/test-runs/${encodeURIComponent(args.runId)}`,
+                undefined, { allow404: true });
+            if (run === null) return `Test run '${args.runId}' not found (only the 50 most recent runs are kept).`;
+            return formatTestRun(JSON.parse(run));
         },
     },
     {
@@ -707,7 +750,7 @@ async function main() {
 
 module.exports = {
     summarizeEvent, pickPath, truncateDeep, formatProblems, suggestionBody, formatRunList, formatRun, formatTrace,
-    formatSubscriptionPreview, validateArgs, TOOLS,
+    formatSubscriptionPreview, formatTestRun, validateArgs, TOOLS,
 };
 
 if (require.main === module) {

@@ -96,7 +96,8 @@ public class AssistantReferenceGenerator {
      * @return Markdown workbench reference
      */
     public String generateChangeSetReference() {
-        return CHANGE_SET_REFERENCE + "\n" + expressionScopesReference() + "\n" + WORKBENCH_SUBSCRIPTIONS_REFERENCE;
+        return CHANGE_SET_REFERENCE + "\n" + expressionScopesReference() + "\n" + WORKBENCH_SUBSCRIPTIONS_REFERENCE
+                + "\n" + WORKBENCH_TEST_RUNS_REFERENCE;
     }
 
     /**
@@ -133,6 +134,17 @@ public class AssistantReferenceGenerator {
               `evaluate_expression` (scope `subscription-filter`).
             - Do not set `enabled`: publishing leaves subscriptions disabled, and the user enables each one in the
               workbench.
+            """;
+
+    private static final String WORKBENCH_TEST_RUNS_REFERENCE = """
+            # Test runs in the workbench
+
+            The user runs tests of drafts from the workbench's Tests tab, and may send you one with a message that
+            names the item and the test run id (e.g. `Test run 1b2c3d4e-...`). Results are never sent to you
+            automatically. When a message references a test run, read it with `get_test_run(runId)` before
+            answering: it returns the status, inputs, environment (secret values redacted; `${secret:NAME}`
+            references are kept), outputs, problems, stdout/stderr (truncated) and the script that ran. Base your
+            fix on that run and the user's note, then `suggest_test` again so the user can re-run it.
             """;
 
     private static final String CHANGE_SET_REFERENCE = """

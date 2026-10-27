@@ -6703,6 +6703,53 @@
         }
       ]
     },
+    "/compositions/{compositionId}/agent/test-runs/{runId}": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: get a test run",
+        "description": "A test run of the composition for the AI, with secrets redacted: environment values other than `${secret:NAME}` references are replaced, the values of referenced secrets are scrubbed from all text, and stdout and stderr are truncated. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "getAgentTestRun",
+        "responses": {
+          "200": {
+            "description": "The run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionTestRun"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ]
+    },
     "/stream/events/{eventId}/runs": {
       "post": {
         "tags": [
@@ -12276,6 +12323,13 @@
         "type": "object",
         "additionalProperties": true
       },
+      "CompositionTestEnvironment": {
+        "description": "Environment variables of a test run by name. Only in the agent view of a run, where `${secret:NAME}` references are kept and other values are redacted.",
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
       "CompositionTestRequest": {
         "type": "object",
         "properties": {
@@ -12424,6 +12478,9 @@
               "node"
             ],
             "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/CompositionTestEnvironment"
           }
         }
       },
