@@ -9,19 +9,20 @@ describe("toFlowInstance", () => {
             status: "failed", currentNodeId: "n2", failureReason: "boom", workflowContent: {},
             context: { a: 1 }, startedOn: "2026-10-14T10:00:00Z", completedOn: "2026-10-14T10:01:00Z",
             activeBranches: [{ branchId: "b", nodeId: "n2" }, {}],
+            joinArrivals: { j1: ["e"] },
             history: [
                 { nodeId: "n1", nodeName: "Start", enteredOn: "e1", completedOn: "c1", output: { x: 1 },
-                    edgeId: "e", edgeCondition: "ok", input: { i: 1 }, title: "Ti" },
+                    edgeId: "e", edgeCondition: "ok", input: { i: 1 }, title: "Ti", branchId: "b" },
                 { nodeId: "n2", nodeName: "Two", enteredOn: "e2" },
             ],
         } as WorkflowInstanceInfo;
         expect(toFlowInstance(run)).toEqual({
             id: "4", workflowId: "2", currentNodeId: "n2",
             activeBranches: [{ branchId: "b", nodeId: "n2" }, { branchId: "", nodeId: "" }],
-            joinArrivals: {}, status: "failed", context: { a: 1 },
+            joinArrivals: { j1: ["e"] }, status: "failed", context: { a: 1 },
             history: [
                 { nodeId: "n1", nodeName: "Start", edgeId: "e", edgeCondition: "ok", enteredOn: "e1",
-                    completedOn: "c1", output: { x: 1 }, input: { i: 1 }, title: "Ti" },
+                    completedOn: "c1", output: { x: 1 }, input: { i: 1 }, title: "Ti", branchId: "b" },
                 { nodeId: "n2", nodeName: "Two", edgeId: "", edgeCondition: "", enteredOn: "e2",
                     completedOn: "", output: {} },
             ],
@@ -35,6 +36,7 @@ describe("toFlowInstance", () => {
         expect(inst.currentNodeId).toBeNull();
         expect(inst.activeBranches).toEqual([]);
         expect(inst.history).toEqual([]);
+        expect(inst.joinArrivals).toEqual({});
         expect(inst.context).toEqual({});
         expect(inst.updatedOn).toBe("s");
     });

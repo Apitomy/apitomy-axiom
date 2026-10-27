@@ -24,7 +24,7 @@ export function toFlowInstance(run: WorkflowInstanceInfo): FlowInstance {
             branchId: b.branchId ?? "",
             nodeId: b.nodeId ?? "",
         })),
-        joinArrivals: {},
+        joinArrivals: run.joinArrivals ?? {},
         status: run.status as FlowInstance["status"],
         context: run.context || {},
         history: (run.history ?? []).map((h) => ({
@@ -34,6 +34,7 @@ export function toFlowInstance(run: WorkflowInstanceInfo): FlowInstance {
             output: h.output ?? {},
             ...(h.input ? { input: h.input } : {}),
             ...(h.title ? { title: h.title } : {}),
+            ...(h.branchId ? { branchId: h.branchId } : {}),
         })),
         failureReason: run.failureReason,
         createdOn: run.startedOn,
