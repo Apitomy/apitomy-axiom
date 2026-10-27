@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, mergeTestRun, mergeTestRuns, resolveChangeSet, saveItem, setItemEnabled, subscribeComposition } from "./compositions";
+import { ApiError, mergeTestRun, mergeTestRuns, removeTestRuns, resolveChangeSet, saveItem, setItemEnabled, subscribeComposition } from "./compositions";
 import type { CompositionTestRun, TestRunStatus } from "./compositions";
 import { sseClient } from "./sse";
 
@@ -72,5 +72,17 @@ describe("mergeTestRun keeps finished runs", () => {
     it("mergeTestRuns keeps runs already in state and prefers finished ones", () => {
         const merged = mergeTestRuns([r("live", "running"), r("b", "passed")], [r("b", "running"), r("old", "passed")]);
         expect(merged.map((x) => `${x.id}:${x.status}`)).toEqual(["live:running", "b:passed", "old:passed"]);
+    });
+});
+
+describe("removeTestRuns", () => {
+    const r = (id: string): CompositionTestRun => ({
+        id, itemId: 1, itemType: "tool", itemName: "t", author: "user", status: "passed", startedAt: "",
+    });
+
+    it("drops the removed runs and keeps the list when nothing matches", () => {
+        const runs: CompositionTestRun[] = [r("a"), r("b"), r("c")];
+        expect(removeTestRuns(runs, ["a", "c"]).map((x) => x.id)).toEqual(["b"]);
+        expect(removeTestRuns(runs, ["zzz"])).toBe(runs);
     });
 });

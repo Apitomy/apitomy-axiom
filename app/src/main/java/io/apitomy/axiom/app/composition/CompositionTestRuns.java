@@ -218,6 +218,60 @@ public class CompositionTestRuns {
     }
 
     /**
+     * Removes one finished run or suggestion and tells the workbench about it over SSE.
+     *
+     * @param compositionId the composition id
+     * @param runId         the run id
+     * @throws CompositionNotFoundException when the composition has no such run
+     * @throws TestRunRunningException      when the run is still running
+     */
+    public void remove(long compositionId, String runId) {
+        Deque<CompositionTestRun> deque = runs.get(compositionId);
+        if (deque == null) {
+            throw new CompositionNotFoundException("Test run not found: " + runId);
+        }
+        synchronized (deque) {
+            CompositionTestRun run = deque.stream()
+                    .filter(r -> r.getId().equals(runId))
+                    .findFirst()
+                    .orElseThrow(() -> new CompositionNotFoundException("Test run not found: " + runId));
+            if (run.getStatus() == CompositionTestRun.Status.RUNNING) {
+                throw new TestRunRunningException(runId);
+            }
+            deque.remove(run);
+        }
+        sseEvents.fire(SseEvent.compositionTestRunsRemoved(compositionId, List.of(runId)));
+    }
+
+    /**
+     * Removes every run and suggestion of a composition that isn't running, and tells the workbench about the
+     * removed ones over SSE.
+     *
+     * @param compositionId the composition id
+     * @return the ids of the removed runs
+     */
+    public List<String> clear(long compositionId) {
+        Deque<CompositionTestRun> deque = runs.get(compositionId);
+        if (deque == null) {
+            return List.of();
+        }
+        List<String> removed = new ArrayList<>();
+        synchronized (deque) {
+            deque.removeIf(r -> {
+                boolean finished = r.getStatus() != CompositionTestRun.Status.RUNNING;
+                if (finished) {
+                    removed.add(r.getId());
+                }
+                return finished;
+            });
+        }
+        if (!removed.isEmpty()) {
+            sseEvents.fire(SseEvent.compositionTestRunsRemoved(compositionId, removed));
+        }
+        return removed;
+    }
+
+    /**
      * Drops the runs of a deleted composition.
      *
      * @param compositionId the composition id
