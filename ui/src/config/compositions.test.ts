@@ -69,6 +69,11 @@ describe("mergeTestRun keeps finished runs", () => {
         expect(mergeTestRun([r("a", "running")], r("a", "failed"))[0].status).toBe("failed");
     });
 
+    it("replaces a suggestion in place with its running run", () => {
+        const merged = mergeTestRun([r("n", "passed"), r("s", "suggested"), r("o", "passed")], r("s", "running"));
+        expect(merged.map((x) => `${x.id}:${x.status}`)).toEqual(["n:passed", "s:running", "o:passed"]);
+    });
+
     it("mergeTestRuns keeps runs already in state and prefers finished ones", () => {
         const merged = mergeTestRuns([r("live", "running"), r("b", "passed")], [r("b", "running"), r("old", "passed")]);
         expect(merged.map((x) => `${x.id}:${x.status}`)).toEqual(["live:running", "b:passed", "old:passed"]);

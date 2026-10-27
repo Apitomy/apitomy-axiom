@@ -83,7 +83,7 @@ public class CompositionTestRuns {
      */
     public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
                                   Long subjectId, String author, String turnId) {
-        return run(compositionId, item, inputs, Map.of(), subjectId, author, turnId, null);
+        return run(compositionId, item, inputs, Map.of(), subjectId, author, turnId, null, null);
     }
 
     /**
@@ -99,13 +99,16 @@ public class CompositionTestRuns {
      * @param author        {@link CompositionService#AUTHOR_USER} or {@link CompositionService#AUTHOR_AI}
      * @param turnId        the AI turn id, or {@code null}
      * @param runId         the id to use; a new id is generated when it is null, invalid or already used
+     * @param suggestionId  the id of the AI suggestion this run carries out, or {@code null}; when that
+     *                      suggestion still exists for the same item and is still suggested, the run replaces
+     *                      it in place and takes its id (otherwise the run is added as usual)
      * @return the finished run
      * @throws IllegalArgumentException for the workflow or an unknown subject
      * @throws TooManyTestRunsException when the composition already has the maximum number of runs in progress
      */
     public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
                                   Map<String, String> environment, Long subjectId, String author, String turnId,
-                                  String runId) {
+                                  String runId, String suggestionId) {
         boolean tool = "tool".equals(item.itemType);
         if (!tool && !"action-type".equals(item.itemType)) {
             throw new IllegalArgumentException("Only action types and tools can be test-run");
@@ -124,7 +127,7 @@ public class CompositionTestRuns {
         try {
             return execute(compositionId, item, tool, inputs != null ? inputs : Map.of(),
                     environment != null ? environment : Map.of(), subject, subjectId, author, turnId,
-                    runIdFor(compositionId, runId));
+                    runIdFor(compositionId, runId), suggestionId);
         } finally {
             semaphore.release();
         }
@@ -165,7 +168,7 @@ public class CompositionTestRuns {
     private CompositionTestRun execute(long compositionId, CompositionItemEntity item, boolean tool,
                                        Map<String, Object> values, Map<String, String> environment,
                                        SubjectEntity subject, Long subjectId, String author, String turnId,
-                                       String runId) {
+                                       String runId, String suggestionId) {
         CompositionTestRun run = new CompositionTestRun();
         run.setId(runId);
         run.setItemId(item.id);
@@ -178,7 +181,10 @@ public class CompositionTestRuns {
         run.setExecutionMode(executionModeOf(item));
         run.setStartedAt(Date.from(Instant.now()));
         run.setInputs(values(values));
-        remember(compositionId, run);
+        if (!replaceSuggestion(compositionId, suggestionId, run)) {
+            remember(compositionId, run);
+        }
+        runId = run.getId();
         fire(compositionId, run);
 
         CompositionTestRun finished = copyStart(run);
@@ -379,6 +385,42 @@ public class CompositionTestRuns {
                 deque.removeLast();
             }
         }
+    }
+
+    /**
+     * Puts a starting run in the place of a suggestion, taking the suggestion's id, when the suggestion still
+     * exists for the same item and is still suggested. The suggestion's remembered environment (if any) is
+     * dropped, as the run remembers its own under the same id.
+     *
+     * @return whether the suggestion was replaced
+     */
+    private boolean replaceSuggestion(long compositionId, String suggestionId, CompositionTestRun run) {
+        if (suggestionId == null) {
+            return false;
+        }
+        Deque<CompositionTestRun> deque = runs.get(compositionId);
+        if (deque == null) {
+            return false;
+        }
+        synchronized (deque) {
+            List<CompositionTestRun> copy = new ArrayList<>(deque);
+            for (int i = 0; i < copy.size(); i++) {
+                CompositionTestRun existing = copy.get(i);
+                if (existing.getId().equals(suggestionId)) {
+                    if (existing.getStatus() != CompositionTestRun.Status.SUGGESTED
+                            || !existing.getItemId().equals(run.getItemId())) {
+                        return false;
+                    }
+                    run.setId(suggestionId);
+                    copy.set(i, run);
+                    deque.clear();
+                    deque.addAll(copy);
+                    forgetEnvironments(compositionId, List.of(suggestionId));
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void replace(long compositionId, CompositionTestRun finished) {

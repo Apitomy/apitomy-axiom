@@ -30,6 +30,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -224,6 +225,57 @@ class CompositionTestRunsResourceTest {
         given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
                 .body("$", hasSize(1)).body("[0].status", equalTo("suggested"))
                 .body("[0]", not(hasKey("exitCode")));
+    }
+
+    private static String suggest(long id, String name) {
+        return given().header("X-Axiom-Session-Token", "good").contentType(ContentType.JSON)
+                .body(Map.of("type", "action-type", "name", name, "inputs", Map.of("who", "ann")))
+                .post(BASE + "/{id}/agent/test-suggestions", id).then().statusCode(200)
+                .extract().jsonPath().getString("id");
+    }
+
+    @Test
+    void runningASuggestionReplacesItInPlace() {
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = scriptActionType(id);
+        String older = suggest(id, "greet");
+        String suggestion = suggest(id, "greet");
+        String newer = runTest(id, itemId);
+        given().contentType(ContentType.JSON)
+                .body(Map.of("inputs", Map.of("who", "edited"), "runId", "client-run-0002",
+                        "suggestionId", suggestion))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("id", equalTo(suggestion))
+                .body("status", equalTo("passed"))
+                .body("author", equalTo("user"))
+                .body("outputs.greeting", equalTo("hi edited"));
+        given().get(BASE + "/{id}/test-runs", id).then().statusCode(200)
+                .body("$", hasSize(3))
+                .body("[0].id", equalTo(newer))
+                .body("[1].id", equalTo(suggestion)).body("[1].status", equalTo("passed"))
+                .body("[2].id", equalTo(older)).body("[2].status", equalTo("suggested"));
+        given().header("X-Axiom-Session-Token", "good")
+                .get(BASE + "/{id}/agent/test-runs/{runId}", id, suggestion).then().statusCode(200)
+                .body("status", equalTo("passed"));
+    }
+
+    @Test
+    void runningAnAlreadyRunSuggestionAddsANewRun() {
+        long id = CompositionsResourceTest.createComposition();
+        long itemId = scriptActionType(id);
+        String suggestion = suggest(id, "greet");
+        Map<String, Object> body = Map.of("inputs", Map.of("who", "bob"), "suggestionId", suggestion);
+        given().contentType(ContentType.JSON).body(body)
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .body("id", equalTo(suggestion));
+        String rerun = given().contentType(ContentType.JSON).body(body)
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200)
+                .extract().jsonPath().getString("id");
+        assertNotEquals(suggestion, rerun);
+        given().contentType(ContentType.JSON)
+                .body(Map.of("inputs", Map.of("who", "bob"), "suggestionId", "unknown-suggestion"))
+                .post(BASE + "/{id}/items/{itemId}/test", id, itemId).then().statusCode(200);
+        given().get(BASE + "/{id}/test-runs", id).then().statusCode(200).body("$", hasSize(3));
     }
 
     @Test

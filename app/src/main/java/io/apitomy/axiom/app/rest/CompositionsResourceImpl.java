@@ -421,7 +421,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
                     environment.put(k, v != null ? String.valueOf(v) : ""));
         }
         return testRuns.run(compositionId, item, testValues(data.getInputs()), environment, data.getSubjectId(),
-                CompositionService.AUTHOR_USER, null, data.getRunId());
+                CompositionService.AUTHOR_USER, null, data.getRunId(), data.getSuggestionId());
     }
 
     /** {@inheritDoc} */

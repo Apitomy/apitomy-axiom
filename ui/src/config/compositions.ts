@@ -389,7 +389,8 @@ const MAX_TEST_RUNS: number = 50;
 export function mergeTestRun(runs: CompositionTestRun[], run: CompositionTestRun): CompositionTestRun[] {
     const existing: CompositionTestRun | undefined = runs.find((r) => r.id === run.id);
     if (existing) {
-        if (existing.status !== "running" && run.status === "running") {
+        // A late "running" event never overwrites a finished run, but does replace the suggestion it carries out.
+        if (existing.status !== "running" && existing.status !== "suggested" && run.status === "running") {
             return runs;
         }
         return runs.map((r) => (r.id === run.id ? run : r));
