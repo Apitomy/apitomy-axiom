@@ -73,6 +73,8 @@ public class OpenCodeAgent implements Agent {
 
     /** Tracks running sessions for cancellation support. */
     private final Map<String, String> runningSessions = new ConcurrentHashMap<>();
+    /** Working directory of each running execution, for directory-scoped abort calls. */
+    private final Map<String, String> runningDirectories = new ConcurrentHashMap<>();
     private volatile OpenCodeModelDiscovery modelDiscovery;
     private volatile String modelSource = "configured";
 
@@ -152,11 +154,12 @@ public class OpenCodeAgent implements Agent {
     @Override
     public void cancel(String executionId) {
         String sessionId = runningSessions.remove(executionId);
+        String directory = runningDirectories.remove(executionId);
         if (sessionId != null) {
             LOG.infof("Cancelling execution %s (session: %s)", executionId, sessionId);
             try {
                 OpenCodeClient client = getOrStartServer();
-                client.abortSession(sessionId);
+                client.abortSession(sessionId, directory);
             } catch (Exception e) {
                 LOG.warnf("Failed to abort session for execution %s: %s",
                         executionId, e.getMessage());
@@ -235,20 +238,31 @@ public class OpenCodeAgent implements Agent {
         int timeoutSecs = request.getTimeoutSeconds() > 0
                 ? request.getTimeoutSeconds() : defaultTimeoutSeconds;
 
+        String directory = request.getWorkingDirectory() != null
+                ? request.getWorkingDirectory().toAbsolutePath().toString() : null;
+
         return CompletableFuture.supplyAsync(() -> {
+            String sessionId = null;
             try {
+                // Resolve and validate the model before doing any work
+                String model = resolveModel(request);
+                OpenCodeClient.validateModel(model);
+
                 OpenCodeClient client = getOrStartServer();
 
                 // Create session (use the caller's configured timeout so this
                 // doesn't spuriously time out under server load -- see
                 // OpenCodeClient.createSession javadoc)
-                String sessionId = client.createSession(
-                        "axiom-" + System.currentTimeMillis(), timeoutSecs);
-                LOG.infof("OpenCode session created: %s", sessionId);
+                sessionId = client.createSession(
+                        "axiom-" + System.currentTimeMillis(), directory, timeoutSecs);
+                LOG.infof("OpenCode session created: %s (directory: %s)", sessionId, directory);
 
                 // Track session for cancellation
                 if (request.getExecutionId() != null) {
                     runningSessions.put(request.getExecutionId(), sessionId);
+                    if (directory != null) {
+                        runningDirectories.put(request.getExecutionId(), directory);
+                    }
                 }
 
                 // Build structured output format if schema provided
@@ -259,9 +273,6 @@ public class OpenCodeAgent implements Agent {
                     formatNode.set("schema", MAPPER.readTree(jsonSchema));
                     format = formatNode;
                 }
-
-                // Resolve model
-                String model = resolveModel(request);
 
                 // Map tool permissions from Axiom format to OpenCode format
                 Map<String, Object> permissions = OpenCodePermissionMapper.mapPermissions(
@@ -278,11 +289,12 @@ public class OpenCodeAgent implements Agent {
 
                 // Send prompt and wait for response
                 JsonNode response = client.sendPrompt(
-                        sessionId, fullPrompt, model, format, permissions, timeoutSecs);
+                        sessionId, directory, fullPrompt, model, format, permissions, timeoutSecs);
 
                 // Clean up session tracking
                 if (request.getExecutionId() != null) {
                     runningSessions.remove(request.getExecutionId());
+                    runningDirectories.remove(request.getExecutionId());
                 }
 
                 // Parse response
@@ -291,11 +303,33 @@ public class OpenCodeAgent implements Agent {
             } catch (Exception e) {
                 if (request.getExecutionId() != null) {
                     runningSessions.remove(request.getExecutionId());
+                    runningDirectories.remove(request.getExecutionId());
                 }
-                LOG.errorf(e, "OpenCode prompt execution failed");
-                return AgentResult.failure("OpenCode error: " + e.getMessage());
+                LOG.errorf(e, "OpenCode prompt execution failed (session: %s, directory: %s)",
+                        sessionId, directory);
+                return failureResult(e, sessionId, directory);
             }
         });
+    }
+
+    /**
+     * Builds a failed result carrying the error in both the error message and the execution
+     * log, together with the session ID, so the failure is visible on the task and the run.
+     */
+    private AgentResult failureResult(Exception e, String sessionId, String directory) {
+        String message = "OpenCode error: " + e.getMessage();
+        StringBuilder log = new StringBuilder(message);
+        if (sessionId != null) {
+            log.append("\nOpenCode session: ").append(sessionId);
+        }
+        if (directory != null) {
+            log.append("\nWorking directory: ").append(directory);
+        }
+        if (serverManager != null && serverManager.getClient() != null) {
+            log.append("\nOpenCode server: ").append(serverManager.getClient().getBaseUrl());
+        }
+        return new AgentResult(false, null, message, log.toString(), sessionId,
+                null, null, null, getType(), null);
     }
 
     /**

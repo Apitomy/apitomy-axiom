@@ -328,7 +328,7 @@ public class WorkflowExecutionService {
                     task.executionLog = appendReason(task.executionLog, reason);
                     reconcileTaskTraceNodeFailed(task);
                     sseEvents.fire(SseEvent.taskUpdated(task.subjectId, task.id, "Failed"));
-                    result = new NodeResult(NodeResultStatus.FAILED, Map.of());
+                    result = new NodeResult(NodeResultStatus.FAILED, Map.of("error", reason));
                 } else {
                     result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
                 }
@@ -336,7 +336,7 @@ public class WorkflowExecutionService {
                 result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
             }
         } else {
-            result = new NodeResult(NodeResultStatus.FAILED, Map.of());
+            result = failedNodeResult(task);
         }
 
         advanceWorkflow(entity, workflow, instance, task.nodeId, result);
@@ -1130,6 +1130,27 @@ public class WorkflowExecutionService {
      * @param reason      the failure reason to append
      * @return the combined log text
      */
+    /**
+     * Builds the FAILED node result for a failed task, carrying the task's failure detail as
+     * {@code error} so the run's failure reason is not just {@code Node returned FAILED: {}}.
+     *
+     * @param task the failed task
+     * @return a FAILED node result with an {@code error} output
+     */
+    static NodeResult failedNodeResult(TaskEntity task) {
+        String reason = task.output;
+        if (reason == null || reason.isBlank()) {
+            reason = task.executionLog;
+        }
+        if (reason == null || reason.isBlank()) {
+            reason = "Task " + task.id + " failed";
+        }
+        if (reason.length() > 2000) {
+            reason = reason.substring(0, 1997) + "...";
+        }
+        return new NodeResult(NodeResultStatus.FAILED, Map.of("error", reason));
+    }
+
     private String appendReason(String existingLog, String reason) {
         if (existingLog == null || existingLog.isBlank()) {
             return reason;

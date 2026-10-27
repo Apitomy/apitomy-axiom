@@ -8,6 +8,8 @@ import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -96,13 +98,30 @@ public class OpenCodeClient {
      * @throws InterruptedException if the thread is interrupted
      */
     public String createSession(String title, int timeoutSeconds) throws IOException, InterruptedException {
+        return createSession(title, null, timeoutSeconds);
+    }
+
+    /**
+     * Creates a new session scoped to the given working directory. OpenCode resolves the
+     * project/instance from the {@code directory} query parameter, so the session's tools
+     * operate in that directory rather than the {@code opencode serve} process's cwd.
+     *
+     * @param title          optional session title
+     * @param directory      the working directory for the session, or null for the server's cwd
+     * @param timeoutSeconds request timeout in seconds
+     * @return the session ID
+     * @throws IOException          if the HTTP request fails
+     * @throws InterruptedException if the thread is interrupted
+     */
+    public String createSession(String title, String directory, int timeoutSeconds)
+            throws IOException, InterruptedException {
         ObjectNode body = MAPPER.createObjectNode();
         if (title != null) {
             body.put("title", title);
         }
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/session"))
+                .uri(sessionUri("/session", directory))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .timeout(Duration.ofSeconds(timeoutSeconds))
@@ -118,7 +137,7 @@ public class OpenCodeClient {
                 .send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200 && response.statusCode() != 201) {
             throw new IOException("Failed to create session: HTTP " + response.statusCode()
-                    + " — " + response.body());
+                    + " — " + describeError(response.body()));
         }
 
         JsonNode result = MAPPER.readTree(response.body());
@@ -142,6 +161,29 @@ public class OpenCodeClient {
                                 JsonNode format, Map<String, Object> permissions,
                                 int timeoutSeconds)
             throws IOException, InterruptedException {
+        return sendPrompt(sessionId, null, prompt, model, format, permissions, timeoutSeconds);
+    }
+
+    /**
+     * Sends a prompt to a session scoped to the given working directory and waits for the response.
+     *
+     * @param sessionId      the session ID
+     * @param directory      the session's working directory, or null for the server's cwd
+     * @param prompt         the prompt text
+     * @param model          the model in provider/model format, or null for default
+     * @param format         structured output format, or null for text
+     * @param permissions    OpenCode permission config, or null for defaults
+     * @param timeoutSeconds request timeout
+     * @return the response JSON
+     * @throws IllegalArgumentException if the model is not in provider/model format
+     * @throws IOException              if the HTTP request fails
+     * @throws InterruptedException     if the thread is interrupted
+     */
+    public JsonNode sendPrompt(String sessionId, String directory, String prompt, String model,
+                                JsonNode format, Map<String, Object> permissions,
+                                int timeoutSeconds)
+            throws IOException, InterruptedException {
+        validateModel(model);
 
         ObjectNode body = MAPPER.createObjectNode();
 
@@ -152,7 +194,7 @@ public class OpenCodeClient {
         textPart.put("text", prompt);
 
         // Model
-        if (model != null && model.contains("/")) {
+        if (model != null && !model.isBlank()) {
             ObjectNode modelNode = body.putObject("model");
             String[] split = model.split("/", 2);
             modelNode.put("providerID", split[0]);
@@ -174,7 +216,7 @@ public class OpenCodeClient {
         }
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/session/" + sessionId + "/message"))
+                .uri(sessionUri("/session/" + sessionId + "/message", directory))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
                 .timeout(Duration.ofSeconds(timeoutSeconds))
@@ -186,7 +228,7 @@ public class OpenCodeClient {
                 .send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() != 200) {
             throw new IOException("Prompt failed: HTTP " + response.statusCode()
-                    + " — " + truncate(response.body(), 500));
+                    + " — " + truncate(describeError(response.body()), 1000));
         }
 
         return MAPPER.readTree(response.body());
@@ -213,9 +255,19 @@ public class OpenCodeClient {
      * @param sessionId the session ID to abort
      */
     public void abortSession(String sessionId) {
+        abortSession(sessionId, null);
+    }
+
+    /**
+     * Aborts a running session scoped to the given working directory.
+     *
+     * @param sessionId the session ID to abort
+     * @param directory the session's working directory, or null for the server's cwd
+     */
+    public void abortSession(String sessionId, String directory) {
         try {
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/session/" + sessionId + "/abort"))
+                    .uri(sessionUri("/session/" + sessionId + "/abort", directory))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.noBody())
                     .timeout(Duration.ofSeconds(10))
@@ -283,6 +335,62 @@ public class OpenCodeClient {
      */
     public String getBaseUrl() {
         return baseUrl;
+    }
+
+    /**
+     * Validates that a model identifier is in OpenCode's {@code provider/model} format.
+     *
+     * @param model the model identifier, or null/blank for the server default
+     * @throws IllegalArgumentException if the model is set but lacks a provider prefix
+     */
+    public static void validateModel(String model) {
+        if (model == null || model.isBlank()) {
+            return;
+        }
+        int slash = model.indexOf('/');
+        if (slash <= 0 || slash == model.length() - 1) {
+            throw new IllegalArgumentException("Invalid OpenCode model '" + model
+                    + "': expected provider/model format (e.g. anthropic/claude-sonnet-4-5)");
+        }
+    }
+
+    private URI sessionUri(String path, String directory) {
+        if (directory == null || directory.isBlank()) {
+            return URI.create(baseUrl + path);
+        }
+        return URI.create(baseUrl + path + "?directory="
+                + URLEncoder.encode(directory, StandardCharsets.UTF_8).replace("+", "%20"));
+    }
+
+    /**
+     * Renders an OpenCode error body ({@code {name, data: {message, ref}}}) as a readable
+     * message, falling back to the raw body when it is not in that shape.
+     */
+    private static String describeError(String body) {
+        if (body == null || body.isBlank()) {
+            return "(empty response body)";
+        }
+        try {
+            JsonNode node = MAPPER.readTree(body);
+            JsonNode data = node.path("data");
+            String message = data.path("message").asText(null);
+            if (message == null) {
+                return body;
+            }
+            StringBuilder sb = new StringBuilder();
+            String name = node.path("name").asText(null);
+            if (name != null) {
+                sb.append(name).append(": ");
+            }
+            sb.append(message);
+            String ref = data.path("ref").asText(null);
+            if (ref != null) {
+                sb.append(" (ref: ").append(ref).append(')');
+            }
+            return sb.toString();
+        } catch (IOException e) {
+            return body;
+        }
     }
 
     private String truncate(String s, int max) {

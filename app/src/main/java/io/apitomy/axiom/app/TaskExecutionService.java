@@ -612,6 +612,9 @@ public class TaskExecutionService {
         task.completedOn = Instant.now();
         task.sessionId = result.sessionId();
         task.executionLog = result.executionLog();
+        if (!result.success()) {
+            applyFailureDetail(task, result.errorMessage());
+        }
 
         String statusText = result.success() ? "completed" : "failed";
         LOG.infof("Task %d %s (cost: $%s, tokens: %d/%d)",
@@ -687,6 +690,33 @@ public class TaskExecutionService {
 
     }
 
+    /**
+     * Makes an agent failure visible on the task: when the agent produced no output the error
+     * message becomes the task output, and the error is appended to the execution log unless the
+     * log already contains it. Without this a failed agent call left both empty, so the workflow
+     * run reported only {@code Node returned FAILED: {}}.
+     *
+     * @param task         the failed task
+     * @param errorMessage the agent's error message, possibly null
+     */
+    static void applyFailureDetail(TaskEntity task, String errorMessage) {
+        String reason = errorMessage == null || errorMessage.isBlank()
+                ? "Agent reported failure without an error message" : errorMessage;
+        if (task.output == null || task.output.isBlank()) {
+            task.output = reason;
+        }
+        if (task.executionLog == null || !task.executionLog.contains(reason)) {
+            task.executionLog = appendFailureReason(task.executionLog, "Error: " + reason);
+        }
+    }
+
+    private static String appendFailureReason(String existingLog, String reason) {
+        if (existingLog == null || existingLog.isBlank()) {
+            return reason;
+        }
+        return existingLog + "\n\n" + reason;
+    }
+
     @Transactional
     void failTask(Long taskId, String reason) {
         doFailTask(taskId, reason, true);
@@ -716,6 +746,7 @@ public class TaskExecutionService {
             }
             task.status = "Failed";
             task.output = reason;
+            task.executionLog = appendFailureReason(task.executionLog, reason);
             task.completedOn = Instant.now();
 
             logActivity(task.subjectId, taskId, task.eventId, "task-failed",
