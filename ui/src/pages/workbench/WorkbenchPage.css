@@ -645,3 +645,9 @@ code.axiom-test-run__value {
 .axiom-subscription-item-editor__divider {
     margin-block: var(--pf-t--global--spacer--lg, 24px) var(--pf-t--global--spacer--md, 16px);
 }
+
+/* Model names can be long; keep the chat toolbar on one line. */
+.axiom-workbench__chat-model {
+    max-width: 12rem;
+    overflow: hidden;
+}

@@ -24,6 +24,7 @@ import ExternalLinkAltIcon from "@patternfly/react-icons/dist/esm/icons/external
 import PencilAltIcon from "@patternfly/react-icons/dist/esm/icons/pencil-alt-icon";
 import ShieldAltIcon from "@patternfly/react-icons/dist/esm/icons/shield-alt-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
+import { SessionUsageLabel } from "../components/assistant/SessionUsageLabel";
 import { AssistantChatPanel, type SessionMode } from "../components/assistant/AssistantChatPanel";
 import { AssistantGeneratedItems } from "../components/assistant/AssistantGeneratedItems";
 import {
@@ -289,24 +290,8 @@ export function AssistantSessionPage() {
                             {sessionModel}
                         </Label>
                     )}
-                    {sessionCost > 0 && (
-                        <Tooltip content={
-                            `Tokens in: ${sessionInputTokens.toLocaleString()} / out: ${sessionOutputTokens.toLocaleString()}`
-                        }>
-                            <Label color="grey" isCompact className="axiom-session-page__header-label">
-                                ${sessionCost.toFixed(4)}
-                            </Label>
-                        </Tooltip>
-                    )}
-                    {sessionCost <= 0 && sessionInputTokens + sessionOutputTokens > 0 && (
-                        <Tooltip content={
-                            `Tokens in: ${sessionInputTokens.toLocaleString()} / out: ${sessionOutputTokens.toLocaleString()}`
-                        }>
-                            <Label color="grey" isCompact className="axiom-session-page__header-label">
-                                {`${(sessionInputTokens + sessionOutputTokens).toLocaleString()} tokens`}
-                            </Label>
-                        </Tooltip>
-                    )}
+                    <SessionUsageLabel costUsd={sessionCost} inputTokens={sessionInputTokens}
+                        outputTokens={sessionOutputTokens} className="axiom-session-page__header-label" />
                     {session.subjectId && session.subjectName && (
                         <Label
                             color="teal"
