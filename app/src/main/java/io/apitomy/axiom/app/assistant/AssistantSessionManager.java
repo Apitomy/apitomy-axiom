@@ -63,9 +63,6 @@ public class AssistantSessionManager {
 
     private static final Logger LOG = Logger.getLogger(AssistantSessionManager.class);
 
-    /** Set when Quarkus shutdown begins; the database may no longer be usable from then on. */
-    private volatile boolean shuttingDown = false;
-
     /** Upper bound for a session's init script. */
     private static final java.time.Duration INIT_SCRIPT_TIMEOUT = java.time.Duration.ofSeconds(60);
 
@@ -351,6 +348,7 @@ public class AssistantSessionManager {
             journals.put(sessionId, journal);
             seed.forEach(journal::accept);
             session.addListener(journal);
+            session.addListener(createUsageRecorder(session));
             session.start();
 
             // Add welcome message to event history so it replays on reconnect (a resumed session already has it)
@@ -463,15 +461,6 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Sets the shutdown flag, for tests.
-     *
-     * @param shuttingDown whether shutdown has begun
-     */
-    void setShuttingDown(boolean shuttingDown) {
-        this.shuttingDown = shuttingDown;
-    }
-
-    /**
      * Returns the number of open history journals, for tests.
      *
      * @return the number of journals currently tracked
@@ -492,8 +481,8 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Destroys a session: kills the subprocess, closes its journal and records usage. The session directory
-     * is deleted unless {@code keepDirectory} is true.
+     * Destroys a session: kills the subprocess and closes its journal. Usage is already persisted after each
+     * turn, so nothing is written here. The session directory is deleted unless {@code keepDirectory} is true.
      *
      * @param sessionId the session to destroy
      * @param keepDirectory whether to keep the session directory on disk
@@ -503,19 +492,6 @@ public class AssistantSessionManager {
         if (session != null) {
             sessionCount.decrementAndGet();
             session.destroy();
-            if (shuttingDown) {
-                // H2's own JVM shutdown hook runs concurrently with Quarkus shutdown and may already have
-                // closed the database, so usage is not persisted during shutdown (see GH #517).
-                LOG.infof("Skipping usage record for session %s during shutdown (cost=$%.4f, turns=%d, "
-                                + "inputTokens=%d, outputTokens=%d)", sessionId, session.getTotalCostUsd(),
-                        session.getTurnCount(), session.getTotalInputTokens(), session.getTotalOutputTokens());
-            } else {
-                try {
-                    QuarkusTransaction.requiringNew().run(() -> recordUsage(session));
-                } catch (Exception e) {
-                    LOG.warnf("Could not record usage for session %s: %s", sessionId, e.getMessage());
-                }
-            }
             closeJournal(sessionId);
             if (!keepDirectory) {
                 contextBuilder.deleteSessionDirectory(session.getSessionDirectory());
@@ -567,21 +543,39 @@ public class AssistantSessionManager {
         }
     }
 
-    private void recordUsage(AssistantSession session) {
-        if (session.getTurnCount() == 0) {
-            return;
-        }
-        AiUsageEntity usage = new AiUsageEntity();
-        usage.invocationType = "assistant-session";
-        usage.actionType = "assistant-session";
-        usage.engine = session.getEngineType();
-        usage.model = session.getModel();
-        usage.costUsd = session.getTotalCostUsd();
-        usage.inputTokens = session.getTotalInputTokens();
-        usage.outputTokens = session.getTotalOutputTokens();
-        usage.durationMs = session.getTotalDurationMs();
-        usage.createdOn = Instant.now();
-        usage.persist();
+    /**
+     * Creates a listener that persists a usage row for each completed turn. Each row holds that turn's
+     * delta: tokens and duration are already per-turn, while cost is derived from the change in the
+     * session's cumulative {@code sessionCostUsd}, so summing rows yields the session total.
+     */
+    private Consumer<SseEvent> createUsageRecorder(AssistantSession session) {
+        double[] lastRecordedCost = {0.0};
+        return event -> {
+            if (!"turn_complete".equals(event.type())) {
+                return;
+            }
+            JsonNode data = event.data();
+            double sessionCost = data.path("sessionCostUsd").asDouble(session.getTotalCostUsd());
+            double costDelta = Math.max(0.0, sessionCost - lastRecordedCost[0]);
+            try {
+                QuarkusTransaction.requiringNew().run(() -> {
+                    AiUsageEntity usage = new AiUsageEntity();
+                    usage.invocationType = "assistant-session";
+                    usage.actionType = "assistant-session";
+                    usage.engine = session.getEngineType();
+                    usage.model = session.getModel();
+                    usage.costUsd = costDelta;
+                    usage.inputTokens = data.path("inputTokens").asLong(0);
+                    usage.outputTokens = data.path("outputTokens").asLong(0);
+                    usage.durationMs = data.path("durationMs").asLong(0);
+                    usage.createdOn = Instant.now();
+                    usage.persist();
+                });
+                lastRecordedCost[0] = sessionCost;
+            } catch (Exception e) {
+                LOG.warnf("Could not record usage for session %s: %s", session.getId(), e.getMessage());
+            }
+        };
     }
 
     /**
@@ -812,7 +806,6 @@ public class AssistantSessionManager {
      * @param event the shutdown event
      */
     void onShutdown(@Observes ShutdownEvent event) {
-        shuttingDown = true;
         LOG.info("Shutting down — destroying all assistant sessions");
         for (AssistantSession session : new ArrayList<>(sessions.values())) {
             destroySession(session.getId(), session.hasCapability(SessionCapability.COMPOSITION));
