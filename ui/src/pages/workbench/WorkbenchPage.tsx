@@ -258,7 +258,7 @@ export function WorkbenchPage() {
         && wb.contents[activeItem.id] ? activeItem : undefined;
 
     /** Values (and no subject) to pre-fill the next test dialog with, from an AI suggestion. */
-    const suggestedValues = useRef<{ itemId: number; values: Record<string, string> } | null>(null);
+    const suggestedValues = useRef<{ itemId: number; values: Record<string, string>; suggestionId: string } | null>(null);
 
     /** Flushes the active item's pending save, then opens the test dialog for it. */
     const openTest = async () => {
@@ -303,7 +303,7 @@ export function WorkbenchPage() {
             setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` });
             return;
         }
-        suggestedValues.current = { itemId: item.id, values: valuesFromInputs(run.inputs) };
+        suggestedValues.current = { itemId: item.id, values: valuesFromInputs(run.inputs), suggestionId: run.id };
         setTesting(item.id);
     };
 
@@ -329,15 +329,17 @@ export function WorkbenchPage() {
 
     /** Starts a test run; the strip shows progress via SSE, request failures show inline. */
     const runTest = (itemId: number, inputs: Record<string, unknown>, values: Record<string, string>,
-                     subjectId?: number, environment?: Record<string, string>) => {
+                     subjectId?: number, environment?: Record<string, string>, suggestionId?: string) => {
         testValues.current.set(itemId, { values, subjectId, environment });
         suggestedValues.current = null;
         setTesting(null);
         setTestError(null);
         // Open the run's details right away; the dialog shows it running and updates live when it finishes.
-        const runId: string = newRunId();
+        // A still-suggested test's run replaces the suggestion and takes its id.
+        const runId: string = suggestionId && wb.testRuns.some((r) => r.id === suggestionId && r.status === "suggested")
+            ? suggestionId : newRunId();
         setSelectedRunId(runId);
-        wb.runTest(itemId, inputs, subjectId, runId, environment).then((run) => {
+        wb.runTest(itemId, inputs, subjectId, runId, environment, suggestionId).then((run) => {
             // If the server recorded the run under another id, keep showing it instead of closing the dialog.
             if (typeof run?.id === "string" && run.id !== runId) {
                 setSelectedRunId((current) => (current === runId ? run.id : current));
@@ -720,7 +722,7 @@ export function WorkbenchPage() {
                         }}
                         initialEnvironment={remembered?.environment}
                         onRun={(inputs, values, subjectId, environment) =>
-                            runTest(testing, inputs, values, subjectId, environment)} />
+                            runTest(testing, inputs, values, subjectId, environment, suggestion?.suggestionId)} />
                 );
             })()}
             {openRunId !== null && (
