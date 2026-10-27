@@ -241,6 +241,7 @@ public class AgentsResourceImpl {
             task.setCompletedOn(Date.from(entity.completedOn));
         }
         task.setSessionId(entity.sessionId);
+        task.setActualModel(entity.actualModel);
         return task;
     }
 }

@@ -7787,6 +7787,10 @@
             "description": "Claude Code session ID",
             "type": "string"
           },
+          "actualModel": {
+            "description": "The AI model the agent engine reported it actually ran (may differ from the requested model)",
+            "type": "string"
+          },
           "traceId": {
             "format": "uuid",
             "type": "string"
