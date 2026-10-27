@@ -1091,7 +1091,7 @@ public class WorkflowExecutionService {
         if (output == null || output.isBlank()) {
             return Map.of();
         }
-        String candidate = extractJsonObject(output);
+        String candidate = AgentOutputJsonExtractor.extract(output);
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = objectMapper.readValue(
@@ -1100,26 +1100,6 @@ public class WorkflowExecutionService {
         } catch (JsonProcessingException e) {
             return Map.of("rawOutput", output);
         }
-    }
-
-    /**
-     * Best-effort extraction of a single JSON object from agent output that may be
-     * wrapped in Markdown code fences or surrounded by prose. Agents are instructed
-     * to emit only a JSON object, but in practice frequently wrap it (```json … ```)
-     * or add commentary; without this, valid output fails required-output validation.
-     * Returns the original string unchanged when no object-like span is found.
-     *
-     * @param output the raw task output
-     * @return the substring most likely to be the JSON object, or {@code output}
-     */
-    private String extractJsonObject(String output) {
-        String trimmed = output.strip();
-        int firstBrace = trimmed.indexOf('{');
-        int lastBrace = trimmed.lastIndexOf('}');
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-            return trimmed.substring(firstBrace, lastBrace + 1);
-        }
-        return output;
     }
 
     /**
