@@ -38,13 +38,14 @@ function lastFilters(): Record<string, unknown> {
 }
 
 describe("WorkflowRunsPage", () => {
-    it("renders one Run column: subject and workflow, with the title below only when there is one", async () => {
+    it("renders Run (subject + optional title) and Workflow (name + version) columns", async () => {
         renderWithRouter(<WorkflowRunsPage />);
-        expect(await screen.findByText("Subject 1 — Triage v1")).toBeInTheDocument();
+        expect(await screen.findByText("Subject 1")).toBeInTheDocument();
         expect(screen.getByText("Run A")).toBeInTheDocument();
-        expect(screen.getByText("Subject 2 — Triage v1")).toBeInTheDocument();
+        expect(screen.getByText("Subject 2")).toBeInTheDocument();
+        expect(screen.getAllByText("Triage v1")).toHaveLength(2);
         const headers: string[] = screen.getAllByRole("columnheader").map((h) => h.textContent ?? "");
-        expect(headers).toEqual(["Status", "Run", "Started", "Duration"]);
+        expect(headers).toEqual(["Status", "Run", "Workflow", "Started"]);
         expect(screen.queryByRole("link")).toBeNull();
         expect(screen.queryByLabelText("Status")).toBeNull();
         expect(screen.queryByPlaceholderText("Subject ID")).toBeNull();
@@ -59,7 +60,7 @@ describe("WorkflowRunsPage", () => {
                     <Route path="/runs/:runId" element={<p>run detail page</p>} />
                 </Routes>
             </MemoryRouter>);
-        await userEvent.click(await screen.findByText("Subject 2 — Triage v1"));
+        await userEvent.click(await screen.findByText("Subject 2"));
         expect(await screen.findByText("run detail page")).toBeInTheDocument();
     });
 
