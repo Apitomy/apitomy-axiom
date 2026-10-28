@@ -20,15 +20,16 @@ public class ExecutionLogBuilder {
     /**
      * Appends the task header section.
      *
-     * @param taskId the task ID
-     * @param actionType the action type name
+     * @param taskId the task ID, or null for an invocation that is not a task
+     * @param actionType the action type name, or null when unknown
      * @param startTime when execution started
      */
-    public void header(long taskId, String actionType, Instant startTime) {
-        log.append("=== Task ").append(taskId)
-                .append(" (").append(actionType).append(")")
-                .append(" — Started ").append(startTime)
-                .append(" ===\n\n");
+    public void header(Long taskId, String actionType, Instant startTime) {
+        log.append("=== ").append(taskId != null ? "Task " + taskId : "Execution");
+        if (actionType != null && !actionType.isBlank()) {
+            log.append(" (").append(actionType).append(")");
+        }
+        log.append(" — Started ").append(startTime).append(" ===\n\n");
     }
 
     /**

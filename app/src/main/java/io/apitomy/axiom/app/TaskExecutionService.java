@@ -345,6 +345,8 @@ public class TaskExecutionService {
 
         String prompt = resolvePromptTemplate(actionTypeEntity, task);
         AgentRequest request = AgentRequest.builder()
+                .taskId(task.id)
+                .actionType(task.actionType)
                 .prompt(prompt != null ? prompt : task.input)
                 .workingDirectory(workspace)
                 .systemPrompt(buildSystemPrompt(actionTypeEntity))
@@ -654,6 +656,19 @@ public class TaskExecutionService {
         return !actualName.contains(requestedName) && !requestedName.contains(actualName);
     }
 
+    /**
+     * Returns true for a human (Inbox) task: a workflow human task carries its human context, and any task
+     * answered from {@code AwaitingInput} without an assigned agent was answered by a person.
+     *
+     * @param task           the task
+     * @param previousStatus the task's status before completion
+     * @return whether the task was completed by a person rather than an AI engine
+     */
+    static boolean isHumanTask(TaskEntity task, String previousStatus) {
+        return task.humanContext != null
+                || (HumanTaskStatuses.AWAITING_INPUT.equals(previousStatus) && task.assignedAgent == null);
+    }
+
     private void recordTaskCompletion(TaskEntity task, AgentResult result) {
         Long taskId = task.id;
         String previousStatus = task.status;
@@ -680,22 +695,25 @@ public class TaskExecutionService {
                 result.inputTokens() != null ? result.inputTokens() : 0,
                 result.outputTokens() != null ? result.outputTokens() : 0);
 
-        // Record AI usage (prefer engine/model from the agent result, fall back to action type config)
-        String engine = result.engine();
-        if (engine == null || engine.isBlank()) {
-            engine = actionTypeEntity != null ? actionTypeEntity.engine : null;
+        // Record AI usage (prefer engine/model from the agent result, fall back to action type config).
+        // Human tasks are answered by a person, not an engine, so they have no AI usage.
+        if (!isHumanTask(task, previousStatus)) {
+            String engine = result.engine();
+            if (engine == null || engine.isBlank()) {
+                engine = actionTypeEntity != null ? actionTypeEntity.engine : null;
+            }
+            if (engine == null || engine.isBlank()) {
+                engine = agentRegistry.getDefaultAgentType();
+            }
+            String model = result.model();
+            if (model == null || model.isBlank()) {
+                model = actionTypeEntity != null ? actionTypeEntity.model : null;
+            }
+            recordAiUsage("task", taskId, task.eventId, task.subjectId,
+                    task.assignedAgent, task.actionType, engine, model,
+                    result.costUsd(), result.inputTokens(), result.outputTokens(),
+                    task.traceId, task.workflowRunId);
         }
-        if (engine == null || engine.isBlank()) {
-            engine = agentRegistry.getDefaultAgentType();
-        }
-        String model = result.model();
-        if (model == null || model.isBlank()) {
-            model = actionTypeEntity != null ? actionTypeEntity.model : null;
-        }
-        recordAiUsage("task", taskId, task.eventId, task.subjectId,
-                task.assignedAgent, task.actionType, engine, model,
-                result.costUsd(), result.inputTokens(), result.outputTokens(),
-                task.traceId, task.workflowRunId);
 
         // Log to activity
         logActivity(task.subjectId, taskId, task.eventId, "task-" + statusText,

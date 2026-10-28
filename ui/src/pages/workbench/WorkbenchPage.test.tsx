@@ -211,11 +211,6 @@ describe("WorkbenchPage", () => {
         expect(await screen.findByText("Add tool")).toBeTruthy();
     });
 
-    it("shows the session's engine and model in the chat toolbar", () => {
-        renderPage();
-        expect(screen.getByText("Claude Code · default")).toBeTruthy();
-    });
-
     it("closes a component tab on middle click", () => {
         renderPage();
         fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));

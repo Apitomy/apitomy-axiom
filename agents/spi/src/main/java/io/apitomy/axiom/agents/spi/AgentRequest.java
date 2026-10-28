@@ -24,6 +24,8 @@ public class AgentRequest {
     private final Map<String, String> environment;
     private final String executionId;
     private final String sessionId;
+    private final Long taskId;
+    private final String actionType;
 
     private AgentRequest(Builder builder) {
         this.prompt = builder.prompt;
@@ -39,6 +41,8 @@ public class AgentRequest {
         this.environment = builder.environment;
         this.executionId = builder.executionId;
         this.sessionId = builder.sessionId;
+        this.taskId = builder.taskId;
+        this.actionType = builder.actionType;
     }
 
     /** @return the user prompt text */
@@ -106,6 +110,16 @@ public class AgentRequest {
         return sessionId;
     }
 
+    /** @return the Axiom task this request executes, or null for non-task invocations */
+    public Long getTaskId() {
+        return taskId;
+    }
+
+    /** @return the action type this request executes, or null for non-task invocations */
+    public String getActionType() {
+        return actionType;
+    }
+
     /**
      * Creates a new builder.
      *
@@ -129,6 +143,30 @@ public class AgentRequest {
         private Map<String, String> environment = Map.of();
         private String executionId;
         private String sessionId;
+        private Long taskId;
+        private String actionType;
+
+        /**
+         * Sets the Axiom task this request executes (used to label execution logs).
+         *
+         * @param taskId the task id, or null
+         * @return this builder
+         */
+        public Builder taskId(Long taskId) {
+            this.taskId = taskId;
+            return this;
+        }
+
+        /**
+         * Sets the action type this request executes (used to label execution logs).
+         *
+         * @param actionType the action type name, or null
+         * @return this builder
+         */
+        public Builder actionType(String actionType) {
+            this.actionType = actionType;
+            return this;
+        }
 
         public Builder prompt(String prompt) {
             this.prompt = prompt;

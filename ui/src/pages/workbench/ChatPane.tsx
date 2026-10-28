@@ -1,9 +1,9 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Workflow } from "@apitomy/flow-ui";
-import { Alert, AlertActionCloseButton, AlertActionLink, Button, Label, Tooltip } from "@patternfly/react-core";
+import { Alert, AlertActionCloseButton, AlertActionLink, Button, Tooltip } from "@patternfly/react-core";
 import { UndoIcon } from "@patternfly/react-icons";
 import { AssistantChatPanel } from "../../components/assistant/AssistantChatPanel";
-import { SessionUsageLabel } from "../../components/assistant/SessionUsageLabel";
+import { SessionInfoChip } from "../../components/assistant/SessionInfoChip";
 import { AllowAllSwitch } from "../../components/assistant/AllowAllSwitch";
 import { fetchAssistantSession } from "../../config/api";
 import type { ToolUseRenderContext } from "../../components/assistant/AssistantMessageList";
@@ -86,12 +86,11 @@ export function ChatPane(props: ChatPaneProps) {
         <div className="axiom-workbench__chat-toolbar">
             {toolbarStart}
             <div className="axiom-workbench__chat-toolbar-end">
-                {sessionId && !sessionError && model && (
-                    <Label color="grey" isCompact className="axiom-workbench__chat-model">{model}</Label>
-                )}
                 {sessionId && !sessionError && (
-                    <SessionUsageLabel costUsd={usage.costUsd} inputTokens={usage.inputTokens}
-                        outputTokens={usage.outputTokens} />
+                    <SessionInfoChip engine={composition.session?.engine}
+                        engineLabel={composition.session?.engineLabel}
+                        requestedModel={composition.session?.model} actualModel={model}
+                        costUsd={usage.costUsd} inputTokens={usage.inputTokens} outputTokens={usage.outputTokens} />
                 )}
                 {sessionId && !sessionError && (
                     <AllowAllSwitch id="workbench-allow-all-toggle" sessionId={sessionId} allowAll={allowAll}

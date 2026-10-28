@@ -112,4 +112,20 @@ class AssistantSessionUsageTest {
         manager.destroySession(session.getId());
         assertEquals(before, assistantUsageCount());
     }
+
+    /**
+     * Usage rows carry the model the engine reported in its session init, even when the session uses the
+     * engine's default model.
+     */
+    @Test
+    void usageRecordsTheReportedModel() throws IOException {
+        AssistantSession session = create();
+        session.handleDriverEvent(new SseEvent("session_init", mapper.createObjectNode()
+                .put("model", "claude-reported-model")));
+        completeTurn(session, 0.5, 10, 20, 30);
+        String model = QuarkusTransaction.requiringNew().call(() -> AiUsageEntity.<AiUsageEntity>find(
+                "invocationType = ?1 order by id desc", "assistant-session").firstResult().model);
+        assertEquals("claude-reported-model", model);
+        manager.destroySession(session.getId());
+    }
 }

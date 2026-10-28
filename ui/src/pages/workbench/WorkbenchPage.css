@@ -209,11 +209,6 @@
     padding: 0;
 }
 
-.axiom-workbench__pane-toolbar > .axiom-workbench__session-badge {
-    margin-left: var(--pf-t--global--spacer--sm, 8px);
-    min-width: 0;
-}
-
 .axiom-workbench__pane-title {
     margin-left: var(--pf-t--global--spacer--sm, 8px);
 }
@@ -646,8 +641,8 @@ code.axiom-test-run__value {
     margin-block: var(--pf-t--global--spacer--lg, 24px) var(--pf-t--global--spacer--md, 16px);
 }
 
-/* Model names can be long; keep the chat toolbar on one line. */
-.axiom-workbench__chat-model {
-    max-width: 12rem;
-    overflow: hidden;
+/* The session details chip opens its popover on hover or click. */
+.axiom-session-info-chip {
+    cursor: pointer;
+    display: inline-flex;
 }
