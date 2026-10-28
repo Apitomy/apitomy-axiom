@@ -2,15 +2,25 @@ package io.apitomy.axiom.agents.claudecode;
 
 import io.apitomy.axiom.agents.spi.AgentCheckResult;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for the plugin directory parsing in {@link ClaudeCodeAgent}.
+ * Tests for the plugin directory parsing and the startup check in
+ * {@link ClaudeCodeAgent}.
  */
 class ClaudeCodeAgentTest {
 
@@ -76,70 +86,196 @@ class ClaudeCodeAgentTest {
         assertEquals(List.of(), ClaudeCodeAgent.parsePluginDirs("bad\u0000dir"));
     }
 
+    /** Generous for fake CLIs that exit at once, short enough to fail fast on a hang. */
+    private static final Duration SHORT = Duration.ofSeconds(3);
+
+    private static ClaudeCodeAgent.CliRun completed(int exitCode, String output) {
+        return new ClaudeCodeAgent.CliRun(ClaudeCodeAgent.Outcome.COMPLETED, exitCode, output, null);
+    }
+
+    private static ClaudeCodeAgent agentWith(Path executable) {
+        ClaudeCodeAgent agent = new ClaudeCodeAgent();
+        agent.executable = executable.toString();
+        return agent;
+    }
+
+    /** Writes an executable shell script standing in for the CLI. */
+    private static Path fakeCli(Path dir, String body) throws IOException {
+        Path script = dir.resolve("claude");
+        Files.writeString(script, "#!/bin/sh\n" + body + "\n");
+        Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"));
+        return script;
+    }
+
     /**
-     * A probe that answers as expected reports ok, also when the server
-     * environment carries no key: the CLI can authenticate by other means,
-     * for example stored credentials.
+     * With a server-side key the test prompt is conclusive: the expected
+     * answer is ok.
      */
     @Test
-    void successfulProbeIsOkWithoutServerApiKey() {
-        AgentCheckResult result = ClaudeCodeAgent.probeResult(true, 0, "AXIOM_OK", false);
+    void answeredProbeIsOk() {
+        AgentCheckResult result = ClaudeCodeAgent.probeResult(completed(0, "AXIOM_OK"), SHORT);
         assertEquals("ok", result.status());
     }
 
     /**
-     * With ANTHROPIC_API_KEY set in the server environment a failed probe is
-     * conclusive: a real misconfiguration must report an error. The message
-     * carries the exit code and the CLI output so the operator sees the
-     * cause, and it does not advise setting the key that is already set.
+     * With a server-side key a failed probe is a misconfiguration: an error
+     * that carries the exit code and the CLI output.
      */
     @Test
-    void failedProbeWithServerApiKeyIsAnError() {
-        AgentCheckResult result = ClaudeCodeAgent.probeResult(true, 1, "Unknown model", true);
+    void failedProbeIsAnError() {
+        AgentCheckResult result = ClaudeCodeAgent.probeResult(completed(1, "Unknown model"), SHORT);
         assertEquals("error", result.status());
         assertTrue(result.message().contains("exit code 1"));
         assertTrue(result.message().contains("Unknown model"));
-        assertTrue(result.message().contains("check the key"));
     }
 
     /**
-     * Without a server-side key a failed probe is inconclusive rather than
-     * evidence of a broken installation: the CLI may authenticate by other
-     * means and agent action types can declare their own key. The check
-     * reports a warning that quotes the CLI output, which keeps the UI
-     * usable in the 3.x deployment model where secrets are never injected
-     * into the server environment.
+     * The expected token with a non-zero exit, or exit 0 without the token,
+     * proves nothing: both are errors.
      */
     @Test
-    void failedProbeWithoutServerApiKeyIsAnInconclusiveWarning() {
-        AgentCheckResult result = ClaudeCodeAgent.probeResult(true, 1,
-                "Invalid API key · Please run /login", false);
+    void probeNeedsBothExitZeroAndTheToken() {
+        assertEquals("error", ClaudeCodeAgent.probeResult(completed(1, "AXIOM_OK"), SHORT).status());
+        assertEquals("error", ClaudeCodeAgent.probeResult(completed(0, "not sure"), SHORT).status());
+    }
+
+    /**
+     * Only a non-blank ANTHROPIC_API_KEY or a third-party provider switch the
+     * CLI reads as on (1, true, yes or on) lets a --bare CLI authenticate.
+     */
+    @Test
+    void serverCredentialsAreTheKeyOrAThirdPartyProvider() {
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of()));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("ANTHROPIC_API_KEY", "  ")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("ANTHROPIC_API_KEY", "k")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_BEDROCK", "1")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_VERTEX", "true")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_MANTLE", " ON ")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(
+                Map.of("CLAUDE_CODE_USE_ANTHROPIC_AWS", "yes")));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_FOUNDRY", "0")));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_BEDROCK", "false")));
+        // the CLI reads only 1/true/yes/on as on, so these leave the provider off
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_BEDROCK", "off")));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_VERTEX", "no")));
+    }
+
+    /**
+     * Without server credentials no test prompt is sent: the check runs
+     * {@code --version} and reports a warning that names the version and
+     * says the runs' own keys cannot be verified.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void withoutCredentialsTheCheckRunsVersionAndWarns(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "[ \"$1\" = --version ] && echo '2.1.306 (Claude Code)' && exit 0\n"
+                + "echo prompt-was-sent; exit 1");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
         assertEquals("warning", result.status());
-        assertTrue(result.message().contains("exit code 1"));
-        assertTrue(result.message().contains("Invalid API key · Please run /login"));
-        assertTrue(result.message().contains("conclusive"));
+        assertTrue(result.message().contains("2.1.306 (Claude Code)"));
+        assertTrue(result.message().contains("no test prompt"));
     }
 
     /**
-     * A timed-out probe with a server-side key keeps reporting an error.
+     * A CLI whose --version fails is broken and reports an error.
      */
     @Test
-    void timeoutWithServerApiKeyIsAnError() {
-        AgentCheckResult result = ClaudeCodeAgent.probeResult(false, -1, "", true);
+    @DisabledOnOs(OS.WINDOWS)
+    void failingVersionIsAnError(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo 'cannot load module'; exit 3");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("exit code 3"));
+        assertTrue(result.message().contains("cannot load module"));
+    }
+
+    /**
+     * With server credentials the test prompt is sent, and its answer
+     * decides the status.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void withCredentialsTheProbeIsSent(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "[ \"$1\" = -p ] && echo AXIOM_OK && exit 0\nexit 1");
+        AgentCheckResult result = agentWith(cli)
+                .check(Map.of("ANTHROPIC_API_KEY", "k"), SHORT, SHORT, dir);
+        assertEquals("ok", result.status());
+    }
+
+    /**
+     * A timed-out probe keeps the output written so far in its message, and
+     * the output file is removed afterwards.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void timeoutQuotesTheOutputSoFar(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo still-connecting; exec sleep 30");
+        AgentCheckResult result = agentWith(cli)
+                .check(Map.of("ANTHROPIC_API_KEY", "k"), Duration.ofMillis(500), SHORT, dir);
         assertEquals("error", result.status());
         assertTrue(result.message().contains("timed out"));
+        assertTrue(result.message().contains("still-connecting"));
+        try (var files = Files.list(dir)) {
+            assertEquals(List.of(cli), files.toList());
+        }
     }
 
     /**
-     * A timed-out probe without a server-side key is inconclusive and
-     * reports a warning for the same reason as a failed probe.
+     * The production call passes no directory: the output file then goes to
+     * the default temporary directory, and the CLI really runs.
      */
     @Test
-    void timeoutWithoutServerApiKeyIsAnInconclusiveWarning() {
-        AgentCheckResult result = ClaudeCodeAgent.probeResult(false, -1, "", false);
+    @DisabledOnOs(OS.WINDOWS)
+    void defaultTemporaryDirectoryIsUsedWithoutADirectory(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo '2.1.306 (Claude Code)'");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, null);
         assertEquals("warning", result.status());
-        assertTrue(result.message().contains("timed out"));
-        assertTrue(result.message().contains("conclusive"));
+        assertTrue(result.message().contains("2.1.306 (Claude Code)"));
+    }
+
+    /**
+     * A CLI that cannot be started at all is an error with the install hint.
+     */
+    @Test
+    void missingCliIsAnError(@TempDir Path dir) {
+        AgentCheckResult result = agentWith(dir.resolve("no-such-claude"))
+                .check(Map.of(), SHORT, SHORT, dir);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("not available"));
+        assertTrue(result.message().contains("npm install"));
+    }
+
+    /**
+     * When the output file cannot be created the CLI was never tried, so the
+     * check reports a warning that names the file problem instead of
+     * claiming the CLI is missing.
+     */
+    @Test
+    void outputFileFailureIsAWarningAboutTheFile(@TempDir Path dir) {
+        AgentCheckResult result = agentWith(dir.resolve("claude"))
+                .check(Map.of(), SHORT, SHORT, dir.resolve("missing-dir"));
+        assertEquals("warning", result.status());
+        assertTrue(result.message().contains("temporary file"));
+        assertFalse(result.message().contains("npm install"));
+    }
+
+    /**
+     * An interrupted check says nothing about the CLI and reports a warning,
+     * and the interrupt flag is restored for the caller.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void interruptedCheckIsAWarning(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "exec sleep 30");
+        Thread.currentThread().interrupt();
+        try {
+            AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+            assertEquals("warning", result.status());
+            assertTrue(result.message().contains("interrupted"));
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     /**
@@ -156,29 +292,5 @@ class ClaudeCodeAgentTest {
         assertEquals(": \"".length() + 200 + "...".length() + "\"".length(), suffix.length());
         assertEquals("", ClaudeCodeAgent.excerptSuffix("   \n  "));
         assertEquals("", ClaudeCodeAgent.excerptSuffix(null));
-    }
-
-    /**
-     * A CLI that exits 0 but does not answer with the expected token proved
-     * nothing: it must not report ok. Without a server-side key this common
-     * inconclusive case reports the same warning as any other failed probe,
-     * quoting the exit code.
-     */
-    @Test
-    void exitZeroWithoutExpectedAnswerIsNotOk() {
-        AgentCheckResult result = ClaudeCodeAgent.probeResult(true, 0,
-                "I am not sure what you mean", false);
-        assertEquals("warning", result.status());
-        assertTrue(result.message().contains("exit code 0"));
-    }
-
-    /**
-     * The expected token in the output with a non-zero exit code is still a
-     * failed probe: the ok branch requires both conditions.
-     */
-    @Test
-    void expectedAnswerWithNonZeroExitIsNotOk() {
-        AgentCheckResult result = ClaudeCodeAgent.probeResult(true, 1, "AXIOM_OK", false);
-        assertEquals("warning", result.status());
     }
 }
