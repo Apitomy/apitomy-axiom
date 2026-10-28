@@ -646,3 +646,9 @@ code.axiom-test-run__value {
     cursor: pointer;
     display: inline-flex;
 }
+
+/* Labels in the session details popover table (which has no header row). */
+.axiom-session-info-chip__table tr > td.axiom-session-info-chip__label {
+    --pf-v6-c-table--cell--FontWeight: var(--pf-t--global--font--weight--body--bold);
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
+}

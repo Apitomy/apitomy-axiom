@@ -21,6 +21,16 @@ describe("SessionInfoChip", () => {
         expect(screen.getByText(`${(1000).toLocaleString()} in / 20 out`)).toBeTruthy();
     });
 
+    it("presents the details as a striped table with no header row", () => {
+        render(<SessionInfoChip engine="claude-code" engineLabel="Claude Code" costUsd={0} inputTokens={0}
+            outputTokens={0} />);
+        fireEvent.click(screen.getByRole("button", { name: /AI session details/ }));
+        const table: HTMLElement = screen.getByRole("grid", { name: "AI session details" });
+        expect(table.className).toContain("pf-m-striped");
+        expect(table.querySelector("thead")).toBeNull();
+        expect(table.querySelectorAll("tbody tr")).toHaveLength(5);
+    });
+
     it("reveals the details on hover", () => {
         render(<SessionInfoChip costUsd={0} inputTokens={0} outputTokens={0} />);
         fireEvent.mouseEnter(screen.getByRole("button", { name: "AI session details" }));
