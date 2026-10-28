@@ -49,12 +49,16 @@ public class ClaudeCodeAgent implements Agent {
     private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration VERSION_TIMEOUT = Duration.ofSeconds(10);
     private static final Duration STOP_WAIT = Duration.ofSeconds(2);
-    /** Far more than the 200-character excerpt a check message quotes. */
+    /** Longest CLI output excerpt a check message quotes. */
+    private static final int MAX_EXCERPT_CHARS = 200;
+    /** Far more than the {@link #MAX_EXCERPT_CHARS} excerpt a check message quotes. */
     private static final int MAX_OUTPUT_BYTES = 4 * 1024;
 
     /**
      * Switches for the providers that {@code --bare} lets use their own
-     * credentials, as the CLI checks them (2.1.306).
+     * credentials, as of CLI 2.1.306. A provider added later just takes the
+     * {@code --version} path, which is harmless, so the list need not be
+     * exhaustive.
      */
     private static final List<String> THIRD_PARTY_PROVIDER_SWITCHES = List.of(
             "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
@@ -381,13 +385,15 @@ public class ClaudeCodeAgent implements Agent {
     /**
      * Builds the result of the {@code --version} check that replaces the test
      * prompt when the server environment has no credentials. The run
-     * completed or timed out.
+     * completed or timed out. {@code --version} makes no network call, so a
+     * timeout means a broken install (for example a Node.js problem or a
+     * wrapper waiting on input) and reports an error, like a non-zero exit.
      */
     static AgentCheckResult versionResult(CliRun run) {
         if (run.outcome() == Outcome.TIMED_OUT) {
-            return new AgentCheckResult(CHECK_NAME, STATUS_WARNING,
+            return new AgentCheckResult(CHECK_NAME, STATUS_ERROR,
                     "'claude --version' did not finish in time" + excerptSuffix(run.output())
-                            + ", so the startup check could not confirm that the CLI starts.");
+                            + ". Check the Claude Code installation: " + INSTALL_HINT);
         }
         if (run.exitCode() != 0) {
             return new AgentCheckResult(CHECK_NAME, STATUS_ERROR,
@@ -396,14 +402,12 @@ public class ClaudeCodeAgent implements Agent {
                             + INSTALL_HINT);
         }
         return new AgentCheckResult(CHECK_NAME, STATUS_WARNING,
-                "Claude Code CLI starts" + excerptSuffix(run.output()) + ", but the startup "
-                        + "check sent no test prompt: the server environment has no "
-                        + "ANTHROPIC_API_KEY and no third-party provider switch such as "
-                        + "CLAUDE_CODE_USE_BEDROCK. Agent "
-                        + "runs authenticate only with the ANTHROPIC_API_KEY their action type "
-                        + "declares in its Environment, which this check cannot verify. Set "
-                        + "ANTHROPIC_API_KEY in the server environment and restart Axiom to "
-                        + "verify the CLI at startup.");
+                "Claude Code CLI starts" + excerptSuffix(run.output()) + ". No test prompt was "
+                        + "sent: the server environment has no ANTHROPIC_API_KEY and no "
+                        + "third-party provider switch such as CLAUDE_CODE_USE_BEDROCK. Agent "
+                        + "runs authenticate with the ANTHROPIC_API_KEY their action type "
+                        + "declares in its Environment, which the startup check cannot verify. "
+                        + "This is expected when keys are configured per action type.");
     }
 
     /**
@@ -441,7 +445,8 @@ public class ClaudeCodeAgent implements Agent {
         if (flat.isEmpty()) {
             return "";
         }
-        String excerpt = flat.length() <= 200 ? flat : flat.substring(0, 200) + "...";
+        String excerpt = flat.length() <= MAX_EXCERPT_CHARS
+                ? flat : flat.substring(0, MAX_EXCERPT_CHARS) + "...";
         return ": \"" + excerpt + "\"";
     }
 

@@ -173,7 +173,8 @@ class ClaudeCodeAgentTest {
         AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
         assertEquals("warning", result.status());
         assertTrue(result.message().contains("2.1.306 (Claude Code)"));
-        assertTrue(result.message().contains("no test prompt"));
+        assertTrue(result.message().contains("No test prompt was sent"));
+        assertTrue(result.message().contains("expected when keys are configured per action type"));
     }
 
     /**
@@ -187,6 +188,20 @@ class ClaudeCodeAgentTest {
         assertEquals("error", result.status());
         assertTrue(result.message().contains("exit code 3"));
         assertTrue(result.message().contains("cannot load module"));
+    }
+
+    /**
+     * {@code --version} makes no network call, so a CLI that does not answer
+     * it in time is broken and reports an error, quoting what it printed.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void hungVersionIsAnError(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo waiting-for-input; exec sleep 30");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, Duration.ofMillis(500), dir);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("did not finish in time"));
+        assertTrue(result.message().contains("waiting-for-input"));
     }
 
     /**
