@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import { Content, DescriptionList, DescriptionListDescription, DescriptionListGroup, DescriptionListTerm, Label,
-    Popover } from "@patternfly/react-core";
+import { Content, Label, Popover } from "@patternfly/react-core";
+import { Table, Tbody, Td, Tr } from "@patternfly/react-table";
 import { RobotIcon } from "@patternfly/react-icons";
 
 /** Props for {@link SessionInfoChip}. */
@@ -48,37 +48,30 @@ export function SessionInfoChip(props: SessionInfoChipProps) {
     const text: string = sessionInfoChipText(costUsd, inputTokens, outputTokens);
     const engineText: string | undefined = engineLabel || engine;
 
+    const rows: Array<[string, string]> = [
+        ...(engineText
+            ? [["Engine", `${engineText}${engine && engineLabel && engine !== engineLabel ? ` (${engine})` : ""}`]
+            ] as Array<[string, string]>
+            : []),
+        ["Requested model", requestedModel || "Engine default"],
+        ["Actual model", actualModel || "Not reported yet"],
+        ["Cost", costUsd > 0 ? `$${costUsd.toFixed(4)}` : "Not reported"],
+        ["Tokens", `${inputTokens.toLocaleString()} in / ${outputTokens.toLocaleString()} out`],
+    ];
+
+    // A striped, header-less two-column table: label on the left, value on the right.
     const details = (
-        <DescriptionList isCompact isHorizontal aria-label="AI session details">
-            {engineText && (
-                <DescriptionListGroup>
-                    <DescriptionListTerm>Engine</DescriptionListTerm>
-                    <DescriptionListDescription>
-                        {engineText}{engine && engineLabel && engine !== engineLabel ? ` (${engine})` : ""}
-                    </DescriptionListDescription>
-                </DescriptionListGroup>
-            )}
-            <DescriptionListGroup>
-                <DescriptionListTerm>Requested model</DescriptionListTerm>
-                <DescriptionListDescription>{requestedModel || "Engine default"}</DescriptionListDescription>
-            </DescriptionListGroup>
-            <DescriptionListGroup>
-                <DescriptionListTerm>Actual model</DescriptionListTerm>
-                <DescriptionListDescription>{actualModel || "Not reported yet"}</DescriptionListDescription>
-            </DescriptionListGroup>
-            <DescriptionListGroup>
-                <DescriptionListTerm>Cost</DescriptionListTerm>
-                <DescriptionListDescription>
-                    {costUsd > 0 ? `$${costUsd.toFixed(4)}` : "Not reported"}
-                </DescriptionListDescription>
-            </DescriptionListGroup>
-            <DescriptionListGroup>
-                <DescriptionListTerm>Tokens</DescriptionListTerm>
-                <DescriptionListDescription>
-                    {`${inputTokens.toLocaleString()} in / ${outputTokens.toLocaleString()} out`}
-                </DescriptionListDescription>
-            </DescriptionListGroup>
-        </DescriptionList>
+        <Table aria-label="AI session details" variant="compact" isStriped
+            className="axiom-session-info-chip__table">
+            <Tbody>
+                {rows.map(([label, value]) => (
+                    <Tr key={label}>
+                        <Td className="axiom-session-info-chip__label" modifier="nowrap">{label}</Td>
+                        <Td>{value}</Td>
+                    </Tr>
+                ))}
+            </Tbody>
+        </Table>
     );
 
     // A click on the chip while it is only hover-open pins it instead of closing it.
