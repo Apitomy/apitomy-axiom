@@ -550,7 +550,15 @@ public class AssistantSessionManager {
      */
     private Consumer<SseEvent> createUsageRecorder(AssistantSession session) {
         double[] lastRecordedCost = {0.0};
+        String[] reportedModel = {null};
         return event -> {
+            if ("session_init".equals(event.type())) {
+                String model = event.data() != null ? event.data().path("model").asText("") : "";
+                if (!model.isBlank()) {
+                    reportedModel[0] = model;
+                }
+                return;
+            }
             if (!"turn_complete".equals(event.type())) {
                 return;
             }
@@ -563,7 +571,9 @@ public class AssistantSessionManager {
                     usage.invocationType = "assistant-session";
                     usage.actionType = "assistant-session";
                     usage.engine = session.getEngineType();
-                    usage.model = session.getModel();
+                    // The model the engine reported running; the configured one (null for the
+                    // engine's default) only when the engine has not reported one.
+                    usage.model = reportedModel[0] != null ? reportedModel[0] : session.getModel();
                     usage.costUsd = costDelta;
                     usage.inputTokens = data.path("inputTokens").asLong(0);
                     usage.outputTokens = data.path("outputTokens").asLong(0);

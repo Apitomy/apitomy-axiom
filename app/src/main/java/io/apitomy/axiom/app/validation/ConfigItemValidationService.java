@@ -2,6 +2,8 @@ package io.apitomy.axiom.app.validation;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.api.beans.NewActionType;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
@@ -22,6 +24,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,6 +54,10 @@ public class ConfigItemValidationService {
 
     @Inject
     SubscriptionFilterEvaluator filterEvaluator;
+
+    /** Supplies engine models for action type model checks; null (in plain unit tests) skips them. */
+    @Inject
+    AgentRegistry agentRegistry;
 
     /**
      * Validates a single configuration item.
@@ -115,9 +122,38 @@ public class ConfigItemValidationService {
             return;
         }
         ActionTypeValidator.KnownNames known = new ActionTypeValidator.KnownNames(context.secretNames(),
-                context.toolNames(), context.toolsetNames(), SdkFunctionRegistry.allToolNames());
+                context.toolNames(), context.toolsetNames(), SdkFunctionRegistry.allToolNames(),
+                defaultEngine(), engineModels(actionType));
         ActionTypeValidator.validate(actionType, known).messages().forEach(m -> problems.add(new ConfigProblem(
                 m.severity().name().toLowerCase(Locale.ROOT), m.field(), "ACTION_TYPE_INVALID", m.message())));
+    }
+
+    private String defaultEngine() {
+        return agentRegistry != null ? agentRegistry.getDefaultAgentType() : null;
+    }
+
+    /**
+     * Returns the available models of the engine an agent action type runs on, keyed by engine type. Only
+     * OpenCode is looked up: its model check is the only one that uses the list.
+     *
+     * @param actionType the action type being validated
+     * @return the engine's models, or an empty map when unknown
+     */
+    private Map<String, List<String>> engineModels(NewActionType actionType) {
+        if (agentRegistry == null || actionType.getModel() == null || actionType.getModel().isBlank()) {
+            return Map.of();
+        }
+        String engine = actionType.getEngine() != null && !actionType.getEngine().isBlank()
+                ? actionType.getEngine() : agentRegistry.getDefaultAgentType();
+        if (!ActionTypeValidator.OPENCODE_ENGINE.equals(engine)) {
+            return Map.of();
+        }
+        try {
+            Agent agent = agentRegistry.getAgent(engine);
+            return agent != null ? Map.of(engine, agent.getAvailableModels()) : Map.of();
+        } catch (RuntimeException e) {
+            return Map.of();
+        }
     }
 
     private void validateToolset(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {

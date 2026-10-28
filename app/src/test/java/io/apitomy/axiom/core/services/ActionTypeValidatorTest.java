@@ -688,4 +688,56 @@ class ActionTypeValidatorTest {
         assertTrue(ActionTypeValidator.REMOVED_PLACEHOLDER_HINTS.values().stream()
                 .noneMatch(h -> h.matches(".*context\\.(ref|repository|subjectName|subjectId)\\b.*")));
     }
+
+    // ── Model checks ─────────────────────────────────────────────────
+
+    private static NewActionType openCodeActor(String engine, String model) {
+        NewActionType at = makeActor("oc", "Uses OpenCode", "Do the thing.");
+        at.setEngine(engine);
+        at.setModel(model);
+        return at;
+    }
+
+    private static ActionTypeValidator.KnownNames engines(String defaultEngine, List<String> openCodeModels) {
+        return new ActionTypeValidator.KnownNames(null, null, null, null, defaultEngine,
+                java.util.Map.of("opencode", openCodeModels));
+    }
+
+    @Test
+    void openCodeModelWithoutProviderIsAnError() {
+        ValidationResult result = ActionTypeValidator.validate(openCodeActor("opencode", "haiku"));
+        assertTrue(result.errors().stream().anyMatch(m -> "model".equals(m.field())
+                && m.message().contains("provider/model")), result.messages().toString());
+    }
+
+    @Test
+    void openCodeModelCheckAppliesWhenOpenCodeIsTheDefaultEngine() {
+        ValidationResult result = ActionTypeValidator.validate(openCodeActor(null, "haiku"),
+                engines("opencode", List.of()));
+        assertTrue(result.hasErrors());
+    }
+
+    @Test
+    void unavailableOpenCodeModelIsAWarning() {
+        ValidationResult result = ActionTypeValidator.validate(openCodeActor("opencode", "anthropic/claude-x"),
+                engines("claude-code", List.of("github-copilot/claude-haiku-4.5")));
+        assertFalse(result.hasErrors());
+        assertTrue(result.warnings().stream().anyMatch(m -> "model".equals(m.field())
+                && m.message().contains("anthropic/claude-x")), result.messages().toString());
+    }
+
+    @Test
+    void availableOpenCodeModelPasses() {
+        ValidationResult result = ActionTypeValidator.validate(
+                openCodeActor("opencode", "github-copilot/claude-haiku-4.5"),
+                engines("claude-code", List.of("github-copilot/claude-haiku-4.5")));
+        assertTrue(result.messages().stream().noneMatch(m -> "model".equals(m.field())));
+    }
+
+    @Test
+    void claudeCodeAliasModelIsNotChecked() {
+        ValidationResult result = ActionTypeValidator.validate(openCodeActor("claude-code", "haiku"),
+                engines("opencode", List.of("a/b")));
+        assertTrue(result.messages().stream().noneMatch(m -> "model".equals(m.field())));
+    }
 }

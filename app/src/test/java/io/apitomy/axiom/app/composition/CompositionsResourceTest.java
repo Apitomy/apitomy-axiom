@@ -115,6 +115,16 @@ class CompositionsResourceTest {
     }
 
     @Test
+    void rejectsMissingRequestBodyWith400() {
+        long id = createComposition();
+        long itemId = addItem(id, "tool", "rest-tool").getLong("id");
+        given().contentType(ContentType.JSON)
+                .post(BASE + "/{id}/items/{itemId}/validate", id, itemId).then().statusCode(400);
+        given().contentType(ContentType.JSON)
+                .post(BASE + "/{id}/publish", id).then().statusCode(400);
+    }
+
+    @Test
     void deletesItem() {
         long id = createComposition();
         long itemId = addItem(id, "tool", "rest-tool").getLong("id");

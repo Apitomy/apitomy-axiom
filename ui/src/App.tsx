@@ -12,6 +12,7 @@ import { ActionTypesPage } from "./pages/ActionTypesPage";
 import { ActivityLogPage } from "./pages/ActivityLogPage";
 import { EventDetailPage } from "./pages/EventDetailPage";
 import { EventStreamPage } from "./pages/EventStreamPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
 import { TasksPage } from "./pages/TasksPage";
 import { EventSourcesPage } from "./pages/EventSourcesPage";
 import { SubjectDetailPage } from "./pages/SubjectDetailPage";
@@ -160,6 +161,7 @@ export function App() {
                         <Route path="/workbench/:compositionId" element={<WorkbenchPage />} />
                         <Route path="/assistant" element={<AssistantPage />} />
                         <Route path="/assistant/:sessionId" element={<AssistantSessionPage />} />
+                        <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                 )}
             </Page>

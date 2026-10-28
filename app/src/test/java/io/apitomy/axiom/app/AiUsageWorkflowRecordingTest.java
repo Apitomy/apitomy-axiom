@@ -80,6 +80,30 @@ class AiUsageWorkflowRecordingTest {
         assertTrue(task.executionLog.contains("Actual: test-model"), task.executionLog);
     }
 
+    /** A human (Inbox) task is answered by a person, so it records no AI usage. */
+    @Test
+    void humanTaskRecordsNoUsage() {
+        long subjectId = TestFixtures.createSubject("ai-rec-" + UUID.randomUUID());
+        long taskId = QuarkusTransaction.requiringNew().call(() -> {
+            TaskEntity task = new TaskEntity();
+            task.subjectId = subjectId;
+            task.actionType = "Approve it";
+            task.createdBy = "test";
+            task.status = "AwaitingInput";
+            task.humanContext = "{}";
+            task.createdOn = Instant.now();
+            task.persist();
+            return task.id;
+        });
+
+        taskExecutionService.completeHumanTask(taskId,
+                new AgentResult(true, "{\"ok\":true}", null, null, null, null, null, null, null, null));
+
+        assertNull(usageFor(taskId));
+        TaskEntity task = QuarkusTransaction.requiringNew().call(() -> TaskEntity.<TaskEntity>findById(taskId));
+        assertEquals("Completed", task.status);
+    }
+
     private static AgentResult usageResult() {
         return new AgentResult(true, "{}", null, null, null, 0.42, 100L, 50L, "claude-code", "test-model");
     }

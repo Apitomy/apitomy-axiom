@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../config/api";
 import { clearEventSchemaCache } from "../hooks/useEventSchemas";
 import { renderWithRouter } from "../test/renderWithRouter";
-import { SubscriptionDetailPage, getElCompletionTree, setElCompletionFields } from "./SubscriptionDetailPage";
+import { SubscriptionDetailPage, completionTreeForExpression, getElCompletionTree, setElCompletionFields }
+    from "./SubscriptionDetailPage";
 
 vi.mock("../config/api", () => ({
     fetchSubscription: vi.fn(),
@@ -15,8 +16,8 @@ vi.mock("../config/api", () => ({
     fetchEventSchemas: vi.fn(),
     fetchEventSchema: vi.fn(),
 }));
-vi.mock("@patternfly/react-code-editor", () => ({
-    CodeEditor: ({ code }: { code: string }) =>
+vi.mock("../components/EditableCodeEditor", () => ({
+    EditableCodeEditor: ({ code }: { code: string }) =>
         <textarea aria-label="Filter expression editor" value={code} readOnly />,
 }));
 vi.mock("../components/StreamEventDetailModal", () => ({ StreamEventDetailModal: () => null }));
@@ -86,6 +87,21 @@ describe("EL completion tree", () => {
         const event = getElCompletionTree().event as Record<string, unknown>;
         expect(event).toHaveProperty("type");
         expect(event.payload).toEqual({ issue: { state: "State" } });
+    });
+
+    it("uses the event type named in the expression, not the panel's previous type", async () => {
+        setElCompletionFields([
+            { path: "event.payload.pullRequest.state", type: "string", description: "PR state", examples: [] },
+        ]);
+        const tree = await completionTreeForExpression("event.type == 'issue.closed' && event.payload.");
+        const event = tree?.event as Record<string, unknown>;
+        expect(event.payload).toEqual({ issue: { state: "string" } });
+        expect(api.fetchEventSchema).toHaveBeenCalledWith("issue.closed");
+    });
+
+    it("falls back to the panel's type when the expression names no known type", async () => {
+        expect(await completionTreeForExpression("event.type == 'nope' && event.")).toBeNull();
+        expect(await completionTreeForExpression("event.source == 'github'")).toBeNull();
     });
 
     it("still offers envelope fields when the schema request fails", async () => {

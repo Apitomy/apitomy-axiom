@@ -52,15 +52,41 @@ public final class ActionTypeValidator {
     private static final Pattern VALID_FIELD_NAME_PATTERN =
             Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
+    /** Engine type whose models must use the {@code provider/model} format. */
+    public static final String OPENCODE_ENGINE = "opencode";
+
     /**
      * Known configuration state for cross-referencing. Any field may be null
      * to skip that check.
+     *
+     * @param secretNames   existing secret names
+     * @param toolNames     existing custom tool names
+     * @param toolsetNames  existing toolset names
+     * @param sdkToolNames  recognized Axiom SDK tool names
+     * @param defaultEngine the engine used when an action type names none, or null if unknown
+     * @param engineModels  models available per engine type; a missing or empty list skips the
+     *                      availability check for that engine
      */
     public record KnownNames(
             Set<String> secretNames,
             Set<String> toolNames,
             Set<String> toolsetNames,
-            Set<String> sdkToolNames) {
+            Set<String> sdkToolNames,
+            String defaultEngine,
+            Map<String, List<String>> engineModels) {
+
+        /**
+         * Creates known names without engine information (skips model availability checks).
+         *
+         * @param secretNames  existing secret names
+         * @param toolNames    existing custom tool names
+         * @param toolsetNames existing toolset names
+         * @param sdkToolNames recognized Axiom SDK tool names
+         */
+        public KnownNames(Set<String> secretNames, Set<String> toolNames, Set<String> toolsetNames,
+                          Set<String> sdkToolNames) {
+            this(secretNames, toolNames, toolsetNames, sdkToolNames, null, null);
+        }
     }
 
     private ActionTypeValidator() {
@@ -93,6 +119,7 @@ public final class ActionTypeValidator {
         validateScriptTemplate(def, messages);
         validateCodeTemplate(def, messages);
         validateAllowedTools(def, known, messages);
+        validateModel(def, known, messages);
         validateEnvironment(def, known, messages);
         validateUndeclaredSecrets(def, known, messages);
         validateFields(def.getInputs(), "inputs", messages);
@@ -277,6 +304,38 @@ public final class ActionTypeValidator {
                         "Tool reference '" + tool
                                 + "' does not match any known pattern."));
             }
+        }
+    }
+
+    /**
+     * Checks an agent action type's model against its engine: OpenCode models must be {@code provider/model}
+     * (an error, since the run would always fail), and a model the engine does not report as available is a
+     * warning (discovery may be incomplete, and some engines accept aliases).
+     */
+    private static void validateModel(NewActionType def, KnownNames known, List<ValidationMessage> messages) {
+        if (!"agent".equals(executionMode(def))) {
+            return;
+        }
+        String model = def.getModel();
+        if (model == null || model.isBlank()) {
+            return;
+        }
+        String engine = def.getEngine() != null && !def.getEngine().isBlank() ? def.getEngine()
+                : known != null ? known.defaultEngine() : null;
+        if (!OPENCODE_ENGINE.equals(engine)) {
+            return;
+        }
+        int slash = model.indexOf('/');
+        if (slash <= 0 || slash == model.length() - 1) {
+            messages.add(error("model", "OpenCode models must use the provider/model format (e.g. "
+                    + "anthropic/claude-sonnet-4-5); '" + model + "' has no provider."));
+            return;
+        }
+        List<String> available = known != null && known.engineModels() != null
+                ? known.engineModels().get(engine) : null;
+        if (available != null && !available.isEmpty() && !available.contains(model)) {
+            messages.add(warning("model", "Model '" + model + "' is not among the models OpenCode reports as "
+                    + "available on this server, so runs will likely fail. Run 'opencode models' to see them."));
         }
     }
 

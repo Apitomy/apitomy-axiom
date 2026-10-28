@@ -24,7 +24,8 @@ import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
 import ExclamationTriangleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-triangle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
-import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { Language } from "@patternfly/react-code-editor";
+import { EditableCodeEditor } from "./EditableCodeEditor";
 import { registerPlaceholderCompletions, inputPlaceholderItems, SCRIPT_ENV_VARS } from "./PlaceholderCompletionProvider";
 import { EditLabelsModal } from "./EditLabelsModal";
 import { AiConfigTab } from "./AiConfigTab";
@@ -449,7 +450,7 @@ function PromptTemplateTab({ value, onChange, inputs, readOnly = false }: {
                     </Button>
                 </FlexItem>
             </Flex>
-            <CodeEditor
+            <EditableCodeEditor
                 code={value}
                 isReadOnly={readOnly}
                 onCodeChange={(v) => onChange(v)}
@@ -563,7 +564,7 @@ function ScriptTab({ value, onChange, inputs, readOnly = false }: {
                     </Button>
                 </FlexItem>
             </Flex>
-            <CodeEditor
+            <EditableCodeEditor
                 code={value}
                 isReadOnly={readOnly}
                 onCodeChange={(v) => onChange(v)}
