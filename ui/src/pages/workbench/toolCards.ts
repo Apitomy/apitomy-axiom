@@ -1,13 +1,25 @@
 /** Workbench MCP tool names (without the `mcp__workbench__` / `workbench_` prefix). */
 export type WorkbenchTool = "get_composition" | "get_item" | "upsert_item" | "remove_item"
     | "propose_workflow_changes" | "validate_composition" | "suggest_test" | "list_stream_events"
-    | "get_stream_event" | "evaluate_expression" | "axiom_list_action_types" | "axiom_get_action_type"
-    | "axiom_list_tools" | "axiom_get_tool" | "axiom_list_secrets";
+    | "get_stream_event" | "evaluate_expression" | "get_test_run" | "preview_subscription"
+    | "list_workflow_runs" | "get_workflow_run" | "get_trace" | "axiom_list_action_types"
+    | "axiom_get_action_type" | "axiom_list_tools" | "axiom_get_tool" | "axiom_list_secrets";
 
-const TOOLS: ReadonlySet<string> = new Set<WorkbenchTool>([
+/** Every workbench MCP tool the chat knows how to label (must match the tools declared by server.js). */
+export const WORKBENCH_TOOLS: readonly WorkbenchTool[] = [
     "get_composition", "get_item", "upsert_item", "remove_item", "propose_workflow_changes",
     "validate_composition", "suggest_test", "list_stream_events", "get_stream_event", "evaluate_expression",
+    "get_test_run", "preview_subscription", "list_workflow_runs", "get_workflow_run", "get_trace",
     "axiom_list_action_types", "axiom_get_action_type", "axiom_list_tools", "axiom_get_tool", "axiom_list_secrets",
+];
+
+const TOOLS: ReadonlySet<string> = new Set<string>(WORKBENCH_TOOLS);
+
+/** Tools that only read state; their cards are grouped together in the chat. */
+const READ_ONLY_TOOLS: ReadonlySet<WorkbenchTool> = new Set<WorkbenchTool>([
+    "get_composition", "get_item", "validate_composition", "get_test_run", "preview_subscription",
+    "list_workflow_runs", "get_workflow_run", "get_trace", "axiom_list_action_types", "axiom_get_action_type",
+    "axiom_list_tools", "axiom_get_tool", "axiom_list_secrets",
 ]);
 
 const PREFIXES: string[] = ["mcp__workbench__", "workbench_"];
@@ -133,8 +145,7 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
     if (tool === null || result === undefined) return null;
     const text: string = unwrapResult(result);
     const firstLine: string = text.split("\n")[0].trim();
-    const readOnly: boolean = tool === "get_composition" || tool === "get_item"
-        || tool === "validate_composition" || tool.startsWith("axiom_");
+    const readOnly: boolean = READ_ONLY_TOOLS.has(tool);
     if (isError === true) {
         return card(readOnly, firstLine || "Error", undefined, undefined, { variant: "danger" });
     }
@@ -192,8 +203,58 @@ export function describeToolCall(toolName: string, input: Record<string, unknown
             return card(true, `Read ${kindLabel(type)}`, name);
         case "validate_composition":
             return card(true, "Checked the composition");
+        case "get_test_run": {
+            const runId: string = str(input?.runId);
+            const m: RegExpExecArray | null = TEST_RUN_RE.exec(firstLine);
+            return card(true, "Read test run", runId, m ? `(${m[1].toLowerCase()})` : undefined);
+        }
+        case "preview_subscription": {
+            const m: RegExpExecArray | null = /^(\d+) of (\d+) recent events match/.exec(firstLine);
+            return card(true, "Previewed subscription filter:", undefined,
+                m ? `${m[1]} of ${plural(Number(m[2]), "recent event")} matched` : undefined);
+        }
+        case "list_workflow_runs": {
+            const n: number = firstLine.startsWith("#") ? nonEmptyLines(text) : 0;
+            return card(true, `Looked at ${plural(n, "workflow run")}`);
+        }
+        case "get_workflow_run": {
+            const status: RegExpExecArray | null = /^status: (\S+)$/m.exec(text);
+            return card(true, "Read workflow run", `#${str(input?.runId)}`,
+                status ? `(${status[1].toLowerCase()})` : undefined);
+        }
+        case "get_trace": {
+            const m: RegExpExecArray | null = /^Trace \S+: (\S+)/.exec(firstLine);
+            return card(true, "Read trace", str(input?.traceId), m ? `(${m[1].toLowerCase()})` : undefined);
+        }
+        case "axiom_list_tools":
+            return card(true, `Listed ${plural(jsonArrayLength(text), "existing tool")}`);
+        case "axiom_get_tool":
+            return card(true, "Read existing tool", name);
+        case "axiom_list_action_types":
+            return card(true, `Listed ${plural(jsonArrayLength(text), "existing action type")}`);
+        case "axiom_get_action_type":
+            return card(true, "Read existing action type", name);
+        case "axiom_list_secrets":
+            return card(true, `Listed ${plural(jsonArrayLength(text), "secret")}`);
         default:
             return card(true, "Looked up existing items");
+    }
+}
+
+/** Matches the status of a get_test_run header: "Test run {id}: {type} {name} {STATUS}[ (exit n)][ in nms], by". */
+const TEST_RUN_RE: RegExp = /^Test run \S+: .+? (\S+?)(?: \(exit -?\d+\))?(?: in \d+ms)?, by /;
+
+function nonEmptyLines(text: string): number {
+    return text.split("\n").filter(l => l.trim() !== "").length;
+}
+
+/** Length of a JSON array result; 0 for non-array results such as "No tools configured.". */
+function jsonArrayLength(text: string): number {
+    try {
+        const parsed: unknown = JSON.parse(text);
+        return Array.isArray(parsed) ? parsed.length : 0;
+    } catch {
+        return 0;
     }
 }
 
