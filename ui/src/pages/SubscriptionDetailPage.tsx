@@ -40,7 +40,7 @@ import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle
 import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
-import { CodeEditor } from "@patternfly/react-code-editor";
+import { EditableCodeEditor } from "../components/EditableCodeEditor";
 import type * as Monaco from "monaco-editor";
 import { ObjectSelect } from "@apitomy/common-ui-components";
 import { LabelInput } from "../components/LabelInput";
@@ -562,7 +562,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
                     EL expression that evaluates to boolean. Leave empty to match all events.
                 </HelperTextItem>
             </HelperText>
-            <CodeEditor
+            <EditableCodeEditor
                 code={filterExpression}
                 onCodeChange={(value) => setFilterExpression(value)}
                 language={EL_LANGUAGE_ID as never}

@@ -16,8 +16,8 @@ vi.mock("../config/api", () => ({
     fetchEventSchemas: vi.fn(),
     fetchEventSchema: vi.fn(),
 }));
-vi.mock("@patternfly/react-code-editor", () => ({
-    CodeEditor: ({ code }: { code: string }) =>
+vi.mock("../components/EditableCodeEditor", () => ({
+    EditableCodeEditor: ({ code }: { code: string }) =>
         <textarea aria-label="Filter expression editor" value={code} readOnly />,
 }));
 vi.mock("../components/StreamEventDetailModal", () => ({ StreamEventDetailModal: () => null }));

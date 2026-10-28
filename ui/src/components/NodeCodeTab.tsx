@@ -1,4 +1,5 @@
-import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { Language } from "@patternfly/react-code-editor";
+import { EditableCodeEditor } from "./EditableCodeEditor";
 import { useEffectiveTheme } from "../hooks/useTheme";
 
 interface NodeCodeTabProps {
@@ -23,7 +24,7 @@ export function NodeCodeTab({ value, onChange, readOnly = false, fillHeight = fa
                 <code>workDir</code>, <code>apiUrl</code>, <code>taskId</code>, <code>log(...)</code> and{" "}
                 <code>exec(cmd, args, options)</code>. Only Node.js built-in modules may be imported.
             </p>
-            <CodeEditor
+            <EditableCodeEditor
                 code={value}
                 isReadOnly={readOnly}
                 onChange={(v) => onChange(v)}
