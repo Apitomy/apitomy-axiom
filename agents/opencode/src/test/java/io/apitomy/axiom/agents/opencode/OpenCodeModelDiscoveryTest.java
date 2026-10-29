@@ -1,7 +1,13 @@
 package io.apitomy.axiom.agents.opencode;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -16,6 +22,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests for {@link OpenCodeModelDiscovery}.
  */
 class OpenCodeModelDiscoveryTest {
+
+    /**
+     * The real command runner reads a model list far larger than a pipe
+     * buffer without blocking, and ignores stderr.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void realRunnerReadsALargeModelList(@TempDir Path dir) throws Exception {
+        Path cli = dir.resolve("opencode");
+        Files.writeString(cli, "#!/bin/sh\necho 'warning: see https://x/y' >&2\n"
+                + "i=0; while [ $i -lt 5000 ]; do echo provider/model-$i; i=$((i+1)); done\n");
+        Files.setPosixFilePermissions(cli, PosixFilePermissions.fromString("rwxr-xr-x"));
+        List<String> models = new OpenCodeModelDiscovery(cli.toString(), true, 5, 60).discoverModels();
+        assertEquals(5000, models.size());
+        assertEquals("provider/model-4999", models.get(4999));
+    }
 
     @Test
     void discoversModelsAndCachesForConfiguredTtl() {

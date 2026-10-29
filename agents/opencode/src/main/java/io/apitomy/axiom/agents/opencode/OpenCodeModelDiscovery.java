@@ -1,5 +1,6 @@
 package io.apitomy.axiom.agents.opencode;
 
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import org.jboss.logging.Logger;
 
 import java.time.Clock;
@@ -9,7 +10,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Discovers OpenCode models by executing {@code opencode models} and caches the
@@ -118,19 +118,21 @@ final class OpenCodeModelDiscovery {
         return new ArrayList<>(deduped);
     }
 
+    /**
+     * Runs {@code opencode models} through {@link BoundedProcessRunner}, which
+     * reads the output while the CLI runs (a long model list can never block
+     * on a full pipe), closes stdin, and kills the whole process tree at the
+     * deadline. Only stdout is parsed, so warnings on stderr cannot be
+     * mistaken for model names.
+     */
     private static CommandResult runCommand(String executable, Duration timeout)
             throws java.io.IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder(executable, "models");
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-
-        boolean completed = process.waitFor(timeout.toSeconds(), TimeUnit.SECONDS);
-        if (!completed) {
-            process.destroyForcibly();
+        BoundedProcessRunner.Result result =
+                BoundedProcessRunner.run(new ProcessBuilder(executable, "models"), timeout);
+        if (result.timedOut()) {
             return new CommandResult(-1, "");
         }
-        String output = new String(process.getInputStream().readAllBytes());
-        return new CommandResult(process.exitValue(), output);
+        return new CommandResult(result.exitCode(), result.stdout());
     }
 
     @FunctionalInterface
