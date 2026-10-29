@@ -79,7 +79,7 @@ class ScriptOutputTest {
         // Fully drained, but only 1 MiB (head and tail) is kept.
         assertTrue(captured.stderrTruncated());
         assertTrue(captured.stderr().startsWith("xxx"));
-        assertTrue(captured.stderr().contains(io.apitomy.axiom.core.util.BoundedProcessRunner.TRUNCATION_MARKER));
+        assertTrue(captured.stderr().contains(io.apitomy.axiom.agents.spi.process.BoundedProcessRunner.TRUNCATION_MARKER));
     }
 
     @Test
@@ -111,7 +111,7 @@ class ScriptOutputTest {
         assertTrue(captured.finished());
         assertTrue(captured.stdout().length() < 2_000_000, "length " + captured.stdout().length());
         assertTrue(captured.stdoutTruncated());
-        assertTrue(captured.stdout().contains(io.apitomy.axiom.core.util.BoundedProcessRunner.TRUNCATION_MARKER));
+        assertTrue(captured.stdout().contains(io.apitomy.axiom.agents.spi.process.BoundedProcessRunner.TRUNCATION_MARKER));
     }
 
     @Test

@@ -9,7 +9,7 @@ import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.agents.copilot.CopilotMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager.McpServerConfig;
-import io.apitomy.axiom.core.util.BoundedProcessRunner;
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

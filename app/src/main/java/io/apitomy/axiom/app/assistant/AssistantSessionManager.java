@@ -24,7 +24,7 @@ import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.core.services.ToolsetResolver;
 import io.apitomy.axiom.core.services.WorkspaceService;
-import io.apitomy.axiom.core.util.BoundedProcessRunner;
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import jakarta.enterprise.event.Event;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.runtime.ShutdownEvent;

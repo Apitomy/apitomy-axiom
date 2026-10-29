@@ -1,6 +1,7 @@
 package io.apitomy.axiom.agents.claudecode;
 
 import io.apitomy.axiom.agents.spi.AgentCheckResult;
+import io.apitomy.axiom.agents.spi.process.CliRun;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -89,8 +90,8 @@ class ClaudeCodeAgentTest {
     /** Generous for fake CLIs that exit at once, short enough to fail fast on a hang. */
     private static final Duration SHORT = Duration.ofSeconds(3);
 
-    private static ClaudeCodeAgent.CliRun completed(int exitCode, String output) {
-        return new ClaudeCodeAgent.CliRun(ClaudeCodeAgent.Outcome.COMPLETED, exitCode, output, null);
+    private static CliRun completed(int exitCode, String output) {
+        return new CliRun(CliRun.Outcome.COMPLETED, exitCode, output, null);
     }
 
     private static ClaudeCodeAgent agentWith(Path executable) {
@@ -170,7 +171,7 @@ class ClaudeCodeAgentTest {
     void withoutCredentialsTheCheckRunsVersionAndWarns(@TempDir Path dir) throws IOException {
         Path cli = fakeCli(dir, "[ \"$1\" = --version ] && echo '2.1.306 (Claude Code)' && exit 0\n"
                 + "echo prompt-was-sent; exit 1");
-        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT);
         assertEquals("warning", result.status());
         assertTrue(result.message().contains("2.1.306 (Claude Code)"));
         assertTrue(result.message().contains("No test prompt was sent"));
@@ -184,7 +185,7 @@ class ClaudeCodeAgentTest {
     @DisabledOnOs(OS.WINDOWS)
     void failingVersionIsAnError(@TempDir Path dir) throws IOException {
         Path cli = fakeCli(dir, "echo 'cannot load module'; exit 3");
-        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT);
         assertEquals("error", result.status());
         assertTrue(result.message().contains("exit code 3"));
         assertTrue(result.message().contains("cannot load module"));
@@ -198,7 +199,7 @@ class ClaudeCodeAgentTest {
     @DisabledOnOs(OS.WINDOWS)
     void hungVersionIsAnError(@TempDir Path dir) throws IOException {
         Path cli = fakeCli(dir, "echo waiting-for-input; exec sleep 30");
-        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, Duration.ofMillis(500), dir);
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, Duration.ofMillis(500));
         assertEquals("error", result.status());
         assertTrue(result.message().contains("did not finish in time"));
         assertTrue(result.message().contains("waiting-for-input"));
@@ -213,39 +214,22 @@ class ClaudeCodeAgentTest {
     void withCredentialsTheProbeIsSent(@TempDir Path dir) throws IOException {
         Path cli = fakeCli(dir, "[ \"$1\" = -p ] && echo AXIOM_OK && exit 0\nexit 1");
         AgentCheckResult result = agentWith(cli)
-                .check(Map.of("ANTHROPIC_API_KEY", "k"), SHORT, SHORT, dir);
+                .check(Map.of("ANTHROPIC_API_KEY", "k"), SHORT, SHORT);
         assertEquals("ok", result.status());
     }
 
     /**
-     * A timed-out probe keeps the output written so far in its message, and
-     * the output file is removed afterwards.
+     * A timed-out probe keeps the output written so far in its message.
      */
     @Test
     @DisabledOnOs(OS.WINDOWS)
     void timeoutQuotesTheOutputSoFar(@TempDir Path dir) throws IOException {
         Path cli = fakeCli(dir, "echo still-connecting; exec sleep 30");
         AgentCheckResult result = agentWith(cli)
-                .check(Map.of("ANTHROPIC_API_KEY", "k"), Duration.ofMillis(500), SHORT, dir);
+                .check(Map.of("ANTHROPIC_API_KEY", "k"), Duration.ofMillis(500), SHORT);
         assertEquals("error", result.status());
         assertTrue(result.message().contains("timed out"));
         assertTrue(result.message().contains("still-connecting"));
-        try (var files = Files.list(dir)) {
-            assertEquals(List.of(cli), files.toList());
-        }
-    }
-
-    /**
-     * The production call passes no directory: the output file then goes to
-     * the default temporary directory, and the CLI really runs.
-     */
-    @Test
-    @DisabledOnOs(OS.WINDOWS)
-    void defaultTemporaryDirectoryIsUsedWithoutADirectory(@TempDir Path dir) throws IOException {
-        Path cli = fakeCli(dir, "echo '2.1.306 (Claude Code)'");
-        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, null);
-        assertEquals("warning", result.status());
-        assertTrue(result.message().contains("2.1.306 (Claude Code)"));
     }
 
     /**
@@ -254,24 +238,10 @@ class ClaudeCodeAgentTest {
     @Test
     void missingCliIsAnError(@TempDir Path dir) {
         AgentCheckResult result = agentWith(dir.resolve("no-such-claude"))
-                .check(Map.of(), SHORT, SHORT, dir);
+                .check(Map.of(), SHORT, SHORT);
         assertEquals("error", result.status());
         assertTrue(result.message().contains("not available"));
         assertTrue(result.message().contains("npm install"));
-    }
-
-    /**
-     * When the output file cannot be created the CLI was never tried, so the
-     * check reports a warning that names the file problem instead of
-     * claiming the CLI is missing.
-     */
-    @Test
-    void outputFileFailureIsAWarningAboutTheFile(@TempDir Path dir) {
-        AgentCheckResult result = agentWith(dir.resolve("claude"))
-                .check(Map.of(), SHORT, SHORT, dir.resolve("missing-dir"));
-        assertEquals("warning", result.status());
-        assertTrue(result.message().contains("temporary file"));
-        assertFalse(result.message().contains("npm install"));
     }
 
     /**
@@ -284,7 +254,7 @@ class ClaudeCodeAgentTest {
         Path cli = fakeCli(dir, "exec sleep 30");
         Thread.currentThread().interrupt();
         try {
-            AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+            AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT);
             assertEquals("warning", result.status());
             assertTrue(result.message().contains("interrupted"));
             assertTrue(Thread.currentThread().isInterrupted());
@@ -294,18 +264,33 @@ class ClaudeCodeAgentTest {
     }
 
     /**
-     * The output excerpt is flattened to one line, capped at 200 characters,
-     * and omitted entirely when the output has no printable content.
+     * A probe that writes far more than a pipe buffer still completes, and
+     * the failure message quotes the end of the output, where the error is.
      */
     @Test
-    void excerptIsFlattenedAndCapped() {
-        assertEquals(": \"a b\"", ClaudeCodeAgent.excerptSuffix("a\n  b"));
-        String longOutput = "x".repeat(250);
-        String suffix = ClaudeCodeAgent.excerptSuffix(longOutput);
-        assertTrue(suffix.startsWith(": \"xxxxx"));
-        assertTrue(suffix.endsWith("...\""));
-        assertEquals(": \"".length() + 200 + "...".length() + "\"".length(), suffix.length());
-        assertEquals("", ClaudeCodeAgent.excerptSuffix("   \n  "));
-        assertEquals("", ClaudeCodeAgent.excerptSuffix(null));
+    @DisabledOnOs(OS.WINDOWS)
+    void chattyFailingProbeQuotesTheEndOfItsOutput(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "i=0; while [ $i -lt 20000 ]; do echo banner-line; i=$((i+1)); done\n"
+                + "echo 'Not logged in'; exit 1");
+        AgentCheckResult result = agentWith(cli)
+                .check(Map.of("ANTHROPIC_API_KEY", "k"), SHORT, SHORT);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("exit code 1"));
+        assertTrue(result.message().contains("Not logged in"));
+    }
+
+    /**
+     * A hung CLI is killed together with the processes it started.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void hungCheckKillsTheChildProcesses(@TempDir Path dir) throws Exception {
+        Path pidFile = dir.resolve("child.pid");
+        Path cli = fakeCli(dir, "sleep 60 & echo $! > " + pidFile + "; wait");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, Duration.ofMillis(800));
+        assertEquals("error", result.status());
+        long childPid = Long.parseLong(Files.readString(pidFile).trim());
+        assertFalse(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false),
+                "child process survived the check");
     }
 }

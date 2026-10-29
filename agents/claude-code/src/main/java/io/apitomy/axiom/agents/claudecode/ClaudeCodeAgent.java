@@ -4,15 +4,13 @@ import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentCheckResult;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
+import io.apitomy.axiom.agents.spi.process.CliRun;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -26,7 +24,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Unified agent implementation for Claude Code. Executes prompts by launching
@@ -45,14 +42,8 @@ public class ClaudeCodeAgent implements Agent {
     private static final String INSTALL_HINT = "npm install -g @anthropic-ai/claude-code";
     private static final String PROBE_ADVICE =
             "Check the API key, the configured model, and network access.";
-    private static final String OUTPUT_FILE_PREFIX = "axiom-claude-code-check-";
     private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration VERSION_TIMEOUT = Duration.ofSeconds(10);
-    private static final Duration STOP_WAIT = Duration.ofSeconds(2);
-    /** Longest CLI output excerpt a check message quotes. */
-    private static final int MAX_EXCERPT_CHARS = 200;
-    /** Far more than the {@link #MAX_EXCERPT_CHARS} excerpt a check message quotes. */
-    private static final int MAX_OUTPUT_BYTES = 4 * 1024;
 
     /**
      * Switches for the providers that {@code --bare} lets use their own
@@ -204,7 +195,7 @@ public class ClaudeCodeAgent implements Agent {
     /** {@inheritDoc} */
     @Override
     public List<AgentCheckResult> healthCheck() {
-        return List.of(check(System.getenv(), PROBE_TIMEOUT, VERSION_TIMEOUT, null));
+        return List.of(check(System.getenv(), PROBE_TIMEOUT, VERSION_TIMEOUT));
     }
 
     /**
@@ -221,17 +212,15 @@ public class ClaudeCodeAgent implements Agent {
      * @param env the server environment
      * @param probeTimeout the time limit for the test prompt
      * @param versionTimeout the time limit for {@code --version}
-     * @param tempDir the directory for the CLI output file, or {@code null}
-     *                for the default temporary directory
      * @return the check result
      */
     AgentCheckResult check(Map<String, String> env, Duration probeTimeout,
-            Duration versionTimeout, Path tempDir) {
+            Duration versionTimeout) {
         boolean credentials = hasServerCredentials(env);
         CliRun run = credentials
-                ? runCli(List.of(executable, "-p", "Reply with exactly: AXIOM_OK", "--bare",
-                        "--output-format", "text", "--max-turns", "1"), probeTimeout, tempDir)
-                : runCli(List.of(executable, "--version"), versionTimeout, tempDir);
+                ? CliRun.run(List.of(executable, "-p", "Reply with exactly: AXIOM_OK", "--bare",
+                        "--output-format", "text", "--max-turns", "1"), probeTimeout)
+                : CliRun.run(List.of(executable, "--version"), versionTimeout);
         AgentCheckResult notRun = notRunResult(run);
         if (notRun != null) {
             return notRun;
@@ -256,130 +245,23 @@ public class ClaudeCodeAgent implements Agent {
         return value != null && ENABLED_VALUES.contains(value.trim().toLowerCase(Locale.ROOT));
     }
 
-    /** How a CLI invocation for the startup check ended. */
-    enum Outcome { COMPLETED, TIMED_OUT, INTERRUPTED, NOT_STARTED, NO_OUTPUT_FILE }
-
-    /**
-     * One CLI invocation for the startup check.
-     *
-     * @param outcome how the invocation ended
-     * @param exitCode the exit code, meaningful only when completed
-     * @param output the combined output read so far, possibly empty
-     * @param failure the cause when the CLI or its output file could not be set up
-     */
-    record CliRun(Outcome outcome, int exitCode, String output, String failure) {
-    }
-
-    /**
-     * Runs the CLI with its combined output redirected to a temporary file,
-     * so a chatty CLI can never block on a full pipe. The output is read
-     * (bounded) also after a timeout, and the file is always removed; a
-     * failed removal is logged and does not change the result.
-     */
-    static CliRun runCli(List<String> command, Duration timeout, Path tempDir) {
-        Path outputFile;
-        try {
-            outputFile = tempDir == null
-                    ? Files.createTempFile(OUTPUT_FILE_PREFIX, ".txt")
-                    : Files.createTempFile(tempDir, OUTPUT_FILE_PREFIX, ".txt");
-        } catch (IOException | RuntimeException e) {
-            return new CliRun(Outcome.NO_OUTPUT_FILE, -1, "", e.getMessage());
-        }
-        try {
-            Process process;
-            try {
-                process = start(command, outputFile);
-            } catch (IOException | RuntimeException e) {
-                return new CliRun(Outcome.NOT_STARTED, -1, "", e.getMessage());
-            }
-            return await(process, timeout, outputFile);
-        } finally {
-            try {
-                Files.deleteIfExists(outputFile);
-            } catch (IOException e) {
-                LOG.debugf("Could not delete the startup check output file %s: %s",
-                        outputFile, e.getMessage());
-            }
-        }
-    }
-
-    /**
-     * Starts the CLI with its combined output going to the file and with
-     * end-of-input on stdin: otherwise {@code -p} waits 3 s for piped input
-     * and prints a warning about it into the output the check quotes.
-     */
-    private static Process start(List<String> command, Path outputFile) throws IOException {
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(true);
-        pb.redirectOutput(outputFile.toFile());
-        Process process = pb.start();
-        try {
-            process.getOutputStream().close();
-        } catch (IOException e) {
-            LOG.debugf("Could not close the startup check's stdin: %s", e.getMessage());
-        }
-        return process;
-    }
-
-    /**
-     * Waits for the CLI and reads its output, also after a timeout. On
-     * interruption the process is stopped first, while the interrupt flag is
-     * still clear so the stop can wait, and the flag is restored afterwards.
-     */
-    private static CliRun await(Process process, Duration timeout, Path outputFile) {
-        try {
-            if (process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                return new CliRun(Outcome.COMPLETED, process.exitValue(),
-                        readBounded(outputFile), null);
-            }
-            stop(process);
-            return new CliRun(Outcome.TIMED_OUT, -1, readBounded(outputFile), null);
-        } catch (InterruptedException e) {
-            stop(process);
-            Thread.currentThread().interrupt();
-            return new CliRun(Outcome.INTERRUPTED, -1, "", null);
-        }
-    }
-
-    /**
-     * Kills the process and waits briefly for it to exit, so the output file
-     * is no longer held open when it is read and deleted (Windows refuses to
-     * delete a file that a running process holds).
-     */
-    private static void stop(Process process) {
-        process.destroyForcibly();
-        try {
-            process.waitFor(STOP_WAIT.toMillis(), TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    private static String readBounded(Path file) {
-        try (InputStream in = Files.newInputStream(file)) {
-            return new String(in.readNBytes(MAX_OUTPUT_BYTES), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "";
-        }
-    }
-
     /**
      * Builds the result of a test prompt sent with server credentials, where
      * any failure is conclusive. The run completed or timed out.
      */
     static AgentCheckResult probeResult(CliRun run, Duration timeout) {
-        if (run.outcome() == Outcome.TIMED_OUT) {
+        if (run.outcome() == CliRun.Outcome.TIMED_OUT) {
             return new AgentCheckResult(CHECK_NAME, STATUS_ERROR,
                     "Claude Code CLI check timed out after " + timeout.toSeconds() + " seconds"
-                            + excerptSuffix(run.output()) + ". " + PROBE_ADVICE);
+                            + run.excerptSuffix() + ". " + PROBE_ADVICE);
         }
-        if (run.exitCode() == 0 && run.output().contains("AXIOM_OK")) {
+        if (run.succeededWith("AXIOM_OK")) {
             return new AgentCheckResult(CHECK_NAME, STATUS_OK,
                     "Claude Code CLI is available and working.");
         }
         return new AgentCheckResult(CHECK_NAME, STATUS_ERROR,
                 "Claude Code CLI probe failed with exit code " + run.exitCode()
-                        + excerptSuffix(run.output()) + ". " + PROBE_ADVICE);
+                        + run.excerptSuffix() + ". " + PROBE_ADVICE);
     }
 
     /**
@@ -390,19 +272,19 @@ public class ClaudeCodeAgent implements Agent {
      * wrapper waiting on input) and reports an error, like a non-zero exit.
      */
     static AgentCheckResult versionResult(CliRun run) {
-        if (run.outcome() == Outcome.TIMED_OUT) {
+        if (run.outcome() == CliRun.Outcome.TIMED_OUT) {
             return new AgentCheckResult(CHECK_NAME, STATUS_ERROR,
-                    "'claude --version' did not finish in time" + excerptSuffix(run.output())
+                    "'claude --version' did not finish in time" + run.excerptSuffix()
                             + ". Check the Claude Code installation: " + INSTALL_HINT);
         }
         if (run.exitCode() != 0) {
             return new AgentCheckResult(CHECK_NAME, STATUS_ERROR,
                     "'claude --version' failed with exit code " + run.exitCode()
-                            + excerptSuffix(run.output()) + ". Reinstall Claude Code: "
+                            + run.excerptSuffix() + ". Reinstall Claude Code: "
                             + INSTALL_HINT);
         }
         return new AgentCheckResult(CHECK_NAME, STATUS_WARNING,
-                "Claude Code CLI starts" + excerptSuffix(run.output()) + ". No test prompt was "
+                "Claude Code CLI starts" + run.excerptSuffix() + ". No test prompt was "
                         + "sent: the server environment has no ANTHROPIC_API_KEY and no "
                         + "third-party provider switch such as CLAUDE_CODE_USE_BEDROCK. Agent "
                         + "runs authenticate with the ANTHROPIC_API_KEY their action type "
@@ -412,42 +294,19 @@ public class ClaudeCodeAgent implements Agent {
 
     /**
      * Maps the outcomes where the CLI did not run to completion or timeout,
-     * shared by both checks: a CLI that cannot start is an error, while a
-     * missing output file or an interrupted check says nothing about the CLI
-     * and reports a warning. Returns {@code null} otherwise.
+     * shared by both checks: a CLI that cannot start is an error, while an
+     * interrupted check says nothing about the CLI and reports a warning.
+     * Returns {@code null} otherwise.
      */
     static AgentCheckResult notRunResult(CliRun run) {
         return switch (run.outcome()) {
             case NOT_STARTED -> new AgentCheckResult(CHECK_NAME, STATUS_ERROR,
                     "Claude Code CLI is not available: " + run.failure() + ". Install Claude "
                             + "Code: " + INSTALL_HINT);
-            case NO_OUTPUT_FILE -> new AgentCheckResult(CHECK_NAME, STATUS_WARNING,
-                    "Claude Code CLI check did not run: could not create a temporary file "
-                            + "for its output (" + run.failure() + ").");
             case INTERRUPTED -> new AgentCheckResult(CHECK_NAME, STATUS_WARNING,
                     "Claude Code CLI check was interrupted before it finished.");
             default -> null;
         };
-    }
-
-    /**
-     * Formats the CLI output as a quoted, single-line excerpt for a check
-     * message, or an empty string when the output has no printable content.
-     * The excerpt is capped so a chatty failure cannot flood the check list.
-     * It quotes the CLI's own output verbatim and is operator-visible in the
-     * server log and the UI, so it must stay an operator-facing diagnostic.
-     */
-    static String excerptSuffix(String output) {
-        if (output == null) {
-            return "";
-        }
-        String flat = output.replaceAll("\\s+", " ").trim();
-        if (flat.isEmpty()) {
-            return "";
-        }
-        String excerpt = flat.length() <= MAX_EXCERPT_CHARS
-                ? flat : flat.substring(0, MAX_EXCERPT_CHARS) + "...";
-        return ": \"" + excerpt + "\"";
     }
 
     private CompletableFuture<AgentResult> executeInternal(AgentRequest request,

@@ -21,6 +21,10 @@
             <artifactId>apitomy-axiom-api</artifactId>
         </dependency>
         <dependency>
+            <groupId>io.apitomy</groupId>
+            <artifactId>apitomy-axiom-agents-spi</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-orm-panache</artifactId>
         </dependency>

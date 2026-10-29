@@ -1,9 +1,13 @@
 package io.apitomy.axiom.agents.opencode;
 
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
+import io.apitomy.axiom.agents.spi.process.CliRun;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -20,6 +24,7 @@ public class OpenCodeServerManager {
     private static final Logger LOG = Logger.getLogger(OpenCodeServerManager.class);
     private static final int MAX_RESTART_ATTEMPTS = 5;
     private static final long INITIAL_BACKOFF_MS = 1000;
+    private static final Duration VERSION_TIMEOUT = Duration.ofSeconds(10);
 
     private final String hostname;
     private final int port;
@@ -55,7 +60,7 @@ public class OpenCodeServerManager {
         // Server not healthy -- try to start or restart
         if (serverProcess != null && serverProcess.isAlive()) {
             LOG.warn("OpenCode server process alive but not healthy, killing and restarting");
-            serverProcess.destroyForcibly();
+            BoundedProcessRunner.killTree(serverProcess);
         }
 
         start();
@@ -80,11 +85,14 @@ public class OpenCodeServerManager {
                     "--port", String.valueOf(activePort),
                     "--hostname", hostname
             );
-            pb.redirectErrorStream(false);
-            pb.redirectInput(ProcessBuilder.Redirect.from(new java.io.File("/dev/null")));
-            // Inherit environment (API keys, etc.)
+            // Nothing reads the server's output, so discard it: an unread pipe
+            // fills up and blocks the server once it has logged enough.
+            pb.redirectOutput(ProcessBuilder.Redirect.DISCARD);
+            pb.redirectError(ProcessBuilder.Redirect.DISCARD);
+            // Inherit environment (API keys, etc.). stdin stays a pipe that
+            // start() closes at once: end-of-input on every OS, unlike /dev/null.
 
-            serverProcess = pb.start();
+            serverProcess = BoundedProcessRunner.start(pb);
             client = new OpenCodeClient(hostname, activePort);
 
             // Wait for server to become healthy
@@ -184,15 +192,19 @@ public class OpenCodeServerManager {
     public synchronized void stop() {
         if (serverProcess != null && serverProcess.isAlive()) {
             LOG.info("Stopping OpenCode server");
+            // Collect the children first: once the server exits they are
+            // re-parented and can no longer be found through it.
+            List<ProcessHandle> children = serverProcess.descendants().toList();
             serverProcess.destroy();
             try {
                 if (!serverProcess.waitFor(10, TimeUnit.SECONDS)) {
-                    serverProcess.destroyForcibly();
+                    BoundedProcessRunner.killTree(serverProcess);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                serverProcess.destroyForcibly();
+                BoundedProcessRunner.killTree(serverProcess);
             }
+            children.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroyForcibly);
         }
         serverProcess = null;
         client = null;
@@ -205,19 +217,8 @@ public class OpenCodeServerManager {
      * @return true if {@code opencode --version} succeeds
      */
     public static boolean isOpenCodeAvailable() {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("opencode", "--version");
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-            boolean completed = process.waitFor(10, TimeUnit.SECONDS);
-            if (!completed) {
-                process.destroyForcibly();
-                return false;
-            }
-            return process.exitValue() == 0;
-        } catch (Exception e) {
-            return false;
-        }
+        CliRun run = CliRun.run(List.of("opencode", "--version"), VERSION_TIMEOUT);
+        return run.outcome() == CliRun.Outcome.COMPLETED && run.exitCode() == 0;
     }
 
     /**
@@ -226,16 +227,9 @@ public class OpenCodeServerManager {
      * @return the CLI version string, or null if unavailable
      */
     public static String getCliVersion() {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("opencode", "--version");
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-            boolean completed = process.waitFor(10, TimeUnit.SECONDS);
-            if (completed && process.exitValue() == 0) {
-                return new String(process.getInputStream().readAllBytes()).trim();
-            }
-        } catch (Exception e) {
-            // ignore
+        CliRun run = CliRun.run(List.of("opencode", "--version"), VERSION_TIMEOUT);
+        if (run.outcome() == CliRun.Outcome.COMPLETED && run.exitCode() == 0) {
+            return run.output().trim();
         }
         return null;
     }

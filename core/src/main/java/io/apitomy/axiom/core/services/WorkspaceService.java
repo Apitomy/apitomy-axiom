@@ -1,7 +1,7 @@
 package io.apitomy.axiom.core.services;
 
 import io.apitomy.axiom.core.entities.SubjectEntity;
-import io.apitomy.axiom.core.util.BoundedProcessRunner;
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;

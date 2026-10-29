@@ -16,7 +16,7 @@ import io.apitomy.axiom.app.validation.ValidationContextFactory;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
-import io.apitomy.axiom.core.util.BoundedProcessRunner;
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
