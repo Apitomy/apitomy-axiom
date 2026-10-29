@@ -1,14 +1,26 @@
 package io.apitomy.axiom.agents.claudecode;
 
+import io.apitomy.axiom.agents.spi.AgentCheckResult;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for the plugin directory parsing in {@link ClaudeCodeAgent}.
+ * Tests for the plugin directory parsing and the startup check in
+ * {@link ClaudeCodeAgent}.
  */
 class ClaudeCodeAgentTest {
 
@@ -72,5 +84,228 @@ class ClaudeCodeAgentTest {
     @Test
     void skipsUnparseableEntries() {
         assertEquals(List.of(), ClaudeCodeAgent.parsePluginDirs("bad\u0000dir"));
+    }
+
+    /** Generous for fake CLIs that exit at once, short enough to fail fast on a hang. */
+    private static final Duration SHORT = Duration.ofSeconds(3);
+
+    private static ClaudeCodeAgent.CliRun completed(int exitCode, String output) {
+        return new ClaudeCodeAgent.CliRun(ClaudeCodeAgent.Outcome.COMPLETED, exitCode, output, null);
+    }
+
+    private static ClaudeCodeAgent agentWith(Path executable) {
+        ClaudeCodeAgent agent = new ClaudeCodeAgent();
+        agent.executable = executable.toString();
+        return agent;
+    }
+
+    /** Writes an executable shell script standing in for the CLI. */
+    private static Path fakeCli(Path dir, String body) throws IOException {
+        Path script = dir.resolve("claude");
+        Files.writeString(script, "#!/bin/sh\n" + body + "\n");
+        Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"));
+        return script;
+    }
+
+    /**
+     * With a server-side key the test prompt is conclusive: the expected
+     * answer is ok.
+     */
+    @Test
+    void answeredProbeIsOk() {
+        AgentCheckResult result = ClaudeCodeAgent.probeResult(completed(0, "AXIOM_OK"), SHORT);
+        assertEquals("ok", result.status());
+    }
+
+    /**
+     * With a server-side key a failed probe is a misconfiguration: an error
+     * that carries the exit code and the CLI output.
+     */
+    @Test
+    void failedProbeIsAnError() {
+        AgentCheckResult result = ClaudeCodeAgent.probeResult(completed(1, "Unknown model"), SHORT);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("exit code 1"));
+        assertTrue(result.message().contains("Unknown model"));
+    }
+
+    /**
+     * The expected token with a non-zero exit, or exit 0 without the token,
+     * proves nothing: both are errors.
+     */
+    @Test
+    void probeNeedsBothExitZeroAndTheToken() {
+        assertEquals("error", ClaudeCodeAgent.probeResult(completed(1, "AXIOM_OK"), SHORT).status());
+        assertEquals("error", ClaudeCodeAgent.probeResult(completed(0, "not sure"), SHORT).status());
+    }
+
+    /**
+     * Only a non-blank ANTHROPIC_API_KEY or a third-party provider switch the
+     * CLI reads as on (1, true, yes or on) lets a --bare CLI authenticate.
+     */
+    @Test
+    void serverCredentialsAreTheKeyOrAThirdPartyProvider() {
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of()));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("ANTHROPIC_API_KEY", "  ")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("ANTHROPIC_API_KEY", "k")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_BEDROCK", "1")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_VERTEX", "true")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_MANTLE", " ON ")));
+        assertTrue(ClaudeCodeAgent.hasServerCredentials(
+                Map.of("CLAUDE_CODE_USE_ANTHROPIC_AWS", "yes")));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_FOUNDRY", "0")));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_BEDROCK", "false")));
+        // the CLI reads only 1/true/yes/on as on, so these leave the provider off
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_BEDROCK", "off")));
+        assertFalse(ClaudeCodeAgent.hasServerCredentials(Map.of("CLAUDE_CODE_USE_VERTEX", "no")));
+    }
+
+    /**
+     * Without server credentials no test prompt is sent: the check runs
+     * {@code --version} and reports a warning that names the version and
+     * says the runs' own keys cannot be verified.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void withoutCredentialsTheCheckRunsVersionAndWarns(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "[ \"$1\" = --version ] && echo '2.1.306 (Claude Code)' && exit 0\n"
+                + "echo prompt-was-sent; exit 1");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+        assertEquals("warning", result.status());
+        assertTrue(result.message().contains("2.1.306 (Claude Code)"));
+        assertTrue(result.message().contains("No test prompt was sent"));
+        assertTrue(result.message().contains("expected when keys are configured per action type"));
+    }
+
+    /**
+     * A CLI whose --version fails is broken and reports an error.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void failingVersionIsAnError(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo 'cannot load module'; exit 3");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("exit code 3"));
+        assertTrue(result.message().contains("cannot load module"));
+    }
+
+    /**
+     * {@code --version} makes no network call, so a CLI that does not answer
+     * it in time is broken and reports an error, quoting what it printed.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void hungVersionIsAnError(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo waiting-for-input; exec sleep 30");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, Duration.ofMillis(500), dir);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("did not finish in time"));
+        assertTrue(result.message().contains("waiting-for-input"));
+    }
+
+    /**
+     * With server credentials the test prompt is sent, and its answer
+     * decides the status.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void withCredentialsTheProbeIsSent(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "[ \"$1\" = -p ] && echo AXIOM_OK && exit 0\nexit 1");
+        AgentCheckResult result = agentWith(cli)
+                .check(Map.of("ANTHROPIC_API_KEY", "k"), SHORT, SHORT, dir);
+        assertEquals("ok", result.status());
+    }
+
+    /**
+     * A timed-out probe keeps the output written so far in its message, and
+     * the output file is removed afterwards.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void timeoutQuotesTheOutputSoFar(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo still-connecting; exec sleep 30");
+        AgentCheckResult result = agentWith(cli)
+                .check(Map.of("ANTHROPIC_API_KEY", "k"), Duration.ofMillis(500), SHORT, dir);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("timed out"));
+        assertTrue(result.message().contains("still-connecting"));
+        try (var files = Files.list(dir)) {
+            assertEquals(List.of(cli), files.toList());
+        }
+    }
+
+    /**
+     * The production call passes no directory: the output file then goes to
+     * the default temporary directory, and the CLI really runs.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void defaultTemporaryDirectoryIsUsedWithoutADirectory(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "echo '2.1.306 (Claude Code)'");
+        AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, null);
+        assertEquals("warning", result.status());
+        assertTrue(result.message().contains("2.1.306 (Claude Code)"));
+    }
+
+    /**
+     * A CLI that cannot be started at all is an error with the install hint.
+     */
+    @Test
+    void missingCliIsAnError(@TempDir Path dir) {
+        AgentCheckResult result = agentWith(dir.resolve("no-such-claude"))
+                .check(Map.of(), SHORT, SHORT, dir);
+        assertEquals("error", result.status());
+        assertTrue(result.message().contains("not available"));
+        assertTrue(result.message().contains("npm install"));
+    }
+
+    /**
+     * When the output file cannot be created the CLI was never tried, so the
+     * check reports a warning that names the file problem instead of
+     * claiming the CLI is missing.
+     */
+    @Test
+    void outputFileFailureIsAWarningAboutTheFile(@TempDir Path dir) {
+        AgentCheckResult result = agentWith(dir.resolve("claude"))
+                .check(Map.of(), SHORT, SHORT, dir.resolve("missing-dir"));
+        assertEquals("warning", result.status());
+        assertTrue(result.message().contains("temporary file"));
+        assertFalse(result.message().contains("npm install"));
+    }
+
+    /**
+     * An interrupted check says nothing about the CLI and reports a warning,
+     * and the interrupt flag is restored for the caller.
+     */
+    @Test
+    @DisabledOnOs(OS.WINDOWS)
+    void interruptedCheckIsAWarning(@TempDir Path dir) throws IOException {
+        Path cli = fakeCli(dir, "exec sleep 30");
+        Thread.currentThread().interrupt();
+        try {
+            AgentCheckResult result = agentWith(cli).check(Map.of(), SHORT, SHORT, dir);
+            assertEquals("warning", result.status());
+            assertTrue(result.message().contains("interrupted"));
+            assertTrue(Thread.currentThread().isInterrupted());
+        } finally {
+            Thread.interrupted();
+        }
+    }
+
+    /**
+     * The output excerpt is flattened to one line, capped at 200 characters,
+     * and omitted entirely when the output has no printable content.
+     */
+    @Test
+    void excerptIsFlattenedAndCapped() {
+        assertEquals(": \"a b\"", ClaudeCodeAgent.excerptSuffix("a\n  b"));
+        String longOutput = "x".repeat(250);
+        String suffix = ClaudeCodeAgent.excerptSuffix(longOutput);
+        assertTrue(suffix.startsWith(": \"xxxxx"));
+        assertTrue(suffix.endsWith("...\""));
+        assertEquals(": \"".length() + 200 + "...".length() + "\"".length(), suffix.length());
+        assertEquals("", ClaudeCodeAgent.excerptSuffix("   \n  "));
+        assertEquals("", ClaudeCodeAgent.excerptSuffix(null));
     }
 }
