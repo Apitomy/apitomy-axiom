@@ -486,7 +486,8 @@ public final class ActionTypeValidator {
 
     /**
      * Rejects {@code {{inputs.X}}} inside the body of a quoted heredoc ({@code <<'EOF'}), where bash expands
-     * nothing, so the value would never reach the script.
+     * nothing, or inside a comment, which bash discards; in both cases the value would never reach the
+     * script.
      */
     private static void checkQuotedHeredocPlaceholders(String script, List<ValidationMessage> messages) {
         ShellContext.Context[] contexts = ShellContext.analyze(script);
@@ -497,6 +498,11 @@ public final class ActionTypeValidator {
                 messages.add(error("scriptTemplate", placeholder + " is inside a quoted heredoc (<<'EOF'), "
                         + "where bash expands nothing, so the value would never reach the script. Use an "
                         + "unquoted heredoc (<<EOF) or pipe the value: printf '%s' " + placeholder + " | ..."));
+            } else if (contexts[matcher.start()] == ShellContext.Context.COMMENT) {
+                String placeholder = matcher.group();
+                messages.add(error("scriptTemplate", placeholder + " is inside a comment, which bash "
+                        + "discards before expansion, so the value would never reach the script. Move it "
+                        + "out of the comment or remove it."));
             }
         }
     }

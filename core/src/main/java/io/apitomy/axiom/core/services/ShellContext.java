@@ -7,7 +7,7 @@ import java.util.Deque;
 /**
  * Classifies every character of a bash script by the quoting context it appears in, including heredoc bodies.
  * Used to substitute {@code {{inputs.X}}} placeholders with a correctly formed shell reference and to reject
- * placeholders where bash never expands anything (quoted heredoc bodies).
+ * placeholders where bash never expands anything (quoted heredoc bodies and comments).
  *
  * <p>Handles single and double quotes, backslash escapes, heredocs ({@code <<WORD}, {@code <<-WORD}, with a
  * quoted or unquoted delimiter, several per line), and comments: an unquoted {@code #} at the start of a word
@@ -30,7 +30,9 @@ public final class ShellContext {
         /** Inside the body of a heredoc with an unquoted delimiter: parameters expand, quotes are literal. */
         HEREDOC,
         /** Inside the body of a heredoc with a quoted delimiter: nothing expands. */
-        QUOTED_HEREDOC
+        QUOTED_HEREDOC,
+        /** Inside a comment, from the {@code #} to the end of the line: bash discards it before expansion. */
+        COMMENT
     }
 
     private record PendingHeredoc(String delimiter, boolean quoted, boolean stripTabs) {
@@ -107,8 +109,8 @@ public final class ShellContext {
             // quotes inside it, so quote state must not change. Inside arithmetic a '#' is a
             // literal (base notation, operators), not a comment.
             if (c == '#' && arithmetic.isEmpty() && i != gluedAt && startsComment(script, i)) {
-                i++;
                 while (i < n && script.charAt(i) != '\n') {
+                    contexts[i] = Context.COMMENT;
                     i++;
                 }
                 continue;

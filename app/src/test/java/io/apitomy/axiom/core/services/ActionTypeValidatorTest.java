@@ -222,6 +222,17 @@ class ActionTypeValidatorTest {
     }
 
     @Test
+    void placeholderInCommentIsError() {
+        NewActionType at = makeScript("test", "desc", "echo hi # value: {{inputs.labels}}\n");
+        at.setInputs(List.of(field("labels", ActionTypeField.Type.STRING)));
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        assertTrue(result.errors().stream().anyMatch(m -> m.field().equals("scriptTemplate")
+                && m.message().contains("inside a comment")), result.toString());
+    }
+
+    @Test
     void placeholderInUnquotedHeredocIsAccepted() {
         NewActionType at = makeScript("test", "desc", "cat <<EOF | jq .\n{{inputs.labels}}\nEOF\n");
         at.setInputs(List.of(field("labels", ActionTypeField.Type.OBJECT)));

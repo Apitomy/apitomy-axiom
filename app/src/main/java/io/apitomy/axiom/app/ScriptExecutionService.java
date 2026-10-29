@@ -600,6 +600,13 @@ public class ScriptExecutionService {
                         match = placeholder;
                     }
                 }
+                if (match != null && contexts[i] == ShellContext.Context.COMMENT) {
+                    // bash discards comments before expansion: leave the placeholder as inert text and
+                    // do not bind a variable the script can never see (the validator rejects this).
+                    out.append(match);
+                    i += match.length();
+                    continue;
+                }
                 if (match != null) {
                     String envName = bindings.get(match);
                     env.put(envName, values.get(match));
@@ -627,6 +634,8 @@ public class ScriptExecutionService {
             // Heredoc body: expansions are not word-split or executed, and quotes would be literal text.
             // (In a quoted heredoc nothing expands at all; the validator rejects placeholders there.)
             case HEREDOC, QUOTED_HEREDOC -> "${" + envName + "}";
+            // Never reached: render() leaves placeholders in comments untouched.
+            case COMMENT -> throw new IllegalStateException("placeholder in a comment");
             // Unquoted: quote the expansion so whitespace does not word-split it.
             case UNQUOTED -> "\"${" + envName + "}\"";
         };
