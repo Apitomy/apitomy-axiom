@@ -22,8 +22,8 @@
 
     <modules>
         <module>common/api</module>
-        <module>core</module>
         <module>agents/spi</module>
+        <module>core</module>
         <module>agents/claude-code</module>
         <module>agents/opencode</module>
         <module>agents/copilot</module>

@@ -1,4 +1,4 @@
-package io.apitomy.axiom.core.util;
+package io.apitomy.axiom.agents.spi.process;
 
 import java.io.Closeable;
 import java.io.IOException;

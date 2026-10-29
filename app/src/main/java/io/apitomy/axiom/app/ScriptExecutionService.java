@@ -15,7 +15,7 @@ import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.InputBindingResolver;
 import io.apitomy.axiom.core.services.ShellContext;
 import io.apitomy.axiom.core.tracing.TraceService;
-import io.apitomy.axiom.core.util.BoundedProcessRunner;
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import io.quarkus.arc.Arc;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
