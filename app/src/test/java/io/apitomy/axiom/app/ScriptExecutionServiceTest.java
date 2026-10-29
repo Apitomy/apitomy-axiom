@@ -247,6 +247,18 @@ class ScriptExecutionServiceTest {
     }
 
     @Test
+    void placeholderInsideCommentIsLeftUntouchedAndNotBound() {
+        Map<String, String> env = new LinkedHashMap<>();
+
+        String resolved = substitute("# uses {{inputs.title}}\necho done\n", "1", env);
+
+        // bash discards comments before expansion, so the placeholder stays inert text
+        // and no variable is bound for a value the script could never see.
+        assertEquals("# uses {{inputs.title}}\necho done\n", resolved);
+        assertFalse(env.containsKey("AXIOM_INPUT_title"));
+    }
+
+    @Test
     void whitespaceValueInDoubleQuotesStaysSingleArgument()
             throws IOException, InterruptedException {
         Map<String, String> env = new LinkedHashMap<>();

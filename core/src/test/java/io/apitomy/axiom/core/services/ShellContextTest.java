@@ -2,6 +2,7 @@ package io.apitomy.axiom.core.services;
 
 import org.junit.jupiter.api.Test;
 
+import static io.apitomy.axiom.core.services.ShellContext.Context.COMMENT;
 import static io.apitomy.axiom.core.services.ShellContext.Context.DOUBLE;
 import static io.apitomy.axiom.core.services.ShellContext.Context.HEREDOC;
 import static io.apitomy.axiom.core.services.ShellContext.Context.QUOTED_HEREDOC;
@@ -78,6 +79,17 @@ class ShellContextTest {
         String s = "# sync-target's flag\nX1 {{inputs.x}}\n";
         assertEquals(UNQUOTED, at(s, "X1"));
         assertEquals(UNQUOTED, at(s, "{{inputs.x}}"));
+    }
+
+    @Test
+    void commentCharactersAreClassifiedAsComment() {
+        String s = "#!/bin/bash\necho X1 # see {{inputs.x}}\nX2";
+        assertEquals(COMMENT, at(s, "#!"));
+        assertEquals(UNQUOTED, at(s, "X1"));
+        assertEquals(COMMENT, at(s, "# see"));
+        assertEquals(COMMENT, at(s, "{{inputs.x}}"));
+        assertEquals(UNQUOTED, at(s, "\nX2"));
+        assertEquals(UNQUOTED, at(s, "X2"));
     }
 
     @Test
