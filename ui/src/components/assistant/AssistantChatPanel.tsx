@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AssistantMessageList, type ChatMessage, type ToolUseGroupRenderer } from "./AssistantMessageList";
 import { AssistantMessageInput } from "./AssistantMessageInput";
-import { AssistantSubagentPanel } from "./AssistantSubagentPanel";
+import { AssistantSubagentPanel, initialSubagentPanelTab, type SubagentPanelTab } from "./AssistantSubagentPanel";
+import { AssistantActivityStrip, activityStripSummary } from "./AssistantActivityStrip";
+import { Button } from "@patternfly/react-core";
+import TimesIcon from "@patternfly/react-icons/dist/esm/icons/times-icon";
 import { type AssistantTodo } from "./AssistantTodoPanel";
 import type { SubagentCardData, SubagentActivityEntry, SubagentPermission } from "./AssistantSubagentCard";
 import type { BackgroundTaskCardData } from "./AssistantBackgroundTaskCard";
@@ -47,11 +50,16 @@ interface AssistantChatPanelProps {
     prefill?: { text: string; nonce: number };
     /** Optional custom rendering of runs of consecutive tool calls (see AssistantMessageList). */
     renderToolUseGroup?: ToolUseGroupRenderer;
+    /**
+     * How subagents, background tasks and todos are shown: "side" (default) as a resizable column beside the
+     * chat, "compact" as a one-line strip above the input that opens the panel in a popover.
+     */
+    sidePanelMode?: "side" | "compact";
 }
 
 let messageIdCounter = 0;
 
-export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate, onSend, onInterrupt, disabledReason, prefill, renderToolUseGroup }: AssistantChatPanelProps) {
+export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, onAutoApprovalCountChange, onAllowAllChanged, onModelDetected, onCostUpdate, onSend, onInterrupt, disabledReason, prefill, renderToolUseGroup, sidePanelMode = "side" }: AssistantChatPanelProps) {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [todos, setTodos] = useState<AssistantTodo[]>([]);
     const [isProcessing, setIsProcessingState] = useState(false);
@@ -854,10 +862,18 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
     const [highlightedCardId, setHighlightedCardId] = useState<string | undefined>(undefined);
     const [highlightedAgentBlockId, setHighlightedAgentBlockId] = useState<string | undefined>(undefined);
 
+    const [popoverOpen, setPopoverOpen] = useState(false);
+    const [popoverTab, setPopoverTab] = useState<SubagentPanelTab | undefined>(undefined);
+    const isCompact: boolean = sidePanelMode === "compact";
+
     const handleSubagentClick = useCallback((toolUseId: string) => {
+        if (isCompact) {
+            setPopoverTab("subagents");
+            setPopoverOpen(true);
+        }
         setHighlightedCardId(toolUseId);
         setTimeout(() => setHighlightedCardId(undefined), 2000);
-    }, []);
+    }, [isCompact]);
 
     const handleNavigateToAgent = useCallback((toolUseId: string) => {
         const el = document.querySelector(`[data-tool-use-id="${CSS.escape(toolUseId)}"]`);
@@ -877,6 +893,68 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
         [backgroundTaskCards]
     );
     const hasSidePanel = visibleSubagentCards.length > 0 || visibleBgTaskCards.length > 0 || todos.length > 0;
+    const stripSummary: string = useMemo(
+        () => activityStripSummary(visibleSubagentCards, visibleBgTaskCards, todos),
+        [visibleSubagentCards, visibleBgTaskCards, todos]
+    );
+    // Unresolved subagent approvals, as "cardId:permissionId".
+    const pendingApprovals: string[] = useMemo(
+        () => visibleSubagentCards.flatMap((c) =>
+            c.permissions.filter((p) => !p.resolved).map((p) => `${c.id}:${p.permissionId}`)),
+        [visibleSubagentCards]
+    );
+    const seenApprovalsRef = useRef<Set<string>>(new Set());
+
+    // In compact mode, a new pending subagent approval opens the popover on the card that needs it.
+    useEffect(() => {
+        if (!isCompact) return;
+        const fresh: string | undefined = pendingApprovals.find((k) => !seenApprovalsRef.current.has(k));
+        seenApprovalsRef.current = new Set(pendingApprovals);
+        if (fresh !== undefined) {
+            setPopoverTab("subagents");
+            setPopoverOpen(true);
+            setHighlightedCardId(fresh.substring(0, fresh.indexOf(":")));
+        }
+    }, [isCompact, pendingApprovals]);
+
+    useEffect(() => {
+        if (!hasSidePanel) {
+            setPopoverOpen(false);
+        }
+    }, [hasSidePanel]);
+
+    const togglePopover = useCallback(() => {
+        setPopoverOpen((open) => {
+            if (!open) {
+                setPopoverTab(pendingApprovals.length > 0
+                    ? "subagents"
+                    : initialSubagentPanelTab(visibleSubagentCards.length, visibleBgTaskCards.length, todos.length));
+            }
+            return !open;
+        });
+    }, [pendingApprovals, visibleSubagentCards, visibleBgTaskCards, todos]);
+
+    useEffect(() => {
+        if (!popoverOpen) return;
+        const onKeyDown = (e: KeyboardEvent): void => {
+            if (e.key === "Escape") setPopoverOpen(false);
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, [popoverOpen]);
+
+    const subagentPanelProps = {
+        subagentCards: visibleSubagentCards,
+        backgroundTaskCards: visibleBgTaskCards,
+        todos,
+        onDismissSubagent: handleDismissCard,
+        onDismissBackgroundTask: handleDismissCard,
+        onDismissAllCompleted: handleDismissAllCompleted,
+        onNavigateToAgent: handleNavigateToAgent,
+        onPermissionRespond: handlePermissionRespond,
+        onAllowAll: handleSubagentAllowAll,
+        highlightedCardId,
+    };
 
     return (
         <div style={{
@@ -901,6 +979,25 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     highlightedAgentBlockId={highlightedAgentBlockId}
                     renderToolUseGroup={renderToolUseGroup}
                 />
+                {isCompact && hasSidePanel && (
+                    <div className="axiom-activity-popover-anchor">
+                        {popoverOpen && (
+                            <div className="axiom-activity-popover" role="dialog"
+                                aria-label="Subagents, background tasks and todos">
+                                <div className="axiom-activity-popover__header">
+                                    <Button variant="plain" size="sm" aria-label="Close"
+                                        icon={<TimesIcon />} onClick={() => setPopoverOpen(false)} />
+                                </div>
+                                <div className="axiom-activity-popover__body">
+                                    <AssistantSubagentPanel {...subagentPanelProps} variant="popover"
+                                        activeTab={popoverTab} onActiveTabChange={setPopoverTab} />
+                                </div>
+                            </div>
+                        )}
+                        <AssistantActivityStrip summary={stripSummary} attention={pendingApprovals.length > 0}
+                            expanded={popoverOpen} onToggle={togglePopover} />
+                    </div>
+                )}
                 <AssistantMessageInput
                     onSend={handleSend}
                     disabled={isProcessing || !!disabledReason}
@@ -912,18 +1009,9 @@ export function AssistantChatPanel({ sessionId, onItemsChanged, onModeChange, on
                     slashCommands={slashCommands}
                 />
             </div>
-            {hasSidePanel && (
+            {!isCompact && hasSidePanel && (
                 <AssistantSubagentPanel
-                    subagentCards={visibleSubagentCards}
-                    backgroundTaskCards={visibleBgTaskCards}
-                    todos={todos}
-                    onDismissSubagent={handleDismissCard}
-                    onDismissBackgroundTask={handleDismissCard}
-                    onDismissAllCompleted={handleDismissAllCompleted}
-                    onNavigateToAgent={handleNavigateToAgent}
-                    onPermissionRespond={handlePermissionRespond}
-                    onAllowAll={handleSubagentAllowAll}
-                    highlightedCardId={highlightedCardId}
+                    {...subagentPanelProps}
                     width={panelWidth}
                     onWidthChange={setPanelWidth}
                 />
