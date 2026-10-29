@@ -3,8 +3,12 @@ import { Button, ExpandableSection, Label } from "@patternfly/react-core";
 import CodeIcon from "@patternfly/react-icons/dist/esm/icons/code-icon";
 import EditIcon from "@patternfly/react-icons/dist/esm/icons/edit-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import FilterIcon from "@patternfly/react-icons/dist/esm/icons/filter-icon";
 import FlaskIcon from "@patternfly/react-icons/dist/esm/icons/flask-icon";
+import HistoryIcon from "@patternfly/react-icons/dist/esm/icons/history-icon";
+import KeyIcon from "@patternfly/react-icons/dist/esm/icons/key-icon";
 import ProjectDiagramIcon from "@patternfly/react-icons/dist/esm/icons/project-diagram-icon";
+import RouteIcon from "@patternfly/react-icons/dist/esm/icons/route-icon";
 import SearchIcon from "@patternfly/react-icons/dist/esm/icons/search-icon";
 import StreamIcon from "@patternfly/react-icons/dist/esm/icons/stream-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
@@ -33,10 +37,16 @@ function iconFor(tool: WorkbenchTool | null, card: ToolCard): ReactNode {
         case "upsert_item": return <EditIcon />;
         case "remove_item": return <TrashIcon />;
         case "propose_workflow_changes": return <ProjectDiagramIcon />;
-        case "suggest_test": return <FlaskIcon />;
+        case "suggest_test":
+        case "get_test_run": return <FlaskIcon />;
         case "evaluate_expression": return <CodeIcon />;
         case "list_stream_events":
         case "get_stream_event": return <StreamIcon />;
+        case "preview_subscription": return <FilterIcon />;
+        case "list_workflow_runs":
+        case "get_workflow_run": return <HistoryIcon />;
+        case "get_trace": return <RouteIcon />;
+        case "axiom_list_secrets": return <KeyIcon />;
         default: return <SearchIcon />;
     }
 }
