@@ -56,3 +56,61 @@ describe("AssistantChatPanel overrides", () => {
         expect(container).toBeTruthy();
     });
 });
+
+describe("AssistantChatPanel compact side panel mode", () => {
+    const todosEvent = { eventIndex: 1, eventType: "todos", eventData: { todos: [
+        { content: "a", status: "completed" }, { content: "b", status: "in_progress" },
+    ] } };
+    const subagentEvent = { eventIndex: 2, eventType: "subagent_started", eventData: {
+        toolUseId: "tu1", taskId: "t1", description: "Explore code", subagentType: "explore" } };
+    const bgEvent = { eventIndex: 3, eventType: "background_task_started", eventData: {
+        toolUseId: "bg1", taskId: "b1", description: "npm build" } };
+
+    it("shows a summary strip instead of the side column", async () => {
+        vi.spyOn(api, "fetchAssistantSessionHistory").mockResolvedValue([todosEvent, subagentEvent, bgEvent] as never);
+        const { container } = render(<AssistantChatPanel sessionId="s1" sidePanelMode="compact" />);
+        const strip = await screen.findByTestId("assistant-activity-strip");
+        expect(strip.textContent).toContain("Todos 1/2 · 1 subagent running · 1 background task running");
+        expect(container.querySelector(".axiom-subagent-panel")).toBeNull();
+    });
+
+    it("opens the popover when the strip is clicked", async () => {
+        vi.spyOn(api, "fetchAssistantSessionHistory").mockResolvedValue([todosEvent] as never);
+        render(<AssistantChatPanel sessionId="s1" sidePanelMode="compact" />);
+        const strip = await screen.findByTestId("assistant-activity-strip");
+        expect(screen.queryByRole("dialog")).toBeNull();
+        fireEvent.click(strip);
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog.querySelector(".axiom-subagent-panel--popover")).toBeTruthy();
+        expect(dialog.textContent).toContain("Todos (1/2)");
+        fireEvent.click(strip);
+        await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    });
+
+    it("opens the popover automatically on a pending subagent approval", async () => {
+        vi.spyOn(api, "fetchAssistantSessionHistory").mockResolvedValue([subagentEvent,
+            { eventIndex: 4, eventType: "permission_request", eventData: {
+                requestId: "p1", toolName: "Bash", toolInput: { command: "ls" }, subagentToolUseId: "tu1" } },
+        ] as never);
+        render(<AssistantChatPanel sessionId="s1" sidePanelMode="compact" />);
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog.querySelector('.axiom-subagent-card')).toBeTruthy();
+        const strip = screen.getByTestId("assistant-activity-strip");
+        expect(strip.className).toContain("axiom-activity-strip--attention");
+        expect(strip.textContent).toContain("1 approval needed");
+    });
+
+    it("hides the strip when there is nothing to show", async () => {
+        vi.spyOn(api, "fetchAssistantSessionHistory").mockResolvedValue([] as never);
+        render(<AssistantChatPanel sessionId="s1" sidePanelMode="compact" />);
+        await screen.findByRole("textbox");
+        expect(screen.queryByTestId("assistant-activity-strip")).toBeNull();
+    });
+
+    it("keeps the side column in the default mode", async () => {
+        vi.spyOn(api, "fetchAssistantSessionHistory").mockResolvedValue([todosEvent] as never);
+        const { container } = render(<AssistantChatPanel sessionId="s1" />);
+        await waitFor(() => expect(container.querySelector(".axiom-subagent-panel")).toBeTruthy());
+        expect(screen.queryByTestId("assistant-activity-strip")).toBeNull();
+    });
+});

@@ -26,8 +26,32 @@ interface AssistantSubagentPanelProps {
     onPermissionRespond?: (permissionId: string, allow: boolean, toolInput?: Record<string, unknown>) => void;
     onAllowAll?: (subagentToolUseId: string) => void;
     highlightedCardId?: string;
-    width: number;
-    onWidthChange: (width: number) => void;
+    /** Width of the side column; ignored in the popover variant. */
+    width?: number;
+    onWidthChange?: (width: number) => void;
+    /** "side" renders a resizable column; "popover" renders the content to fill its container. */
+    variant?: "side" | "popover";
+    /** When given, the active tab is controlled by the parent. */
+    activeTab?: SubagentPanelTab;
+    onActiveTabChange?: (tab: SubagentPanelTab) => void;
+}
+
+/** The tabs of the subagent panel. */
+export type SubagentPanelTab = "subagents" | "background" | "todos";
+
+/**
+ * Returns the tab to show first: the first one that has content.
+ *
+ * @param subagentCount number of subagent cards
+ * @param backgroundCount number of background task cards
+ * @param todoCount number of todos
+ * @returns the initial tab
+ */
+export function initialSubagentPanelTab(subagentCount: number, backgroundCount: number,
+        todoCount: number): SubagentPanelTab {
+    if (subagentCount > 0) return "subagents";
+    if (backgroundCount > 0) return "background";
+    return todoCount > 0 ? "todos" : "subagents";
 }
 
 const MIN_WIDTH = 200;
@@ -37,14 +61,17 @@ export function AssistantSubagentPanel({
     subagentCards, backgroundTaskCards, todos,
     onDismissSubagent, onDismissBackgroundTask, onDismissAllCompleted,
     onNavigateToAgent, onPermissionRespond, onAllowAll,
-    highlightedCardId, width, onWidthChange,
+    highlightedCardId, width = 390, onWidthChange,
+    variant = "side", activeTab: controlledTab, onActiveTabChange,
 }: AssistantSubagentPanelProps) {
     // Open on whichever tab has content when the panel first appears.
-    const [activeTab, setActiveTab] = useState<string | number>(() => {
-        if (subagentCards.length > 0) return "subagents";
-        if (backgroundTaskCards.length > 0) return "background";
-        return todos.length > 0 ? "todos" : "subagents";
-    });
+    const [uncontrolledTab, setUncontrolledTab] = useState<SubagentPanelTab>(
+        () => initialSubagentPanelTab(subagentCards.length, backgroundTaskCards.length, todos.length));
+    const activeTab: SubagentPanelTab = controlledTab ?? uncontrolledTab;
+    const setActiveTab = (tab: SubagentPanelTab): void => {
+        setUncontrolledTab(tab);
+        onActiveTabChange?.(tab);
+    };
     const draggingRef = useRef(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
@@ -56,7 +83,7 @@ export function AssistantSubagentPanel({
         if (!draggingRef.current) return;
         const delta = startXRef.current - e.clientX;
         const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startWidthRef.current + delta));
-        onWidthChange(newWidth);
+        onWidthChange?.(newWidth);
     }, [onWidthChange]);
 
     const onMouseUp = useCallback(() => {
@@ -83,12 +110,17 @@ export function AssistantSubagentPanel({
         document.body.style.userSelect = "none";
     }, [width]);
 
+    const isPopover: boolean = variant === "popover";
+
     return (
-        <div className="axiom-subagent-panel" style={{ width }}>
-            <div className="axiom-subagent-panel__resize-handle" onMouseDown={handleMouseDown} />
+        <div className={isPopover ? "axiom-subagent-panel axiom-subagent-panel--popover" : "axiom-subagent-panel"}
+            style={isPopover ? undefined : { width }}>
+            {!isPopover && (
+                <div className="axiom-subagent-panel__resize-handle" onMouseDown={handleMouseDown} />
+            )}
             <Tabs
                 activeKey={activeTab}
-                onSelect={(_e, key) => setActiveTab(key)}
+                onSelect={(_e, key) => setActiveTab(key as SubagentPanelTab)}
                 className="axiom-subagent-panel__tabs"
             >
                 <Tab

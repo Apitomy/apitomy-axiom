@@ -173,7 +173,7 @@ export function ChatPane(props: ChatPaneProps) {
                     {notice.body}
                 </Alert>
             )}
-            <AssistantChatPanel sessionId={sessionId} onSend={onSend} onAllowAllChanged={setAllowAll}
+            <AssistantChatPanel sessionId={sessionId} sidePanelMode="compact" onSend={onSend} onAllowAllChanged={setAllowAll}
                 onInterrupt={() => interruptComposition(composition.id)}
                 disabledReason={composition.turnState === "ai-working" ? "The AI is working…" : undefined}
                 prefill={props.prefill} onModelDetected={setModel} onCostUpdate={onCostUpdate}
