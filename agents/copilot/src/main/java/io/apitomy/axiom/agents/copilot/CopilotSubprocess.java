@@ -1,5 +1,6 @@
 package io.apitomy.axiom.agents.copilot;
 
+import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jboss.logging.Logger;
@@ -100,7 +101,6 @@ public class CopilotSubprocess {
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(false);
-        pb.redirectInput(ProcessBuilder.Redirect.from(new java.io.File("/dev/null")));
 
         if (workingDirectory != null) {
             pb.directory(workingDirectory);
@@ -110,7 +110,9 @@ public class CopilotSubprocess {
             pb.environment().putAll(environment);
         }
 
-        process = pb.start();
+        // stdin stays a pipe that start() closes at once: end-of-input on
+        // every OS (there is no /dev/null on Windows).
+        process = BoundedProcessRunner.start(pb);
 
         StringBuilder stderrContent = new StringBuilder();
 
@@ -249,17 +251,13 @@ public class CopilotSubprocess {
         }
     }
 
+    /**
+     * Terminates the CLI and every process it started, deepest first, so
+     * none is re-parented out of reach; survivors are killed forcibly after
+     * a short grace period.
+     */
     private void destroyProcessTree() {
-        process.descendants().forEach(ph -> {
-            LOG.tracef("Killing descendant process %d", ph.pid());
-            ph.destroyForcibly();
-        });
-        process.destroyForcibly();
-        try {
-            process.waitFor(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        BoundedProcessRunner.killTree(process);
     }
 
     private void joinWithTimeout(CompletableFuture<Void> future, String name) {
