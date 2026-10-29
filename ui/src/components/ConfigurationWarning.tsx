@@ -17,7 +17,7 @@ interface ConfigurationWarningProps {
 }
 
 /**
- * Displays a full-page configuration warning when startup checks have errors.
+ * Displays a full-page configuration warning when no AI engine is available or Node.js is missing.
  * Shows the status of each check with instructions for fixing problems.
  */
 export function ConfigurationWarning({ checks }: ConfigurationWarningProps) {
@@ -31,7 +31,7 @@ export function ConfigurationWarning({ checks }: ConfigurationWarningProps) {
                     Application Configuration Required
                 </Title>
                 <p className="axiom-text-subtle" style={{ marginBottom: "24px" }}>
-                    Apitomy Axiom detected configuration issues during startup.
+                    Apitomy Axiom needs Node.js and at least one available AI engine.
                     Please resolve the items below and restart the application.
                 </p>
 

@@ -42,45 +42,42 @@ class StartupCheckServiceTest {
     }
 
     /**
-     * An engine whose only problem is a warning counts as healthy, so the
-     * system-level errors of the other engines are downgraded and the UI
-     * opens, even though no engine was verified. Each engine's own results
-     * keep the true status, which is what engines[].available reads.
+     * Engine errors are never downgraded: the flat list, the per-engine results
+     * and the log all carry the true status, even when another engine works.
      */
     @Test
-    void warningOnlyEngineDowngradesOtherEnginesErrors() {
+    void engineErrorsKeepTheirTrueStatusInEveryList() {
+        StartupCheckService service = serviceWith(
+                agent("claude-code", "ok"), agent("copilot", "error"));
+
+        assertEquals("ok", systemStatus(service, "claude-code"));
+        assertEquals("error", systemStatus(service, "copilot"));
+        assertEquals("error", service.getResultsForEngine("copilot").get(0).status());
+        assertTrue(service.anyEngineAvailable());
+    }
+
+    /**
+     * A warning-only engine is available (it has no errors), matching
+     * engines[].available; the other engine's error is still reported as an error.
+     */
+    @Test
+    void warningOnlyEngineIsAvailableAndOtherErrorsStay() {
         StartupCheckService service = serviceWith(
                 agent("claude-code", "warning"), agent("copilot", "error"));
 
         assertEquals("warning", systemStatus(service, "claude-code"));
-        assertEquals("warning", systemStatus(service, "copilot"));
-        assertFalse(service.hasErrors());
-        assertEquals("error", service.getResultsForEngine("copilot").get(0).status());
+        assertEquals("error", systemStatus(service, "copilot"));
+        assertTrue(service.anyEngineAvailable());
     }
 
     /**
-     * With no healthy engine every error stays an error, so the UI keeps
-     * its configuration page.
+     * With every engine failing, no engine is available.
      */
     @Test
-    void errorsStayWhenNoEngineIsHealthy() {
+    void noEngineAvailableWhenAllFail() {
         StartupCheckService service = serviceWith(
                 agent("claude-code", "error"), agent("copilot", "error"));
 
-        assertEquals("error", systemStatus(service, "claude-code"));
-        assertEquals("error", systemStatus(service, "copilot"));
-        assertTrue(service.hasErrors());
-    }
-
-    /**
-     * A verified engine downgrades the other engines' errors.
-     */
-    @Test
-    void okEngineDowngradesOtherEnginesErrors() {
-        StartupCheckService service = serviceWith(
-                agent("claude-code", "ok"), agent("copilot", "error"));
-
-        assertEquals("warning", systemStatus(service, "copilot"));
-        assertFalse(service.hasErrors());
+        assertFalse(service.anyEngineAvailable());
     }
 }
