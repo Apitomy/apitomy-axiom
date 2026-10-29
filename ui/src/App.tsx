@@ -55,6 +55,8 @@ export function App() {
     const location = useLocation();
     const { mode: themeMode, effectiveTheme, setMode: setThemeMode } = useTheme();
     const [startupChecks, setStartupChecks] = useState<StartupCheck[] | null>(null);
+    // null until the config loads; the UI is locked only when no engine is available.
+    const [anyEngineAvailable, setAnyEngineAvailable] = useState<boolean | null>(null);
     const [engineLabel, setEngineLabel] = useState<string | undefined>(undefined);
     const [assistantAvailable, setAssistantAvailable] = useState(false);
     const [appVersion, setAppVersion] = useState<string>("");
@@ -67,9 +69,8 @@ export function App() {
 
         fetchSystemConfig()
             .then((config) => {
-                if (config.checks) {
-                    setStartupChecks(config.checks);
-                }
+                setStartupChecks(config.checks || []);
+                setAnyEngineAvailable((config.engines || []).some((e) => e.available));
                 if (config.version) {
                     setAppVersion(config.version);
                 }
@@ -95,8 +96,10 @@ export function App() {
 
     const isAssistantPage = location.pathname.startsWith("/assistant");
 
-    const hasCheckErrors = startupChecks != null &&
-        startupChecks.some((c) => c.status === "error");
+    // Gate on the per-engine flag plus one explicit prerequisite: Node.js. Other startup checks
+    // (individual engines' errors and warnings) are shown as information only.
+    const nodeJsFailed = (startupChecks || []).some((c) => c.name === "Node.js" && c.status === "error");
+    const hasCheckErrors = anyEngineAvailable === false || nodeJsFailed;
     const searchParams = new URLSearchParams(location.search);
     const isBreakout = searchParams.get("breakout") === "true" || searchParams.get("chrome") === "none";
     const isWorkbenchFocus = location.pathname.startsWith("/workbench/") && searchParams.get("focus") === "1";
@@ -115,7 +118,7 @@ export function App() {
                 } as React.CSSProperties : undefined}
             >
                 {hasCheckErrors ? (
-                    <ConfigurationWarning checks={startupChecks!} />
+                    <ConfigurationWarning checks={startupChecks || []} />
                 ) : (
                     <Routes>
                         <Route path="/" element={<Navigate to="/runs" replace />} />

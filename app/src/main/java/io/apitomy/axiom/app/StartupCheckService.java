@@ -69,15 +69,6 @@ public class StartupCheckService {
         return engineResults.getOrDefault(engineType, List.of());
     }
 
-    /**
-     * Returns true if there are any errors in the startup checks.
-     *
-     * @return true if any check has status "error"
-     */
-    public boolean hasErrors() {
-        return results.stream().anyMatch(r -> "error".equals(r.status()));
-    }
-
     private void checkNodeJs() {
         try {
             ProcessBuilder pb = new ProcessBuilder("node", "--version");
@@ -131,45 +122,15 @@ public class StartupCheckService {
     }
 
     void checkAllEngines() {
-        // First pass: collect per-engine results with their true status
-        Map<String, List<AgentCheckResult>> rawResults = new LinkedHashMap<>();
         for (Agent agent : agentRegistry.getAllAgents()) {
             LOG.infof("Checking AI engine: %s", agent.getType());
-            rawResults.put(agent.getType(), agent.healthCheck());
-        }
-
-        // Determine if at least one engine is healthy, meaning it has no
-        // errors. A warning-only engine counts: it started but could not be
-        // verified (for example claude-code without a server-side key, whose
-        // runs authenticate with keys declared per action type). Counting it
-        // keeps the UI open on such installs, and it also downgrades the other
-        // engines' errors, so the UI can open while no engine is verified;
-        // each engine's own results keep the true status.
-        boolean anyEngineHealthy = rawResults.values().stream()
-                .anyMatch(StartupCheckService::hasNoErrors);
-
-        // Second pass: store per-engine results as-is, but downgrade errors
-        // to warnings in the system-level list when another engine is healthy
-        for (var entry : rawResults.entrySet()) {
-            String engineType = entry.getKey();
-            List<AgentCheckResult> agentChecks = entry.getValue();
-            boolean thisEngineHealthy = hasNoErrors(agentChecks);
-
             List<CheckResult> perEngine = new ArrayList<>();
-            for (AgentCheckResult engineResult : agentChecks) {
-                // Per-engine results always reflect the true status
-                CheckResult perEngineResult = new CheckResult(engineResult.name(),
+            for (AgentCheckResult engineResult : agent.healthCheck()) {
+                // Every list carries the true status; the UI gates on engines[].available.
+                CheckResult result = new CheckResult(engineResult.name(),
                         engineResult.status(), engineResult.message());
-                perEngine.add(perEngineResult);
-
-                // System-level: downgrade to warning if this engine failed
-                // but at least one other engine is healthy
-                String systemStatus = engineResult.status();
-                if ("error".equals(systemStatus) && anyEngineHealthy && !thisEngineHealthy) {
-                    systemStatus = "warning";
-                }
-                results.add(new CheckResult(engineResult.name(),
-                        systemStatus, engineResult.message()));
+                perEngine.add(result);
+                results.add(result);
 
                 if ("ok".equals(engineResult.status())) {
                     LOG.infof("Startup check OK: %s", engineResult.name());
@@ -179,15 +140,26 @@ public class StartupCheckService {
                             engineResult.message());
                 }
             }
-            engineResults.put(engineType, List.copyOf(perEngine));
+            engineResults.put(agent.getType(), List.copyOf(perEngine));
         }
 
-        if (!anyEngineHealthy) {
+        if (!anyEngineAvailable()) {
             LOG.error("No AI engines are available — at least one engine must be configured");
         }
     }
 
-    private static boolean hasNoErrors(List<AgentCheckResult> checks) {
+    /**
+     * Returns true if at least one engine passed its startup checks without errors. This is the same rule
+     * as {@code engines[].available} in the system config, which the UI uses to decide whether Axiom is
+     * usable.
+     *
+     * @return true if any engine has no error results
+     */
+    public boolean anyEngineAvailable() {
+        return engineResults.values().stream().anyMatch(StartupCheckService::hasNoErrors);
+    }
+
+    private static boolean hasNoErrors(List<CheckResult> checks) {
         return checks.stream().noneMatch(c -> "error".equals(c.status()));
     }
 
