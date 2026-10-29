@@ -75,4 +75,8 @@ public class TaskEntity extends PanacheEntity {
 
     @Column(name = "execution_log", columnDefinition = "TEXT")
     public String executionLog;
+
+    /** The AI model the agent engine reported it actually ran (null when unknown or not an AI task). */
+    @Column(name = "actual_model")
+    public String actualModel;
 }

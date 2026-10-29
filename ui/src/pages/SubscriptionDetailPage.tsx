@@ -40,7 +40,7 @@ import TimesCircleIcon from "@patternfly/react-icons/dist/esm/icons/times-circle
 import HelpIcon from "@patternfly/react-icons/dist/esm/icons/help-icon";
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
-import { CodeEditor } from "@patternfly/react-code-editor";
+import { EditableCodeEditor } from "../components/EditableCodeEditor";
 import type * as Monaco from "monaco-editor";
 import { ObjectSelect } from "@apitomy/common-ui-components";
 import { LabelInput } from "../components/LabelInput";
@@ -51,7 +51,10 @@ import {
     type EventFieldRow,
     appendPath,
     pathsToCompletionTree,
+    schemaToPaths,
+    typesFromFilterExpression,
 } from "../config/eventSchemaPaths";
+import { loadEventSchema, loadEventSchemaList } from "../hooks/useEventSchemas";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import {
     type NewSubscription,
@@ -300,6 +303,31 @@ export function getElCompletionTree(): CompletionNode {
 }
 
 /**
+ * Builds the completion tree for an expression from the event types it names (`event.type == '...'`), loading
+ * their schemas if needed. Reading the expression at completion time avoids offering the previously selected
+ * type's fields while the Event fields panel is still loading the new type.
+ *
+ * @param expression the full filter expression
+ * @returns the envelope merged with every named type's fields, or `null` when the expression names no known
+ *     type (or the schemas cannot be loaded), in which case the panel's selected type applies
+ */
+export async function completionTreeForExpression(expression: string): Promise<CompletionNode | null> {
+    try {
+        const known: string[] = (await loadEventSchemaList()).map((s) => s.type);
+        const types: string[] = typesFromFilterExpression(expression, known);
+        if (types.length === 0) {
+            return null;
+        }
+        const schemas = await Promise.all(types.map((t) => loadEventSchema(t)));
+        return schemas.reduce<CompletionNode>(
+            (tree, schema) => mergeCompletionTrees(tree, pathsToCompletionTree(schemaToPaths(schema))),
+            EL_ENVELOPE_TREE);
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Registers a custom Monaco language for EL filter expressions.
  * Uses the Monarch tokenizer for declarative syntax highlighting.
  */
@@ -380,8 +408,8 @@ function registerElLanguage(monaco: typeof Monaco) {
 
     // ── Context-aware code completion ────────────────────────────
 
-    function resolveSchema(path: string[]): CompletionNode | null {
-        let node: CompletionNode = elCompletionTree;
+    function resolveSchema(tree: CompletionNode, path: string[]): CompletionNode | null {
+        let node: CompletionNode = tree;
         for (const segment of path) {
             const child = node[segment];
             if (child == null || typeof child === "string") return null;
@@ -392,7 +420,8 @@ function registerElLanguage(monaco: typeof Monaco) {
 
     monaco.languages.registerCompletionItemProvider(EL_LANGUAGE_ID, {
         triggerCharacters: ["."],
-        provideCompletionItems(model, position) {
+        async provideCompletionItems(model, position) {
+            const tree: CompletionNode = (await completionTreeForExpression(model.getValue())) ?? elCompletionTree;
             const textUntilPosition = model.getValueInRange({
                 startLineNumber: position.lineNumber,
                 startColumn: 1,
@@ -405,7 +434,7 @@ function registerElLanguage(monaco: typeof Monaco) {
             const pathStr = match ? match[1] : "";
             const path = pathStr ? pathStr.split(".") : [];
 
-            const node = path.length > 0 ? resolveSchema(path) : elCompletionTree;
+            const node = path.length > 0 ? resolveSchema(tree, path) : tree;
             if (!node) return { suggestions: [] };
 
             const word = model.getWordUntilPosition(position);
@@ -436,7 +465,7 @@ function registerElLanguage(monaco: typeof Monaco) {
             // Add string method suggestions when the path resolves to a string field
             const lastSegment = path[path.length - 1];
             const parentPath = path.slice(0, -1);
-            const parent = parentPath.length > 0 ? resolveSchema(parentPath) : elCompletionTree;
+            const parent = parentPath.length > 0 ? resolveSchema(tree, parentPath) : tree;
             if (parent && lastSegment && typeof parent[lastSegment] === "string") {
                 const methods = [
                     { name: "startsWith", detail: "String prefix match", snippet: "startsWith('$1')" },
@@ -533,7 +562,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
                     EL expression that evaluates to boolean. Leave empty to match all events.
                 </HelperTextItem>
             </HelperText>
-            <CodeEditor
+            <EditableCodeEditor
                 code={filterExpression}
                 onCodeChange={(value) => setFilterExpression(value)}
                 language={EL_LANGUAGE_ID as never}

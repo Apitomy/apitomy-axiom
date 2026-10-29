@@ -166,6 +166,10 @@ export interface TestRunDetailModalProps {
     onOpenItem(itemId: number): void;
     /** Runs an AI-suggested test (shown for suggested runs only). */
     onRunSuggestion?(run: CompositionTestRun): void;
+    /** Shares the run with the AI (shown for finished runs only). */
+    onSendToAi?(run: CompositionTestRun): void;
+    /** Disables Send to AI (e.g. while the AI is working). */
+    isSendToAiDisabled?: boolean;
 }
 
 const STATUS_COLOR: Record<CompositionTestRun["status"], "blue" | "green" | "red" | "orange" | "purple"> = {
@@ -176,7 +180,7 @@ const STATUS_COLOR: Record<CompositionTestRun["status"], "blue" | "green" | "red
  * Shows one test run: its status and timing, inputs and outputs (JSON highlighted), problems, stdout,
  * stderr and the resolved script.
  */
-export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }: TestRunDetailModalProps) {
+export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion, onSendToAi, isSendToAiDisabled }: TestRunDetailModalProps) {
     const source = sourceTab(run);
     // Always open on the first tab: Script/Code when the run has one, otherwise Inputs/Parameters.
     const [tab, setTab] = useState<RunTab>(source ? "source" : "inputs");
@@ -277,6 +281,10 @@ export function TestRunDetailModal({ run, onClose, onOpenItem, onRunSuggestion }
                 {run.status === "suggested" && onRunSuggestion && (
                     <Button id="test-run-detail-primary" variant="primary"
                         onClick={() => { onClose(); onRunSuggestion(run); }}>Run…</Button>
+                )}
+                {onSendToAi && run.status !== "running" && run.status !== "suggested" && (
+                    <Button variant="secondary" isDisabled={isSendToAiDisabled}
+                        onClick={() => { onClose(); onSendToAi(run); }}>Send to AI</Button>
                 )}
                 <Button id={run.status === "suggested" && onRunSuggestion ? undefined : "test-run-detail-primary"}
                     variant={run.status === "suggested" ? "link" : "primary"} onClick={onClose}>Close</Button>

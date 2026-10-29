@@ -205,6 +205,7 @@ export function TasksPage() {
                                 <Th>Subject</Th>
                                 <Th>Status</Th>
                                 <Th>Created By</Th>
+                                <Th>Model</Th>
                                 <Th>Created</Th>
                                 <Th>Completed</Th>
                                 <Th />
@@ -236,6 +237,7 @@ export function TasksPage() {
                                         </Label>
                                     </Td>
                                     <Td>{task.createdBy}</Td>
+                                    <Td dataLabel="Model">{task.actualModel || "—"}</Td>
                                     <Td style={{ whiteSpace: "nowrap" }}>
                                         {new Date(task.createdOn).toLocaleString()}
                                     </Td>

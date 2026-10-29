@@ -1,6 +1,6 @@
 {
     "name": "axiom-mcp-tools",
-    "version": "3.0.1-SNAPSHOT",
+    "version": "3.0.2-SNAPSHOT",
     "description": "Axiom MCP server providing custom tools to AI agents",
     "private": true,
     "type": "commonjs",

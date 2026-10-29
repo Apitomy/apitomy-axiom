@@ -84,3 +84,22 @@ export function useEventSchemas(): AsyncState<EventSchemaSummary[]> {
 export function useEventSchema(eventType: string | undefined): AsyncState<JsonSchema> {
     return useCached(eventType, cachedSchema);
 }
+
+/**
+ * Loads the list of event types with schemas outside React, sharing the session cache.
+ *
+ * @returns the list of event types
+ */
+export function loadEventSchemaList(): Promise<EventSchemaSummary[]> {
+    return cachedList();
+}
+
+/**
+ * Loads one event type's schema outside React, sharing the session cache.
+ *
+ * @param eventType the event type
+ * @returns the assembled schema
+ */
+export function loadEventSchema(eventType: string): Promise<JsonSchema> {
+    return cachedSchema(eventType);
+}

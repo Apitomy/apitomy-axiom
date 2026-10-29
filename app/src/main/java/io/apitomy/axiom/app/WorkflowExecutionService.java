@@ -328,7 +328,7 @@ public class WorkflowExecutionService {
                     task.executionLog = appendReason(task.executionLog, reason);
                     reconcileTaskTraceNodeFailed(task);
                     sseEvents.fire(SseEvent.taskUpdated(task.subjectId, task.id, "Failed"));
-                    result = new NodeResult(NodeResultStatus.FAILED, Map.of());
+                    result = new NodeResult(NodeResultStatus.FAILED, Map.of("error", reason));
                 } else {
                     result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
                 }
@@ -336,7 +336,7 @@ public class WorkflowExecutionService {
                 result = new NodeResult(NodeResultStatus.COMPLETED, outputMap);
             }
         } else {
-            result = new NodeResult(NodeResultStatus.FAILED, Map.of());
+            result = failedNodeResult(task);
         }
 
         advanceWorkflow(entity, workflow, instance, task.nodeId, result);
@@ -1091,7 +1091,7 @@ public class WorkflowExecutionService {
         if (output == null || output.isBlank()) {
             return Map.of();
         }
-        String candidate = extractJsonObject(output);
+        String candidate = AgentOutputJsonExtractor.extract(output);
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> map = objectMapper.readValue(
@@ -1103,26 +1103,6 @@ public class WorkflowExecutionService {
     }
 
     /**
-     * Best-effort extraction of a single JSON object from agent output that may be
-     * wrapped in Markdown code fences or surrounded by prose. Agents are instructed
-     * to emit only a JSON object, but in practice frequently wrap it (```json … ```)
-     * or add commentary; without this, valid output fails required-output validation.
-     * Returns the original string unchanged when no object-like span is found.
-     *
-     * @param output the raw task output
-     * @return the substring most likely to be the JSON object, or {@code output}
-     */
-    private String extractJsonObject(String output) {
-        String trimmed = output.strip();
-        int firstBrace = trimmed.indexOf('{');
-        int lastBrace = trimmed.lastIndexOf('}');
-        if (firstBrace >= 0 && lastBrace > firstBrace) {
-            return trimmed.substring(firstBrace, lastBrace + 1);
-        }
-        return output;
-    }
-
-    /**
      * Appends an output-validation failure reason to a task's execution log,
      * preserving whatever was already there (including the original output).
      *
@@ -1130,6 +1110,27 @@ public class WorkflowExecutionService {
      * @param reason      the failure reason to append
      * @return the combined log text
      */
+    /**
+     * Builds the FAILED node result for a failed task, carrying the task's failure detail as
+     * {@code error} so the run's failure reason is not just {@code Node returned FAILED: {}}.
+     *
+     * @param task the failed task
+     * @return a FAILED node result with an {@code error} output
+     */
+    static NodeResult failedNodeResult(TaskEntity task) {
+        String reason = task.output;
+        if (reason == null || reason.isBlank()) {
+            reason = task.executionLog;
+        }
+        if (reason == null || reason.isBlank()) {
+            reason = "Task " + task.id + " failed";
+        }
+        if (reason.length() > 2000) {
+            reason = reason.substring(0, 1997) + "...";
+        }
+        return new NodeResult(NodeResultStatus.FAILED, Map.of("error", reason));
+    }
+
     private String appendReason(String existingLog, String reason) {
         if (existingLog == null || existingLog.isBlank()) {
             return reason;

@@ -78,26 +78,25 @@ export function resolveWorkflowFilter(value: string, definitions: WorkflowDefini
     return /^\d+$/.test(value) ? Number(value) : -1;
 }
 
-function formatDuration(startedOn: string, completedOn?: string): string {
-    if (!completedOn) return "—";
-    const ms = new Date(completedOn).getTime() - new Date(startedOn).getTime();
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-    const mins = Math.floor(ms / 60_000);
-    const secs = Math.round((ms % 60_000) / 1000);
-    return `${mins}m ${secs}s`;
+/**
+ * Describes what a run ran on: its subject's name.
+ *
+ * @param run the run summary
+ * @returns the run's subject description
+ */
+export function describeRun(run: WorkflowRunSummary): string {
+    return run.subjectName || `Subject #${run.subjectId}`;
 }
 
 /**
- * Describes a run by what it ran on and what it ran: "subject — workflow vN".
+ * Describes the workflow a run came from: "workflow vN".
  *
  * @param run the run summary
- * @returns the run's description
+ * @returns the run's workflow name and version
  */
-export function describeRun(run: WorkflowRunSummary): string {
-    const subject: string = run.subjectName || `Subject #${run.subjectId}`;
+export function describeRunWorkflow(run: WorkflowRunSummary): string {
     const workflow: string = run.definitionName || `Workflow #${run.definitionId}`;
-    return `${subject} — ${workflow} v${run.definitionVersion}`;
+    return `${workflow} v${run.definitionVersion}`;
 }
 
 /**
@@ -242,8 +241,8 @@ export function WorkflowRunsPage() {
                         <Tr>
                             <Th>Status</Th>
                             <Th>Run</Th>
+                            <Th>Workflow</Th>
                             <Th>Started</Th>
-                            <Th>Duration</Th>
                         </Tr>
                     </Thead>
                     <Tbody>
@@ -261,11 +260,9 @@ export function WorkflowRunsPage() {
                                         <Content component="small" className="axiom-run-title">{run.title}</Content>
                                     )}
                                 </Td>
+                                <Td style={{ whiteSpace: "nowrap" }}>{describeRunWorkflow(run)}</Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>
                                     {new Date(run.startedOn).toLocaleString()}
-                                </Td>
-                                <Td style={{ whiteSpace: "nowrap" }}>
-                                    {formatDuration(run.startedOn, run.completedOn)}
                                 </Td>
                             </Tr>
                         ))}

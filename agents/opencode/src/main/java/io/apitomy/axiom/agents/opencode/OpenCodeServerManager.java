@@ -2,11 +2,18 @@ package io.apitomy.axiom.agents.opencode;
 
 import org.jboss.logging.Logger;
 
+import java.io.IOException;
+import java.net.ServerSocket;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Manages the lifecycle of an {@code opencode serve} process. Starts the server
  * on demand, monitors health, and restarts on crash with exponential backoff.
+ *
+ * <p>Axiom only talks to a server it launched itself. If something else is already
+ * answering on the configured port (e.g. an {@code opencode serve} started by a user
+ * from an unrelated or deleted directory), a warning is logged and Axiom launches its
+ * own server on a free port instead of silently reusing the foreign one.</p>
  */
 public class OpenCodeServerManager {
 
@@ -16,6 +23,8 @@ public class OpenCodeServerManager {
 
     private final String hostname;
     private final int port;
+    private int activePort;
+    private boolean axiomLaunched;
 
     private Process serverProcess;
     private OpenCodeClient client;
@@ -30,6 +39,7 @@ public class OpenCodeServerManager {
     public OpenCodeServerManager(String hostname, int port) {
         this.hostname = hostname;
         this.port = port;
+        this.activePort = port;
     }
 
     /**
@@ -38,7 +48,7 @@ public class OpenCodeServerManager {
      * @return the client connected to the running server
      */
     public synchronized OpenCodeClient ensureRunning() {
-        if (client != null && client.isHealthy()) {
+        if (client != null && serverProcess != null && serverProcess.isAlive() && client.isHealthy()) {
             return client;
         }
 
@@ -62,10 +72,12 @@ public class OpenCodeServerManager {
         }
 
         try {
-            LOG.infof("Starting OpenCode server on %s:%d", hostname, port);
+            axiomLaunched = false;
+            activePort = selectLaunchPort();
+            LOG.infof("Starting OpenCode server on %s:%d", hostname, activePort);
             ProcessBuilder pb = new ProcessBuilder(
                     "opencode", "serve",
-                    "--port", String.valueOf(port),
+                    "--port", String.valueOf(activePort),
                     "--hostname", hostname
             );
             pb.redirectErrorStream(false);
@@ -73,10 +85,11 @@ public class OpenCodeServerManager {
             // Inherit environment (API keys, etc.)
 
             serverProcess = pb.start();
-            client = new OpenCodeClient(hostname, port);
+            client = new OpenCodeClient(hostname, activePort);
 
             // Wait for server to become healthy
             waitForHealthy();
+            axiomLaunched = true;
             restartAttempts = 0;
             LOG.infof("OpenCode server started (PID: %d, version: %s)",
                     serverProcess.pid(), client.getVersion());
@@ -96,6 +109,49 @@ public class OpenCodeServerManager {
     }
 
     /**
+     * Chooses the port to launch the server on: the configured port, unless a server Axiom
+     * did not start is already answering there, in which case a free ephemeral port is used.
+     *
+     * @return the port to pass to {@code opencode serve}
+     * @throws IOException if no free port can be allocated
+     */
+    int selectLaunchPort() throws IOException {
+        if (!isForeignServerRunning(port)) {
+            return port;
+        }
+        int alternate;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            alternate = socket.getLocalPort();
+        }
+        LOG.warnf("An OpenCode server that Axiom did not start is already running on %s:%d; "
+                + "not reusing it (its working directory and configuration are unknown). "
+                + "Starting Axiom's own OpenCode server on port %d instead.", hostname, port, alternate);
+        return alternate;
+    }
+
+    /**
+     * Returns whether a healthy OpenCode server not launched by this manager is listening on the port.
+     *
+     * @param candidatePort the port to probe
+     * @return true if a foreign server answers health checks on the port
+     */
+    boolean isForeignServerRunning(int candidatePort) {
+        if (axiomLaunched && serverProcess != null && serverProcess.isAlive() && candidatePort == activePort) {
+            return false;
+        }
+        return new OpenCodeClient(hostname, candidatePort).isHealthy();
+    }
+
+    /**
+     * Returns whether the currently connected server was launched by Axiom.
+     *
+     * @return true if Axiom started the server process the client talks to
+     */
+    public boolean isAxiomLaunched() {
+        return axiomLaunched;
+    }
+
+    /**
      * Waits for the server to become healthy, polling every 500ms up to 30 seconds.
      *
      * @throws InterruptedException if the thread is interrupted while waiting
@@ -106,12 +162,14 @@ public class OpenCodeServerManager {
         int waited = 0;
 
         while (waited < maxWaitMs) {
-            if (client.isHealthy()) {
-                return;
-            }
+            // Check our own process first so a server that already holds the port is never
+            // mistaken for the one we just launched.
             if (serverProcess != null && !serverProcess.isAlive()) {
                 throw new RuntimeException("OpenCode server process exited with code "
                         + serverProcess.exitValue());
+            }
+            if (client.isHealthy()) {
+                return;
             }
             Thread.sleep(intervalMs);
             waited += intervalMs;
@@ -138,6 +196,7 @@ public class OpenCodeServerManager {
         }
         serverProcess = null;
         client = null;
+        axiomLaunched = false;
     }
 
     /**

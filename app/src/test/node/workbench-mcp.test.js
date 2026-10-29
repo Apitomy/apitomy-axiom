@@ -144,3 +144,63 @@ test("validateArgs treats null as missing and rejects arguments to a no-argument
     assert.strictEqual(helpers.validateArgs(validate, { x: 1 }),
         "Invalid arguments for validate_composition: unknown argument 'x'. Expected: (no arguments).");
 });
+
+test("formatTestRun renders status, inputs, redacted environment, outputs, problems and logs", () => {
+    const text = helpers.formatTestRun({
+        id: "run-1", itemType: "tool", itemName: "lookup", status: "failed", exitCode: 2, durationMs: 15,
+        author: "user", startedAt: "2026-01-01T00:00:00Z", inputs: { q: "x" },
+        environment: { TOKEN: "${secret:API}", OTHER: "[redacted]" }, outputs: { a: 1 },
+        problems: ["Timed out."], stdout: "out", stderr: "boom", resolvedScript: "echo x",
+    });
+    assert.match(text, /^Test run run-1: tool lookup failed \(exit 2\) in 15ms, by user/);
+    assert.match(text, /Inputs: \{"q":"x"\}/);
+    assert.match(text, /Environment \(secrets redacted\): \{"TOKEN":"\$\{secret:API\}","OTHER":"\[redacted\]"\}/);
+    assert.match(text, /Outputs: \{"a":1\}/);
+    assert.match(text, /Problems:\n- Timed out\./);
+    assert.match(text, /stdout:\nout/);
+    assert.match(text, /stderr:\nboom/);
+    assert.match(text, /Script that ran:\necho x/);
+});
+
+test("formatTestRun omits absent sections", () => {
+    const text = helpers.formatTestRun({
+        id: "r", itemType: "action-type", itemName: "a", status: "passed", author: "ai", startedAt: "t",
+    });
+    assert.doesNotMatch(text, /Environment|Outputs|Problems|stdout|stderr|exit/);
+});
+
+test("get_test_run fetches the agent view of the run with the session token", async () => {
+    const modulePath = path.resolve(__dirname, "../../main/resources/templates/axiom-workbench-mcp/server.js");
+    const saved = { ...process.env };
+    const savedFetch = global.fetch;
+    process.env.AXIOM_API_URL = "http://axiom.test/api/v1";
+    process.env.AXIOM_COMPOSITION_ID = "7";
+    process.env.AXIOM_SESSION_TOKEN = "tok";
+    delete require.cache[modulePath];
+    const calls = [];
+    try {
+        const bound = require(modulePath);
+        const tool = bound.TOOLS.find(t => t.name === "get_test_run");
+        global.fetch = async (url, opts) => {
+            calls.push({ url, opts });
+            if (url.endsWith("/missing")) return { ok: false, status: 404, text: async () => "" };
+            return {
+                ok: true, status: 200, text: async () => JSON.stringify({
+                    id: "abc-123", itemType: "tool", itemName: "t", status: "passed", author: "user", startedAt: "t",
+                }),
+            };
+        };
+        const out = await tool.handler({ runId: "abc-123" });
+        assert.match(out, /^Test run abc-123: tool t passed/);
+        assert.strictEqual(calls[0].url, "http://axiom.test/api/v1/compositions/7/agent/test-runs/abc-123");
+        assert.strictEqual(calls[0].opts.method, "GET");
+        assert.strictEqual(calls[0].opts.headers["X-Axiom-Session-Token"], "tok");
+        assert.match(await tool.handler({ runId: "missing" }), /not found/);
+        assert.deepStrictEqual(bound.validateArgs(tool, {}), "Invalid arguments for get_test_run: missing required "
+            + "argument 'runId'. Expected: runId: string.");
+    } finally {
+        global.fetch = savedFetch;
+        process.env = saved;
+        delete require.cache[modulePath];
+    }
+});

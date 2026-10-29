@@ -135,6 +135,8 @@ export interface Task {
     createdOn: string;
     completedOn?: string;
     sessionId?: string;
+    /** The AI model the agent engine reported it actually ran. */
+    actualModel?: string;
     traceId?: string;
     workflowRunId?: number;
     nodeId?: string;
@@ -1768,6 +1770,8 @@ export interface WorkflowInstanceInfo {
     runId?: number;
     traceId?: string;
     activeBranches?: ActiveBranchInfo[];
+    /** Per AND-join node id, the incoming edge ids whose branches have arrived but not yet fired. */
+    joinArrivals?: Record<string, string[]>;
     /** Stream event whose create-workflow routing started this run, if any. */
     triggerEventId?: string;
     triggerLedgerId?: number;

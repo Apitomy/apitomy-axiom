@@ -209,11 +209,6 @@
     padding: 0;
 }
 
-.axiom-workbench__pane-toolbar > .axiom-workbench__session-badge {
-    margin-left: var(--pf-t--global--spacer--sm, 8px);
-    min-width: 0;
-}
-
 .axiom-workbench__pane-title {
     margin-left: var(--pf-t--global--spacer--sm, 8px);
 }
@@ -644,4 +639,16 @@ code.axiom-test-run__value {
 /* Separates the subscription editor's form from its Matching events preview. */
 .axiom-subscription-item-editor__divider {
     margin-block: var(--pf-t--global--spacer--lg, 24px) var(--pf-t--global--spacer--md, 16px);
+}
+
+/* The session details chip opens its popover on hover or click. */
+.axiom-session-info-chip {
+    cursor: pointer;
+    display: inline-flex;
+}
+
+/* Labels in the session details popover table (which has no header row). */
+.axiom-session-info-chip__table tr > td.axiom-session-info-chip__label {
+    --pf-v6-c-table--cell--FontWeight: var(--pf-t--global--font--weight--body--bold);
+    font-weight: var(--pf-t--global--font--weight--body--bold, 600);
 }

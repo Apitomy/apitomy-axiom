@@ -207,9 +207,10 @@ CompositionService          → saves composition items (workflow, action types,
 The workbench agent reaches Axiom through the built-in `@axiom-workbench` MCP server
 (`app/src/main/resources/templates/axiom-workbench-mcp/server.js`). Its tools read the composition, write
 action types and tools (`upsert_item`, `remove_item`), propose workflow changes
-(`propose_workflow_changes`), validate, suggest tests (`suggest_test`), and look up events, runs, traces and
-existing components. The agent cannot run tests or change the workflow directly: workflow change sets are
-applied by the user's editor when the turn ends, and only the user runs tests. Calls from the MCP server to
+(`propose_workflow_changes`), validate, suggest tests (`suggest_test`), read test runs the user shares
+(`get_test_run`), and look up events, runs, traces and existing components. The agent cannot run tests or change
+the workflow directly: workflow change sets are applied by the user's editor when the turn ends, and only the
+user runs tests. Calls from the MCP server to
 the `/compositions/{compositionId}/agent/...` routes are checked by `SessionTokenGuard`.
 
 See [Workflow Workbench](../user-guide/workbench.md) for the user-facing description.

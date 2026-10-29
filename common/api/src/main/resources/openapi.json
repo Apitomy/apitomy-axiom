@@ -7,7 +7,7 @@
       "name": "Apache 2.0",
       "url": "https://www.apache.org/licenses/LICENSE-2.0"
     },
-    "version": "3.0.1-SNAPSHOT"
+    "version": "3.0.2-SNAPSHOT"
   },
   "servers": [
     {
@@ -6586,6 +6586,22 @@
           }
         }
       },
+      "delete": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Clear test runs",
+        "description": "Removes every test run and suggestion of the composition that isn't running. Running entries are kept.",
+        "operationId": "clearCompositionTestRuns",
+        "responses": {
+          "204": {
+            "description": "The entries were removed"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
       "parameters": [
         {
           "name": "compositionId",
@@ -6594,6 +6610,46 @@
           "schema": {
             "format": "int64",
             "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/test-runs/{runId}": {
+      "delete": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Remove a test run",
+        "description": "Removes one test run or suggestion. A running entry cannot be removed (409).",
+        "operationId": "deleteCompositionTestRun",
+        "responses": {
+          "204": {
+            "description": "The entry was removed"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The run is still running"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
           }
         }
       ]
@@ -6643,6 +6699,53 @@
           "schema": {
             "format": "int64",
             "type": "integer"
+          }
+        }
+      ]
+    },
+    "/compositions/{compositionId}/agent/test-runs/{runId}": {
+      "get": {
+        "tags": [
+          "Compositions"
+        ],
+        "summary": "Agent: get a test run",
+        "description": "A test run of the composition for the AI, with secrets redacted: environment values other than `${secret:NAME}` references are replaced, the values of referenced secrets are scrubbed from all text, and stdout and stderr are truncated. Requires the `X-Axiom-Session-Token` header of the composition's live workbench session (401 otherwise).",
+        "operationId": "getAgentTestRun",
+        "responses": {
+          "200": {
+            "description": "The run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositionTestRun"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid session token"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "compositionId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "runId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
           }
         }
       ]
@@ -7785,6 +7888,10 @@
           },
           "sessionId": {
             "description": "Claude Code session ID",
+            "type": "string"
+          },
+          "actualModel": {
+            "description": "The AI model the agent engine reported it actually ran (may differ from the requested model)",
             "type": "string"
           },
           "traceId": {
@@ -10653,6 +10760,16 @@
               "$ref": "#/components/schemas/ActiveBranch"
             }
           },
+          "joinArrivals": {
+            "description": "Per AND-join node id, the incoming edge ids whose branches have arrived but not yet fired",
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
           "startedOn": {
             "format": "date-time",
             "type": "string"
@@ -12206,6 +12323,13 @@
         "type": "object",
         "additionalProperties": true
       },
+      "CompositionTestEnvironment": {
+        "description": "Environment variables of a test run by name. Only in the agent view of a run, where `${secret:NAME}` references are kept and other values are redacted.",
+        "type": "object",
+        "additionalProperties": {
+          "type": "string"
+        }
+      },
       "CompositionTestRequest": {
         "type": "object",
         "properties": {
@@ -12219,6 +12343,10 @@
           },
           "runId": {
             "description": "Optional id for the run (letters, digits and dashes, 8 to 64 characters), so the caller can follow it before the request returns; ignored when invalid or already used",
+            "type": "string"
+          },
+          "suggestionId": {
+            "description": "Optional id of the AI-suggested test this run carries out. When that suggestion still exists for the same item and has not been run, the run replaces it in place and takes its id (runId is then ignored); otherwise the run is added as usual.",
             "type": "string"
           },
           "environment": {
@@ -12354,6 +12482,9 @@
               "node"
             ],
             "type": "string"
+          },
+          "environment": {
+            "$ref": "#/components/schemas/CompositionTestEnvironment"
           }
         }
       },

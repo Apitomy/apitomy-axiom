@@ -45,6 +45,7 @@ import io.apitomy.axiom.app.composition.CompositionNotFoundException;
 import io.apitomy.axiom.app.composition.CompositionPublisher;
 import io.apitomy.axiom.app.composition.CompositionService;
 import io.apitomy.axiom.app.composition.CompositionTestRuns;
+import io.apitomy.axiom.app.composition.TestRunRunningException;
 import io.apitomy.axiom.app.composition.TooManyTestRunsException;
 import io.apitomy.axiom.app.composition.CompositionTurns;
 import io.apitomy.axiom.app.composition.CompositionValidator;
@@ -60,6 +61,7 @@ import io.apitomy.flow.changeset.ContentRevision;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
@@ -121,6 +123,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public Composition createComposition(NewComposition data) {
+        requireBody(data);
         return toBean(service.create(data.getName(), data.getGoal(), data.getEngine(), data.getModel(),
                 data.getSeedWorkflowId()));
     }
@@ -134,6 +137,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public Composition updateComposition(long compositionId, CompositionUpdate data) {
+        requireBody(data);
         return toBean(service.update(compositionId, data.getName(),
                 data.getApplyMode() == null ? null : data.getApplyMode().value()));
     }
@@ -154,6 +158,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public CompositionItem addCompositionItem(long compositionId, NewCompositionItem data) {
+        requireBody(data);
         if (data.getType() == null) {
             throw new IllegalArgumentException("type is required");
         }
@@ -174,6 +179,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public CompositionItem updateCompositionItem(long compositionId, long itemId, CompositionItemUpdate data) {
+        requireBody(data);
         JsonNode content = data.getContent() == null ? null
                 : mapper.valueToTree(data.getContent().getAdditionalProperties());
         String turnId = data.getTurnId() == null || data.getTurnId().isBlank() ? null : data.getTurnId();
@@ -184,6 +190,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public CompositionItem setCompositionItemEnabled(long compositionId, long itemId, CompositionItemEnabled data) {
+        requireBody(data);
         try {
             return toBean(service.setEnabled(compositionId, itemId, data.getEnabled()), false);
         } catch (IllegalStateException e) {
@@ -217,10 +224,24 @@ public class CompositionsResourceImpl implements CompositionsResource {
         return toBean(service.restore(compositionId, itemId, revisionId), true);
     }
 
+    /**
+     * Rejects a missing request body with 400. The generated interfaces declare the bodies as required, but
+     * an empty request still reaches the method with {@code null}.
+     *
+     * @param data the request body
+     * @throws BadRequestException when the body is missing
+     */
+    private static void requireBody(Object data) {
+        if (data == null) {
+            throw new BadRequestException("A request body is required");
+        }
+    }
+
     /** {@inheritDoc} */
     @Override
     public AssistantValidateResult validateCompositionItem(long compositionId, long itemId,
             CompositionItemValidateRequest data) {
+        requireBody(data);
         CompositionItemEntity item = service.item(compositionId, itemId);
         if (data.getContent() == null) {
             throw new IllegalArgumentException("content is required");
@@ -256,6 +277,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public CompositionPublishResult publishComposition(long compositionId, CompositionPublishRequest data) {
+        requireBody(data);
         CompositionPublisher.Outcome outcome = publisher.publish(compositionId, data.getItemIds(),
                 Boolean.TRUE.equals(data.getForce()));
         CompositionPublishResult result = new CompositionPublishResult();
@@ -268,6 +290,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public Composition sendCompositionMessage(long compositionId, CompositionMessage data) {
+        requireBody(data);
         if (data.getMessage() == null || data.getMessage().isBlank()) {
             throw new IllegalArgumentException("message is required");
         }
@@ -296,6 +319,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public void resolveCompositionChangeSet(long compositionId, CompositionChangeSetResolution data) {
+        requireBody(data);
         if (data.getTurnId() == null || data.getOutcome() == null) {
             throw new IllegalArgumentException("turnId and outcome are required");
         }
@@ -365,6 +389,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public AgentItemResult upsertAgentItem(long compositionId, AgentItemUpsert data) {
+        requireBody(data);
         requireToken(compositionId);
         if (data.getType() == null || data.getContent() == null) {
             throw new IllegalArgumentException("type and content are required");
@@ -391,6 +416,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public AgentChangeSetResult proposeAgentWorkflowChanges(long compositionId, CompositionContent data) {
+        requireBody(data);
         requireToken(compositionId);
         CompositionTurns.ChangeSetOutcome outcome = turns.applyChangeSet(compositionId, toJson(data));
         AgentChangeSetResult result = new AgentChangeSetResult();
@@ -410,6 +436,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
     /** {@inheritDoc} */
     @Override
     public CompositionTestRun testCompositionItem(long compositionId, long itemId, CompositionTestRequest data) {
+        requireBody(data);
         CompositionItemEntity item = service.item(compositionId, itemId);
         if (ConfigItemType.WORKFLOW.jsonName().equals(item.itemType)) {
             throw new IllegalArgumentException("The workflow cannot be test-run");
@@ -420,7 +447,7 @@ public class CompositionsResourceImpl implements CompositionsResource {
                     environment.put(k, v != null ? String.valueOf(v) : ""));
         }
         return testRuns.run(compositionId, item, testValues(data.getInputs()), environment, data.getSubjectId(),
-                CompositionService.AUTHOR_USER, null, data.getRunId());
+                CompositionService.AUTHOR_USER, null, data.getRunId(), data.getSuggestionId());
     }
 
     /** {@inheritDoc} */
@@ -432,7 +459,22 @@ public class CompositionsResourceImpl implements CompositionsResource {
 
     /** {@inheritDoc} */
     @Override
+    public void clearCompositionTestRuns(long compositionId) {
+        service.get(compositionId);
+        testRuns.clear(compositionId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void deleteCompositionTestRun(long compositionId, String runId) {
+        service.get(compositionId);
+        testRuns.remove(compositionId, runId);
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public CompositionTestRun suggestAgentTest(long compositionId, AgentTestSuggestion data) {
+        requireBody(data);
         requireToken(compositionId);
         String type = data.getType().value();
         CompositionItemEntity item = service.items(compositionId).stream()
@@ -441,6 +483,15 @@ public class CompositionsResourceImpl implements CompositionsResource {
                 .orElseThrow(() -> new CompositionNotFoundException(
                         "No " + type + " named " + data.getName() + " in composition " + compositionId));
         return testRuns.suggest(compositionId, item, testValues(data.getInputs()), turns.currentTurnId(compositionId));
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public CompositionTestRun getAgentTestRun(long compositionId, String runId) {
+        requireToken(compositionId);
+        return testRuns.agentView(compositionId, runId)
+                .orElseThrow(() -> new CompositionNotFoundException(
+                        "No test run " + runId + " in composition " + compositionId));
     }
 
     private static Map<String, Object> testValues(CompositionTestValues values) {
@@ -611,6 +662,15 @@ public class CompositionsResourceImpl implements CompositionsResource {
     @ServerExceptionMapper
     public Response mapTooManyTestRuns(TooManyTestRunsException e) {
         return error(429, e.getMessage());
+    }
+
+    /**
+     * @param e the exception
+     * @return 409 when a test run to remove is still running
+     */
+    @ServerExceptionMapper
+    public Response mapTestRunRunning(TestRunRunningException e) {
+        return error(409, e.getMessage());
     }
 
     /**

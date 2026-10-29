@@ -20,7 +20,7 @@ vi.mock("./useWorkbench", () => ({
             scriptTemplate: "echo {{who}}" } }, revisions: {}, problems: {}, pending: null, lastCompletedTurnId: undefined, sessionError: null,
         loadContent: async () => ({}), refreshItems: async () => {}, refreshComposition: async () => {},
         setContent, replaceItem: () => {}, removeItem: async () => {}, markPendingHandled: () => {}, retrySession: async () => {},
-        testRuns, testRunsLoaded, runTest,
+        testRuns, testRunsLoaded, runTest, removeTestRun: async () => {}, clearTestRuns: async () => {},
     }),
 }));
 
@@ -211,11 +211,6 @@ describe("WorkbenchPage", () => {
         expect(await screen.findByText("Add tool")).toBeTruthy();
     });
 
-    it("shows the session's engine and model in the chat toolbar", () => {
-        renderPage();
-        expect(screen.getByText("Claude Code · default")).toBeTruthy();
-    });
-
     it("closes a component tab on middle click", () => {
         renderPage();
         fireEvent.click(screen.getByRole("button", { name: /^my-tool/ }));
@@ -240,7 +235,7 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Test…" }));
         fireEvent.change(await screen.findByLabelText("who"), { target: { value: "ann" } });
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
-        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "ann" }, undefined, expect.any(String), {}));
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "ann" }, undefined, expect.any(String), {}, undefined));
         expect(itemFlush).toHaveBeenCalled();
     });
 
@@ -344,8 +339,22 @@ describe("WorkbenchPage", () => {
         fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
         fireEvent.click(screen.getByRole("button", { name: "Run…" }));
         expect(((await screen.findByLabelText("who")) as HTMLInputElement).value).toBe("bob");
+        fireEvent.change(screen.getByLabelText("who"), { target: { value: "edited" } });
         fireEvent.click(screen.getByRole("button", { name: "Run" }));
-        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "bob" }, undefined, expect.any(String), {}));
+        // The run replaces the suggestion: it takes the suggestion's id and names it.
+        await waitFor(() => expect(runTest).toHaveBeenCalledWith(11, { who: "edited" }, undefined, "s", {}, "s"));
+    });
+
+    it("leaves the suggestion alone when its test dialog is cancelled", async () => {
+        testRuns = [{ id: "s", itemId: 11, itemType: "tool", itemName: "my-tool", author: "ai", status: "suggested",
+            startedAt: "2026-10-13T10:00:00Z", inputs: { who: "bob" } }];
+        renderPage();
+        fireEvent.click(screen.getByRole("button", { name: "Expand bottom panel" }));
+        fireEvent.click(screen.getByRole("button", { name: "Run…" }));
+        await screen.findByLabelText("who");
+        fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+        await waitFor(() => expect(screen.queryByLabelText("who")).toBeNull());
+        expect(runTest).not.toHaveBeenCalled();
     });
 
     it("shows an error when the suggested item no longer exists", async () => {

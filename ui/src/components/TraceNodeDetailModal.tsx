@@ -246,6 +246,17 @@ function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
     const [activeTab, setActiveTab] = useState(0);
 
     return (
+        <>
+        {detail.actualModel != null && (
+            <DescriptionList isHorizontal isCompact style={{ marginBottom: "12px" }}>
+                <DescriptionListGroup>
+                    <DescriptionListTerm>Model</DescriptionListTerm>
+                    <DescriptionListDescription data-testid="task-actual-model">
+                        {String(detail.actualModel)}
+                    </DescriptionListDescription>
+                </DescriptionListGroup>
+            </DescriptionList>
+        )}
         <Tabs activeKey={activeTab}
             onSelect={(_e, key) => setActiveTab(Number(key))}>
             <Tab eventKey={0} title={<TabTitleText>Input</TabTitleText>}>
@@ -284,6 +295,7 @@ function TaskDetail({ detail }: { detail: Record<string, unknown> }) {
                 </div>
             </Tab>
         </Tabs>
+        </>
     );
 }
 

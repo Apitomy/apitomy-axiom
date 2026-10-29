@@ -152,6 +152,37 @@ describe("test runs", () => {
         expect(result.current.testRuns[0].status).toBe("passed");
     });
 
+    it("replaces a suggestion in place when running it, also via SSE", async () => {
+        vi.spyOn(c, "listItems").mockResolvedValue([{ id: 11, type: "tool", name: "t", contentRevision: "r",
+            lastAuthor: "user", changed: true }]);
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("n", "passed"), run("s", "suggested"), run("o", "passed")]);
+        let finish: (r: c.CompositionTestRun) => void = () => {};
+        const test = vi.spyOn(c, "testItem").mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(3));
+        let done: Promise<c.CompositionTestRun> = Promise.resolve({} as never);
+        act(() => { done = result.current.runTest(11, { a: 1 }, undefined, "client-run-3", undefined, "s"); });
+        expect(test).toHaveBeenCalledWith(1, 11, { inputs: { a: 1 }, runId: "s", suggestionId: "s" });
+        expect(result.current.testRuns.map((r) => `${r.id}:${r.status}`)).toEqual(["n:passed", "s:running", "o:passed"]);
+        act(() => sse.testRun?.({ compositionId: 1, run: run("s", "failed") }));
+        expect(result.current.testRuns.map((r) => `${r.id}:${r.status}`)).toEqual(["n:passed", "s:failed", "o:passed"]);
+        await act(async () => { finish(run("s", "failed")); await done; });
+        expect(result.current.testRuns).toHaveLength(3);
+    });
+
+    it("puts the suggestion back when running it fails", async () => {
+        vi.spyOn(c, "listItems").mockResolvedValue([{ id: 11, type: "tool", name: "t", contentRevision: "r",
+            lastAuthor: "user", changed: true }]);
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("s", "suggested")]);
+        vi.spyOn(c, "testItem").mockRejectedValue(new Error("busy"));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(1));
+        await act(async () => {
+            await expect(result.current.runTest(11, {}, undefined, "x-run", undefined, "s")).rejects.toThrow("busy");
+        });
+        expect(result.current.testRuns.map((r) => `${r.id}:${r.status}`)).toEqual(["s:suggested"]);
+    });
+
     it("drops the placeholder when the run request fails", async () => {
         vi.spyOn(c, "listItems").mockResolvedValue([{ id: 11, type: "tool", name: "t", contentRevision: "r",
             lastAuthor: "user", changed: true }]);
@@ -162,6 +193,45 @@ describe("test runs", () => {
             await expect(result.current.runTest(11, {}, undefined, "client-run-2")).rejects.toThrow("busy");
         });
         expect(result.current.testRuns.find((r) => r.id === "client-run-2")).toBeUndefined();
+    });
+});
+
+describe("removing test runs", () => {
+    it("removes one run on the server and from state", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("a", "passed"), run("b", "suggested")]);
+        const del = vi.spyOn(c, "deleteTestRun").mockResolvedValue(undefined);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(2));
+        await act(async () => { await result.current.removeTestRun("b"); });
+        expect(del).toHaveBeenCalledWith(1, "b");
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["a"]);
+    });
+
+    it("keeps the run when the server rejects the removal", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("a", "passed")]);
+        vi.spyOn(c, "deleteTestRun").mockRejectedValue(new Error("running"));
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(1));
+        await act(async () => { await expect(result.current.removeTestRun("a")).rejects.toThrow("running"); });
+        expect(result.current.testRuns).toHaveLength(1);
+    });
+
+    it("clears every run that isn't running", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("r", "running"), run("a", "passed"), run("s", "suggested")]);
+        const clear = vi.spyOn(c, "clearTestRuns").mockResolvedValue(undefined);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(3));
+        await act(async () => { await result.current.clearTestRuns(); });
+        expect(clear).toHaveBeenCalledWith(1);
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["r"]);
+    });
+
+    it("drops runs removed in another view (SSE)", async () => {
+        vi.spyOn(c, "listTestRuns").mockResolvedValue([run("a", "passed"), run("b", "failed")]);
+        const { result } = renderHook(() => useWorkbench(1));
+        await waitFor(() => expect(result.current.testRuns).toHaveLength(2));
+        act(() => sse.testRunsRemoved?.({ compositionId: 1, runIds: ["a"] }));
+        expect(result.current.testRuns.map((r) => r.id)).toEqual(["b"]);
     });
 });
 

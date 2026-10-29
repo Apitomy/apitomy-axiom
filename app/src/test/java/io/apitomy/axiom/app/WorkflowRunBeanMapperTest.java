@@ -197,6 +197,7 @@ class WorkflowRunBeanMapperTest {
                 .activeBranches(java.util.List.of(
                         new ActiveBranch("root.0", "a1"),
                         new ActiveBranch("root.1", "a2")))
+                .joinArrivals(java.util.Map.of("j1", java.util.List.of("edge1")))
                 .createdOn(Instant.now())
                 .updatedOn(Instant.now())
                 .build()
@@ -234,5 +235,8 @@ class WorkflowRunBeanMapperTest {
 
         assertEquals(1, bean.getHistory().size());
         assertEquals("root.0", bean.getHistory().get(0).getBranchId());
+
+        assertEquals(java.util.List.of("edge1"),
+                bean.getJoinArrivals().getAdditionalProperties().get("j1"));
     }
 }

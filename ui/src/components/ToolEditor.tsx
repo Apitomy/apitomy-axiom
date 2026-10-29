@@ -26,6 +26,7 @@ import {
     Title, Content,
 } from "@patternfly/react-core";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
+import { EditableCodeEditor } from "./EditableCodeEditor";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -323,7 +324,7 @@ function ScriptTemplateTab({ value, onChange, readOnly, fillHeight = false }: {
                 Use <code>{"{{param_name_file}}"}</code> to write the value to a temp file
                 and substitute the file path (useful for long text like comment bodies).
             </p>
-            <CodeEditor
+            <EditableCodeEditor
                 code={value}
                 isReadOnly={readOnly}
                 onCodeChange={(v) => onChange(v)}

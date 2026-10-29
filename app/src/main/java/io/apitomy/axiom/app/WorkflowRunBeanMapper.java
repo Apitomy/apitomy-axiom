@@ -129,6 +129,7 @@ public class WorkflowRunBeanMapper {
             bean.setActiveBranches(flowInstance.activeBranches().stream()
                     .map(b -> toActiveBranchBean(b, workflowForBranches))
                     .toList());
+            bean.setJoinArrivals(toJoinArrivalsBean(flowInstance.joinArrivals()));
         } catch (JsonProcessingException e) {
             bean.setHistory(List.of());
             bean.setActiveBranches(List.of());
@@ -155,6 +156,17 @@ public class WorkflowRunBeanMapper {
         }
         bean.setTraceNodeId(resume.traceNodeId);
         bean.setResumedOn(Date.from(resume.resumedOn));
+        return bean;
+    }
+
+    private static io.apitomy.axiom.api.beans.JoinArrivals toJoinArrivalsBean(
+            Map<String, List<String>> joinArrivals) {
+        io.apitomy.axiom.api.beans.JoinArrivals bean =
+                new io.apitomy.axiom.api.beans.JoinArrivals();
+        if (joinArrivals != null) {
+            joinArrivals.forEach((joinId, edgeIds) ->
+                    bean.setAdditionalProperty(joinId, List.copyOf(edgeIds)));
+        }
         return bean;
     }
 

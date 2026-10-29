@@ -9,6 +9,8 @@ import io.apitomy.axiom.app.DraftTestRunner;
 import io.apitomy.axiom.core.entities.CompositionItemEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
@@ -22,6 +24,7 @@ import java.util.Date;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
@@ -46,6 +49,12 @@ public class CompositionTestRuns {
     private final Map<Long, Deque<CompositionTestRun>> runs = new ConcurrentHashMap<>();
 
     private final Map<Long, Semaphore> permits = new ConcurrentHashMap<>();
+
+    /** The raw (unresolved) environment of each run, by composition and run id; never sent to the UI. */
+    private final Map<Long, Map<String, Map<String, String>>> environments = new ConcurrentHashMap<>();
+
+    @Inject
+    EnvironmentResolver environmentResolver;
 
     @Inject
     CompositionService service;
@@ -74,7 +83,7 @@ public class CompositionTestRuns {
      */
     public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
                                   Long subjectId, String author, String turnId) {
-        return run(compositionId, item, inputs, Map.of(), subjectId, author, turnId, null);
+        return run(compositionId, item, inputs, Map.of(), subjectId, author, turnId, null, null);
     }
 
     /**
@@ -90,13 +99,16 @@ public class CompositionTestRuns {
      * @param author        {@link CompositionService#AUTHOR_USER} or {@link CompositionService#AUTHOR_AI}
      * @param turnId        the AI turn id, or {@code null}
      * @param runId         the id to use; a new id is generated when it is null, invalid or already used
+     * @param suggestionId  the id of the AI suggestion this run carries out, or {@code null}; when that
+     *                      suggestion still exists for the same item and is still suggested, the run replaces
+     *                      it in place and takes its id (otherwise the run is added as usual)
      * @return the finished run
      * @throws IllegalArgumentException for the workflow or an unknown subject
      * @throws TooManyTestRunsException when the composition already has the maximum number of runs in progress
      */
     public CompositionTestRun run(long compositionId, CompositionItemEntity item, Map<String, Object> inputs,
                                   Map<String, String> environment, Long subjectId, String author, String turnId,
-                                  String runId) {
+                                  String runId, String suggestionId) {
         boolean tool = "tool".equals(item.itemType);
         if (!tool && !"action-type".equals(item.itemType)) {
             throw new IllegalArgumentException("Only action types and tools can be test-run");
@@ -115,7 +127,7 @@ public class CompositionTestRuns {
         try {
             return execute(compositionId, item, tool, inputs != null ? inputs : Map.of(),
                     environment != null ? environment : Map.of(), subject, subjectId, author, turnId,
-                    runIdFor(compositionId, runId));
+                    runIdFor(compositionId, runId), suggestionId);
         } finally {
             semaphore.release();
         }
@@ -156,7 +168,7 @@ public class CompositionTestRuns {
     private CompositionTestRun execute(long compositionId, CompositionItemEntity item, boolean tool,
                                        Map<String, Object> values, Map<String, String> environment,
                                        SubjectEntity subject, Long subjectId, String author, String turnId,
-                                       String runId) {
+                                       String runId, String suggestionId) {
         CompositionTestRun run = new CompositionTestRun();
         run.setId(runId);
         run.setItemId(item.id);
@@ -169,12 +181,16 @@ public class CompositionTestRuns {
         run.setExecutionMode(executionModeOf(item));
         run.setStartedAt(Date.from(Instant.now()));
         run.setInputs(values(values));
-        remember(compositionId, run);
+        if (!replaceSuggestion(compositionId, suggestionId, run)) {
+            remember(compositionId, run);
+        }
+        runId = run.getId();
         fire(compositionId, run);
 
         CompositionTestRun finished = copyStart(run);
         try {
             JsonNode content = service.contentOf(item);
+            rememberEnvironment(compositionId, runId, tool ? environment : environmentOf(content));
             DraftTestRunner.Result result = tool
                     ? runner.runTool(content, values, environment, subject)
                     : runner.runActionType(content, values, subject);
@@ -218,6 +234,139 @@ public class CompositionTestRuns {
     }
 
     /**
+     * Gets one of a composition's recent runs.
+     *
+     * @param compositionId the composition id
+     * @param runId         the run id
+     * @return the run, or empty when the composition has no such run
+     */
+    public Optional<CompositionTestRun> get(long compositionId, String runId) {
+        return list(compositionId).stream().filter(r -> r.getId().equals(runId)).findFirst();
+    }
+
+    /**
+     * Gets a run as it is shared with the workbench AI: secrets redacted and logs truncated (see
+     * {@link TestRunRedactor}).
+     *
+     * @param compositionId the composition id
+     * @param runId         the run id
+     * @return the redacted run, or empty when the composition has no such run
+     */
+    public Optional<CompositionTestRun> agentView(long compositionId, String runId) {
+        return get(compositionId, runId).map(run -> {
+            Map<String, String> environment = environments.getOrDefault(compositionId, Map.of()).get(runId);
+            return TestRunRedactor.redact(run, environment, secretValues(environment));
+        });
+    }
+
+    /** Resolves the secrets an environment references, skipping any that cannot be resolved. */
+    private List<String> secretValues(Map<String, String> environment) {
+        List<String> values = new ArrayList<>();
+        for (String name : TestRunRedactor.referencedSecrets(environment)) {
+            try {
+                String json = mapper.writeValueAsString(Map.of("v", "${secret:" + name + "}"));
+                values.add(environmentResolver.resolve(json).get("v"));
+            } catch (JsonProcessingException | MissingSecretException e) {
+                LOG.debugf("Secret %s not resolved for redaction: %s", name, e.getMessage());
+            }
+        }
+        return values;
+    }
+
+    /** The environment of an action type draft as a map, or an empty map. */
+    private Map<String, String> environmentOf(JsonNode content) {
+        JsonNode env = content.path("environment");
+        try {
+            if (env.isTextual() && !env.asText().isBlank()) {
+                env = mapper.readTree(env.asText());
+            }
+            if (env.isObject()) {
+                Map<String, String> result = new java.util.LinkedHashMap<>();
+                env.fields().forEachRemaining(e -> result.put(e.getKey(), e.getValue().asText()));
+                return result;
+            }
+        } catch (JsonProcessingException e) {
+            LOG.debugf("Unreadable action type environment: %s", e.getMessage());
+        }
+        return Map.of();
+    }
+
+    /** Drops the remembered environments of removed runs. */
+    private void forgetEnvironments(long compositionId, List<String> runIds) {
+        Map<String, Map<String, String>> byRun = environments.get(compositionId);
+        if (byRun != null) {
+            runIds.forEach(byRun::remove);
+        }
+    }
+
+    private void rememberEnvironment(long compositionId, String runId, Map<String, String> environment) {
+        Map<String, Map<String, String>> byRun = environments.computeIfAbsent(compositionId,
+                k -> new ConcurrentHashMap<>());
+        byRun.put(runId, new java.util.HashMap<>(environment));
+        if (byRun.size() > MAX_RUNS) {
+            java.util.Set<String> kept = new java.util.HashSet<>();
+            list(compositionId).forEach(r -> kept.add(r.getId()));
+            byRun.keySet().retainAll(kept);
+        }
+    }
+
+    /**
+     * Removes one finished run or suggestion and tells the workbench about it over SSE.
+     *
+     * @param compositionId the composition id
+     * @param runId         the run id
+     * @throws CompositionNotFoundException when the composition has no such run
+     * @throws TestRunRunningException      when the run is still running
+     */
+    public void remove(long compositionId, String runId) {
+        Deque<CompositionTestRun> deque = runs.get(compositionId);
+        if (deque == null) {
+            throw new CompositionNotFoundException("Test run not found: " + runId);
+        }
+        synchronized (deque) {
+            CompositionTestRun run = deque.stream()
+                    .filter(r -> r.getId().equals(runId))
+                    .findFirst()
+                    .orElseThrow(() -> new CompositionNotFoundException("Test run not found: " + runId));
+            if (run.getStatus() == CompositionTestRun.Status.RUNNING) {
+                throw new TestRunRunningException(runId);
+            }
+            deque.remove(run);
+        }
+        forgetEnvironments(compositionId, List.of(runId));
+        sseEvents.fire(SseEvent.compositionTestRunsRemoved(compositionId, List.of(runId)));
+    }
+
+    /**
+     * Removes every run and suggestion of a composition that isn't running, and tells the workbench about the
+     * removed ones over SSE.
+     *
+     * @param compositionId the composition id
+     * @return the ids of the removed runs
+     */
+    public List<String> clear(long compositionId) {
+        Deque<CompositionTestRun> deque = runs.get(compositionId);
+        if (deque == null) {
+            return List.of();
+        }
+        List<String> removed = new ArrayList<>();
+        synchronized (deque) {
+            deque.removeIf(r -> {
+                boolean finished = r.getStatus() != CompositionTestRun.Status.RUNNING;
+                if (finished) {
+                    removed.add(r.getId());
+                }
+                return finished;
+            });
+        }
+        forgetEnvironments(compositionId, removed);
+        if (!removed.isEmpty()) {
+            sseEvents.fire(SseEvent.compositionTestRunsRemoved(compositionId, removed));
+        }
+        return removed;
+    }
+
+    /**
      * Drops the runs of a deleted composition.
      *
      * @param compositionId the composition id
@@ -225,6 +374,7 @@ public class CompositionTestRuns {
     public void forget(long compositionId) {
         runs.remove(compositionId);
         permits.remove(compositionId);
+        environments.remove(compositionId);
     }
 
     private void remember(long compositionId, CompositionTestRun run) {
@@ -235,6 +385,42 @@ public class CompositionTestRuns {
                 deque.removeLast();
             }
         }
+    }
+
+    /**
+     * Puts a starting run in the place of a suggestion, taking the suggestion's id, when the suggestion still
+     * exists for the same item and is still suggested. The suggestion's remembered environment (if any) is
+     * dropped, as the run remembers its own under the same id.
+     *
+     * @return whether the suggestion was replaced
+     */
+    private boolean replaceSuggestion(long compositionId, String suggestionId, CompositionTestRun run) {
+        if (suggestionId == null) {
+            return false;
+        }
+        Deque<CompositionTestRun> deque = runs.get(compositionId);
+        if (deque == null) {
+            return false;
+        }
+        synchronized (deque) {
+            List<CompositionTestRun> copy = new ArrayList<>(deque);
+            for (int i = 0; i < copy.size(); i++) {
+                CompositionTestRun existing = copy.get(i);
+                if (existing.getId().equals(suggestionId)) {
+                    if (existing.getStatus() != CompositionTestRun.Status.SUGGESTED
+                            || !existing.getItemId().equals(run.getItemId())) {
+                        return false;
+                    }
+                    run.setId(suggestionId);
+                    copy.set(i, run);
+                    deque.clear();
+                    deque.addAll(copy);
+                    forgetEnvironments(compositionId, List.of(suggestionId));
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void replace(long compositionId, CompositionTestRun finished) {

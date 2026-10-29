@@ -7,7 +7,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -47,5 +49,40 @@ class ClaudeCodeSubprocessTest {
                 "log should retain the command section");
         assertTrue(result.executionLog().contains("=== Failed ==="),
                 "log should include the failure footer");
+    }
+
+    private static ClaudeCodeSubprocess newSubprocess() {
+        return new ClaudeCodeSubprocess(List.of("claude"), null, Map.of(),
+                Duration.ofSeconds(5), null, new ExecutionLogBuilder());
+    }
+
+    /**
+     * The model reported in the stream-json {@code system}/{@code init} event is recorded.
+     */
+    @Test
+    void recordsModelFromInitEvent() {
+        ClaudeCodeSubprocess subprocess = newSubprocess();
+        assertNull(subprocess.getStreamModel());
+        subprocess.logStreamEvent(
+                "{\"type\":\"system\",\"subtype\":\"init\",\"model\":\"claude-haiku-4-5-20251001\"}");
+        assertEquals("claude-haiku-4-5-20251001", subprocess.getStreamModel());
+    }
+
+    /**
+     * When no init event carried a model, the assistant message's {@code message.model} is used,
+     * but it never overrides a model already reported by the init event.
+     */
+    @Test
+    void recordsModelFromAssistantMessageWhenInitMissing() {
+        ClaudeCodeSubprocess subprocess = newSubprocess();
+        subprocess.logStreamEvent(
+                "{\"type\":\"assistant\",\"message\":{\"model\":\"claude-opus-5\",\"content\":[]}}");
+        assertEquals("claude-opus-5", subprocess.getStreamModel());
+
+        ClaudeCodeSubprocess withInit = newSubprocess();
+        withInit.logStreamEvent("{\"type\":\"system\",\"subtype\":\"init\",\"model\":\"claude-haiku-4-5\"}");
+        withInit.logStreamEvent(
+                "{\"type\":\"assistant\",\"message\":{\"model\":\"other\",\"content\":[]}}");
+        assertEquals("claude-haiku-4-5", withInit.getStreamModel());
     }
 }

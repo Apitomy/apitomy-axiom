@@ -1,8 +1,10 @@
 import { type KeyboardEvent, type ReactNode, useState } from "react";
-import { Button, Label, Spinner, Tab, Tabs, TabTitleText } from "@patternfly/react-core";
+import {
+    Button, Label, Modal, ModalBody, ModalFooter, ModalHeader, Spinner, Tab, Tabs, TabTitleText,
+} from "@patternfly/react-core";
 import {
     AngleDownIcon, AngleUpIcon, CheckCircleIcon, ExclamationCircleIcon, ExclamationTriangleIcon,
-    OutlinedLightbulbIcon,
+    OutlinedLightbulbIcon, TimesIcon,
 } from "@patternfly/react-icons";
 import type { CompositionTestRun } from "../../config/compositions";
 import { TestRunDetailModal } from "./TestRunDetailModal";
@@ -30,10 +32,18 @@ export interface TestOutputStripProps {
     actions?: ReactNode;
     /** Called when the user chooses to run an AI-suggested test. */
     onRunSuggestion?(run: CompositionTestRun): void;
+    /** Called when the user chooses to share a finished run with the AI (prefills the chat). */
+    onSendToAi?(run: CompositionTestRun): void;
+    /** Disables Send to AI (e.g. while the AI is working). */
+    isSendToAiDisabled?: boolean;
     /** Id of the run whose details dialog is open; when given (with `onSelectRun`) the selection is controlled. */
     selectedRunId?: string | null;
     /** Called when the details dialog of a run opens (id) or closes (null). */
     onSelectRun?(runId: string | null): void;
+    /** Removes a finished run or suggestion; when given, each such entry shows a remove button. */
+    onRemoveRun?(run: CompositionTestRun): void;
+    /** Removes every entry that isn't running; when given, the Tests tab shows "Clear all" (with confirmation). */
+    onClearRuns?(): void;
     /** Shows the Tests and Runs tabs; the props above then describe the Tests tab. */
     bottomTabs?: BottomPanelTabs;
 }
@@ -51,6 +61,25 @@ function StatusIcon({ status }: { status: CompositionTestRun["status"] }) {
         default:
             return <ExclamationTriangleIcon aria-label="error" color="var(--pf-t--global--icon--color--status--warning--default)" />;
     }
+}
+
+/**
+ * Whether a run has finished, so its results can be shared with the AI.
+ * @param run the run
+ * @returns true for passed, failed and error runs
+ */
+export function isFinishedRun(run: CompositionTestRun): boolean {
+    return run.status !== "running" && run.status !== "suggested";
+}
+
+/**
+ * Chat prefill that refers the AI to a finished test run; the AI reads its details with get_test_run.
+ * @param run the run
+ * @returns the prefill text
+ */
+export function sendTestRunToAiPrefill(run: CompositionTestRun): string {
+    const kind: string = run.itemType === "tool" ? "tool" : "action type";
+    return `Test run \`${run.id}\` of ${kind} \`${run.itemName}\` (status: ${run.status}): `;
 }
 
 /**
@@ -93,7 +122,10 @@ export function runSummary(run: CompositionTestRun): string {
  * Collapsible list of the composition's recent test runs, by the user and the AI.
  */
 export function TestOutputStrip(props: TestOutputStripProps) {
-    const { runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion, bottomTabs } = props;
+    const { runs, collapsed, onToggle, onOpenItem, actions, onRunSuggestion, onSendToAi, isSendToAiDisabled,
+        onRemoveRun, onClearRuns, bottomTabs } = props;
+    const [confirmClear, setConfirmClear] = useState<boolean>(false);
+    const clearable: number = runs.filter((r) => r.status !== "running").length;
     const runsTab: boolean = bottomTabs?.active === "runs";
     const [ownSelectedId, setOwnSelectedId] = useState<string | null>(null);
     const controlled: boolean = props.selectedRunId !== undefined && props.onSelectRun !== undefined;
@@ -134,6 +166,10 @@ export function TestOutputStrip(props: TestOutputStripProps) {
                     </>
                 )}
                 <span className="axiom-workbench__spacer" />
+                {!runsTab && onClearRuns && (
+                    <Button variant="link" size="sm" isDisabled={clearable === 0}
+                        onClick={() => setConfirmClear(true)}>Clear all</Button>
+                )}
                 {runsTab ? bottomTabs?.runsActions : actions}
             </div>
             {!collapsed && runsTab && <div className="axiom-test-strip__body">{bottomTabs?.runsContent}</div>}
@@ -173,15 +209,50 @@ export function TestOutputStrip(props: TestOutputStripProps) {
                                                 onRunSuggestion?.(run);
                                             }}>Run…</Button>
                                     )}
+                                    {onSendToAi && isFinishedRun(run) && (
+                                        <Button variant="link" isInline size="sm" isDisabled={isSendToAiDisabled}
+                                            aria-label={`Send the ${run.itemName} test run to the AI`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onSendToAi(run);
+                                            }}>Send to AI</Button>
+                                    )}
+                                    {onRemoveRun && run.status !== "running" && (
+                                        <Button variant="plain" size="sm" icon={<TimesIcon />}
+                                            aria-label={`Remove the ${run.itemName} test ${run.status === "suggested" ? "suggestion" : "run"}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onRemoveRun(run);
+                                            }}
+                                            onKeyDown={(e) => e.stopPropagation()} />
+                                    )}
                                 </div>
                             </li>
                         ))}
                     </ul>
                 </div>
             )}
+            {confirmClear && (
+                <Modal isOpen variant="small" onClose={() => setConfirmClear(false)}
+                    aria-labelledby="clear-test-runs-title">
+                    <ModalHeader title="Clear all tests?" labelId="clear-test-runs-title" />
+                    <ModalBody>
+                        This removes {clearable} test {clearable === 1 ? "entry" : "entries"} (runs and AI
+                        suggestions). Running tests are kept. This cannot be undone.
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="danger" onClick={() => {
+                            setConfirmClear(false);
+                            onClearRuns?.();
+                        }}>Clear all</Button>
+                        <Button variant="link" onClick={() => setConfirmClear(false)}>Cancel</Button>
+                    </ModalFooter>
+                </Modal>
+            )}
             {selected && (
                 <TestRunDetailModal run={selected} onClose={() => setSelectedId(null)} onOpenItem={onOpenItem}
-                    onRunSuggestion={onRunSuggestion} />
+                    onRunSuggestion={onRunSuggestion} onSendToAi={onSendToAi}
+                    isSendToAiDisabled={isSendToAiDisabled} />
             )}
         </section>
     );

@@ -456,7 +456,7 @@ public class ClaudeCodeAgent implements Agent {
         LOG.debugf("Plugin dirs applied to this execution: %s", configuredPluginDirs);
 
         ExecutionLogBuilder logBuilder = new ExecutionLogBuilder();
-        logBuilder.header(0, "agent", Instant.now());
+        logBuilder.header(request.getTaskId(), request.getActionType(), Instant.now());
         if (request.getSystemPrompt() != null) {
             logBuilder.systemPrompt(request.getSystemPrompt());
         }

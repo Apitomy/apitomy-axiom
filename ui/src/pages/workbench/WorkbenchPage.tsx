@@ -3,14 +3,14 @@ import type { ActionTypeDescriptor, Workflow } from "@apitomy/flow-ui";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
     Alert, AlertActionLink, Breadcrumb, BreadcrumbItem, Button, Modal, ModalBody, ModalHeader, PageSection, Tab, Tabs, TabTitleText, ToggleGroup,
-    ToggleGroupItem, Tooltip, Dropdown, Label, DropdownItem, DropdownList, MenuToggle,
+    ToggleGroupItem, Tooltip, Dropdown, DropdownItem, DropdownList, MenuToggle,
 } from "@patternfly/react-core";
 import {
     CompressArrowsAltIcon, CompressIcon, ExpandArrowsAltIcon, ExpandIcon, ExternalLinkAltIcon, HistoryIcon, PlusCircleIcon,
 } from "@patternfly/react-icons";
 import { RevisionList } from "./RevisionList";
 import {
-    addItem, type CompositionItem, type CompositionSessionInfo, type CompositionTestRun, fetchItem, updateComposition,
+    addItem, type CompositionItem, type CompositionTestRun, fetchItem, updateComposition,
 } from "../../config/compositions";
 import {
     type AddableType, AddItemDialog, type AddRequest, askAiAboutItemPrefill, CompositionTree, RemoveItemDialog,
@@ -24,7 +24,7 @@ import { ItemTab, type ItemTabHandle } from "./ItemTab";
 import { itemUsages, mergeCatalog } from "./workbenchLogic";
 import { ChatPane } from "./ChatPane";
 import type { WorkbenchToolActions } from "./WorkbenchToolCards";
-import { TestOutputStrip } from "./TestOutputStrip";
+import { sendTestRunToAiPrefill, TestOutputStrip } from "./TestOutputStrip";
 import { RunsList } from "./RunsList";
 import { RunDetailDialog } from "./RunDetailDialog";
 import { runAnalysisPrefill } from "./runAnalysis";
@@ -39,24 +39,6 @@ function newRunId(): string {
     return typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `run-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/**
- * Compact label with the engine and model of the composition's running assistant session; hidden until the
- * session has started.
- */
-function SessionBadge({ session }: { session: CompositionSessionInfo | undefined }) {
-    if (!session?.engine) {
-        return null;
-    }
-    const engine: string = session.engineLabel || session.engine;
-    const model: string = session.model || "default";
-    return (
-        <Tooltip content={<>Engine: {engine} ({session.engine})<br />Model: {session.model
-            ?? "the engine's default model"}</>}>
-            <Label isCompact className="axiom-workbench__session-badge">{`${engine} · ${model}`}</Label>
-        </Tooltip>
-    );
 }
 
 const RAIL: number = 32;
@@ -258,7 +240,7 @@ export function WorkbenchPage() {
         && wb.contents[activeItem.id] ? activeItem : undefined;
 
     /** Values (and no subject) to pre-fill the next test dialog with, from an AI suggestion. */
-    const suggestedValues = useRef<{ itemId: number; values: Record<string, string> } | null>(null);
+    const suggestedValues = useRef<{ itemId: number; values: Record<string, string>; suggestionId: string } | null>(null);
 
     /** Flushes the active item's pending save, then opens the test dialog for it. */
     const openTest = async () => {
@@ -303,7 +285,7 @@ export function WorkbenchPage() {
             setTestError({ title: `Could not run the test: ${e instanceof Error ? e.message : String(e)}` });
             return;
         }
-        suggestedValues.current = { itemId: item.id, values: valuesFromInputs(run.inputs) };
+        suggestedValues.current = { itemId: item.id, values: valuesFromInputs(run.inputs), suggestionId: run.id };
         setTesting(item.id);
     };
 
@@ -329,15 +311,17 @@ export function WorkbenchPage() {
 
     /** Starts a test run; the strip shows progress via SSE, request failures show inline. */
     const runTest = (itemId: number, inputs: Record<string, unknown>, values: Record<string, string>,
-                     subjectId?: number, environment?: Record<string, string>) => {
+                     subjectId?: number, environment?: Record<string, string>, suggestionId?: string) => {
         testValues.current.set(itemId, { values, subjectId, environment });
         suggestedValues.current = null;
         setTesting(null);
         setTestError(null);
         // Open the run's details right away; the dialog shows it running and updates live when it finishes.
-        const runId: string = newRunId();
+        // A still-suggested test's run replaces the suggestion and takes its id.
+        const runId: string = suggestionId && wb.testRuns.some((r) => r.id === suggestionId && r.status === "suggested")
+            ? suggestionId : newRunId();
         setSelectedRunId(runId);
-        wb.runTest(itemId, inputs, subjectId, runId, environment).then((run) => {
+        wb.runTest(itemId, inputs, subjectId, runId, environment, suggestionId).then((run) => {
             // If the server recorded the run under another id, keep showing it instead of closing the dialog.
             if (typeof run?.id === "string" && run.id !== runId) {
                 setSelectedRunId((current) => (current === runId ? run.id : current));
@@ -629,6 +613,11 @@ export function WorkbenchPage() {
                     onToggle={() => updatePrefs({ testStripCollapsed: !prefs.testStripCollapsed })}
                     onOpenItem={openItem}
                     onRunSuggestion={(run) => void runSuggestion(run)}
+                    onSendToAi={(run) => askAi(sendTestRunToAiPrefill(run))}
+                    onRemoveRun={(run) => void wb.removeTestRun(run.id).catch((e: unknown) =>
+                        setTestError({ title: `Could not remove the test: ${e instanceof Error ? e.message : String(e)}` }))}
+                    onClearRuns={() => void wb.clearTestRuns().catch((e: unknown) =>
+                        setTestError({ title: `Could not clear the tests: ${e instanceof Error ? e.message : String(e)}` }))}
                     bottomTabs={{
                         active: prefs.bottomPanelTab,
                         onSelect: (tab) => updatePrefs({ bottomPanelTab: tab }),
@@ -666,8 +655,7 @@ export function WorkbenchPage() {
                     ? aiWorking && <span className="axiom-workbench__pulse" aria-label="AI is working" />
                     : composition && (
                         <ChatPane composition={composition} sessionError={wb.sessionError}
-                            toolbarStart={<>{chatCollapseButton}<span className="axiom-workbench__pane-title">AI Assistant</span>
-                                <SessionBadge session={composition.session} /></>}
+                            toolbarStart={<>{chatCollapseButton}<span className="axiom-workbench__pane-title">AI Assistant</span></>}
                             lastCompletedTurnId={wb.lastCompletedTurnId} prefill={prefill}
                             beforeSend={beforeSend} toolActions={toolActions} onRetrySession={() => void wb.retrySession()}
                             onReplaceWorkflow={(w) => workflowTabRef.current?.replace(w)}
@@ -715,7 +703,7 @@ export function WorkbenchPage() {
                         }}
                         initialEnvironment={remembered?.environment}
                         onRun={(inputs, values, subjectId, environment) =>
-                            runTest(testing, inputs, values, subjectId, environment)} />
+                            runTest(testing, inputs, values, subjectId, environment, suggestion?.suggestionId)} />
                 );
             })()}
             {openRunId !== null && (

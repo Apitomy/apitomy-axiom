@@ -137,4 +137,39 @@ describe("ChatPane", () => {
         render(<ChatPane {...props} composition={{ ...composition, assistantSessionId: undefined }} />);
         expect(screen.queryByLabelText("Allow All")).toBeNull();
     });
+
+    it("shows the model and session usage, updating after each turn", () => {
+        render(<ChatPane {...props} />);
+        expect(screen.queryByText(/^\$/)).toBeNull();
+        expect(screen.getByRole("button", { name: "AI session details" })).toBeTruthy();
+        act(() => { chatProps.onModelDetected("claude-test"); chatProps.onCostUpdate(0.01, 100, 20); });
+        expect(screen.getByText("$0.0100")).toBeTruthy();
+        fireEvent.click(screen.getByRole("button", { name: /AI session details/ }));
+        expect(screen.getByText("claude-test")).toBeTruthy();
+        act(() => { chatProps.onCostUpdate(0.025, 50, 10); });
+        expect(screen.getByRole("button", { name: "AI session details: $0.0250" })).toBeTruthy();
+    });
+
+    it("shows the session's engine and requested model in the session details", () => {
+        render(<ChatPane {...props} composition={{ ...composition,
+            session: { engine: "claude-code", engineLabel: "Claude Code" } }} />);
+        fireEvent.click(screen.getByRole("button", { name: /AI session details/ }));
+        expect(screen.getByText("Claude Code (claude-code)")).toBeTruthy();
+        expect(screen.getByText("Engine default")).toBeTruthy();
+    });
+
+    it("shows token totals when the engine reports no cost", () => {
+        render(<ChatPane {...props} />);
+        act(() => { chatProps.onCostUpdate(0, 100, 20); });
+        expect(screen.getByText("120 tokens")).toBeTruthy();
+        act(() => { chatProps.onCostUpdate(0, 50, 10); });
+        expect(screen.getByText("180 tokens")).toBeTruthy();
+    });
+
+    it("resets usage when the session changes", () => {
+        const { rerender } = render(<ChatPane {...props} />);
+        act(() => { chatProps.onCostUpdate(0.01, 100, 20); });
+        rerender(<ChatPane {...props} composition={{ ...composition, assistantSessionId: "s2" }} />);
+        expect(screen.queryByText("$0.0100")).toBeNull();
+    });
 });

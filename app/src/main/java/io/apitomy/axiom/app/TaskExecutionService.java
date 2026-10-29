@@ -345,6 +345,8 @@ public class TaskExecutionService {
 
         String prompt = resolvePromptTemplate(actionTypeEntity, task);
         AgentRequest request = AgentRequest.builder()
+                .taskId(task.id)
+                .actionType(task.actionType)
                 .prompt(prompt != null ? prompt : task.input)
                 .workingDirectory(workspace)
                 .systemPrompt(buildSystemPrompt(actionTypeEntity))
@@ -604,6 +606,69 @@ public class TaskExecutionService {
         }
     }
 
+    /**
+     * Appends a model section to an execution log recording the requested model and the model the
+     * engine reported it actually ran. When they differ, a note explains that the reported model is
+     * authoritative, so that engine stderr warnings mentioning other models are not mistaken for it.
+     *
+     * @param executionLog   the existing execution log, may be {@code null}
+     * @param requestedModel the model requested by the action type, may be {@code null}
+     * @param actualModel    the model the engine reported it actually ran
+     * @return the execution log with the model section appended
+     */
+    static String appendModelSection(String executionLog, String requestedModel, String actualModel) {
+        StringBuilder section = new StringBuilder();
+        if (executionLog != null && !executionLog.isEmpty()) {
+            section.append(executionLog);
+            if (!executionLog.endsWith("\n")) {
+                section.append('\n');
+            }
+            section.append('\n');
+        }
+        section.append("=== Model ===\n");
+        section.append("Requested: ")
+                .append(requestedModel != null && !requestedModel.isBlank() ? requestedModel : "(engine default)")
+                .append('\n');
+        section.append("Actual: ").append(actualModel).append('\n');
+        if (isModelMismatch(requestedModel, actualModel)) {
+            section.append("Note: the engine ran a different model than requested. The actual model above is ")
+                    .append("reported by the engine; stderr warnings naming other models are not authoritative.\n");
+        }
+        return section.toString();
+    }
+
+    /**
+     * Returns true when a requested model (which may be a short alias such as {@code haiku} or a
+     * {@code provider/model} reference) clearly does not match the model that actually ran.
+     *
+     * @param requestedModel the requested model, may be {@code null}
+     * @param actualModel    the actual model, may be {@code null}
+     * @return true if both are known and the actual model does not match the request
+     */
+    static boolean isModelMismatch(String requestedModel, String actualModel) {
+        if (requestedModel == null || requestedModel.isBlank() || actualModel == null || actualModel.isBlank()) {
+            return false;
+        }
+        String requested = requestedModel.trim().toLowerCase(java.util.Locale.ROOT);
+        String actual = actualModel.trim().toLowerCase(java.util.Locale.ROOT);
+        String requestedName = requested.substring(requested.lastIndexOf('/') + 1);
+        String actualName = actual.substring(actual.lastIndexOf('/') + 1);
+        return !actualName.contains(requestedName) && !requestedName.contains(actualName);
+    }
+
+    /**
+     * Returns true for a human (Inbox) task: a workflow human task carries its human context, and any task
+     * answered from {@code AwaitingInput} without an assigned agent was answered by a person.
+     *
+     * @param task           the task
+     * @param previousStatus the task's status before completion
+     * @return whether the task was completed by a person rather than an AI engine
+     */
+    static boolean isHumanTask(TaskEntity task, String previousStatus) {
+        return task.humanContext != null
+                || (HumanTaskStatuses.AWAITING_INPUT.equals(previousStatus) && task.assignedAgent == null);
+    }
+
     private void recordTaskCompletion(TaskEntity task, AgentResult result) {
         Long taskId = task.id;
         String previousStatus = task.status;
@@ -612,6 +677,16 @@ public class TaskExecutionService {
         task.completedOn = Instant.now();
         task.sessionId = result.sessionId();
         task.executionLog = result.executionLog();
+        if (!result.success()) {
+            applyFailureDetail(task, result.errorMessage());
+        }
+
+        ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", task.actionType).firstResult();
+        String requestedModel = actionTypeEntity != null ? actionTypeEntity.model : null;
+        if (result.model() != null && !result.model().isBlank()) {
+            task.actualModel = result.model();
+            task.executionLog = appendModelSection(task.executionLog, requestedModel, task.actualModel);
+        }
 
         String statusText = result.success() ? "completed" : "failed";
         LOG.infof("Task %d %s (cost: $%s, tokens: %d/%d)",
@@ -620,23 +695,25 @@ public class TaskExecutionService {
                 result.inputTokens() != null ? result.inputTokens() : 0,
                 result.outputTokens() != null ? result.outputTokens() : 0);
 
-        // Record AI usage (prefer engine/model from the agent result, fall back to action type config)
-        ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", task.actionType).firstResult();
-        String engine = result.engine();
-        if (engine == null || engine.isBlank()) {
-            engine = actionTypeEntity != null ? actionTypeEntity.engine : null;
+        // Record AI usage (prefer engine/model from the agent result, fall back to action type config).
+        // Human tasks are answered by a person, not an engine, so they have no AI usage.
+        if (!isHumanTask(task, previousStatus)) {
+            String engine = result.engine();
+            if (engine == null || engine.isBlank()) {
+                engine = actionTypeEntity != null ? actionTypeEntity.engine : null;
+            }
+            if (engine == null || engine.isBlank()) {
+                engine = agentRegistry.getDefaultAgentType();
+            }
+            String model = result.model();
+            if (model == null || model.isBlank()) {
+                model = actionTypeEntity != null ? actionTypeEntity.model : null;
+            }
+            recordAiUsage("task", taskId, task.eventId, task.subjectId,
+                    task.assignedAgent, task.actionType, engine, model,
+                    result.costUsd(), result.inputTokens(), result.outputTokens(),
+                    task.traceId, task.workflowRunId);
         }
-        if (engine == null || engine.isBlank()) {
-            engine = agentRegistry.getDefaultAgentType();
-        }
-        String model = result.model();
-        if (model == null || model.isBlank()) {
-            model = actionTypeEntity != null ? actionTypeEntity.model : null;
-        }
-        recordAiUsage("task", taskId, task.eventId, task.subjectId,
-                task.assignedAgent, task.actionType, engine, model,
-                result.costUsd(), result.inputTokens(), result.outputTokens(),
-                task.traceId, task.workflowRunId);
 
         // Log to activity
         logActivity(task.subjectId, taskId, task.eventId, "task-" + statusText,
@@ -687,6 +764,33 @@ public class TaskExecutionService {
 
     }
 
+    /**
+     * Makes an agent failure visible on the task: when the agent produced no output the error
+     * message becomes the task output, and the error is appended to the execution log unless the
+     * log already contains it. Without this a failed agent call left both empty, so the workflow
+     * run reported only {@code Node returned FAILED: {}}.
+     *
+     * @param task         the failed task
+     * @param errorMessage the agent's error message, possibly null
+     */
+    static void applyFailureDetail(TaskEntity task, String errorMessage) {
+        String reason = errorMessage == null || errorMessage.isBlank()
+                ? "Agent reported failure without an error message" : errorMessage;
+        if (task.output == null || task.output.isBlank()) {
+            task.output = reason;
+        }
+        if (task.executionLog == null || !task.executionLog.contains(reason)) {
+            task.executionLog = appendFailureReason(task.executionLog, "Error: " + reason);
+        }
+    }
+
+    private static String appendFailureReason(String existingLog, String reason) {
+        if (existingLog == null || existingLog.isBlank()) {
+            return reason;
+        }
+        return existingLog + "\n\n" + reason;
+    }
+
     @Transactional
     void failTask(Long taskId, String reason) {
         doFailTask(taskId, reason, true);
@@ -716,6 +820,7 @@ public class TaskExecutionService {
             }
             task.status = "Failed";
             task.output = reason;
+            task.executionLog = appendFailureReason(task.executionLog, reason);
             task.completedOn = Instant.now();
 
             logActivity(task.subjectId, taskId, task.eventId, "task-failed",
