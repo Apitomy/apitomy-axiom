@@ -4,20 +4,19 @@ import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentCheckResult;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
+import io.apitomy.axiom.agents.spi.process.CliRun;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Unified agent implementation for the GitHub Copilot CLI ({@code copilot}).
@@ -33,6 +32,10 @@ import java.util.concurrent.TimeUnit;
 public class CopilotAgent implements Agent {
 
     private static final Logger LOG = Logger.getLogger(CopilotAgent.class);
+
+    private static final String CHECK_NAME = "GitHub Copilot CLI";
+    private static final String INSTALL_HINT = "npm install -g @github/copilot";
+    private static final Duration PROBE_TIMEOUT = Duration.ofSeconds(30);
 
     @ConfigProperty(name = "axiom.agent.copilot.executable", defaultValue = "copilot")
     String executable;
@@ -115,57 +118,39 @@ public class CopilotAgent implements Agent {
      */
     @Override
     public List<AgentCheckResult> healthCheck() {
-        List<AgentCheckResult> results = new ArrayList<>();
+        return List.of(check(PROBE_TIMEOUT));
+    }
 
-        try {
-            ProcessBuilder pb = new ProcessBuilder(executable, "-p",
-                    "Reply with exactly: AXIOM_OK", "--allow-all-tools",
-                    "--disable-builtin-mcps", "--output-format", "text", "-s");
-            pb.redirectErrorStream(true);
-            Process process = pb.start();
-
-            boolean completed = process.waitFor(30, TimeUnit.SECONDS);
-            if (!completed) {
-                process.destroyForcibly();
-                results.add(new AgentCheckResult(
-                        "GitHub Copilot CLI",
-                        "error",
-                        "GitHub Copilot CLI check timed out after 30 seconds. "
-                                + "Ensure that the 'copilot' command is on your PATH and that "
-                                + "you are logged in (run 'copilot login')."
-                ));
-                return results;
-            }
-
-            String output = new String(process.getInputStream().readAllBytes());
-            int exitCode = process.exitValue();
-
-            if (exitCode == 0 && output.contains("AXIOM_OK")) {
-                results.add(new AgentCheckResult(
-                        "GitHub Copilot CLI",
-                        "ok",
-                        "GitHub Copilot CLI is available and working."
-                ));
-            } else {
-                results.add(new AgentCheckResult(
-                        "GitHub Copilot CLI",
-                        "error",
-                        "GitHub Copilot CLI returned exit code " + exitCode + ". "
-                                + "Ensure that 'copilot' is installed, on your PATH, and that "
-                                + "you are authenticated (run 'copilot login'). "
-                                + "Install: npm install -g @github/copilot"
-                ));
-            }
-        } catch (Exception e) {
-            results.add(new AgentCheckResult(
-                    "GitHub Copilot CLI",
-                    "error",
-                    "GitHub Copilot CLI is not available: " + e.getMessage() + ". "
-                            + "Install GitHub Copilot CLI: npm install -g @github/copilot"
-            ));
-        }
-
-        return results;
+    /**
+     * Sends the test prompt and maps the run to a check result. On failure
+     * the message quotes the end of the CLI's own output, which usually
+     * names the actual problem (for example a missing login).
+     *
+     * @param timeout the time limit for the test prompt
+     * @return the check result
+     */
+    AgentCheckResult check(Duration timeout) {
+        CliRun run = CliRun.run(List.of(executable, "-p", "Reply with exactly: AXIOM_OK",
+                "--allow-all-tools", "--disable-builtin-mcps", "--output-format", "text", "-s"),
+                timeout);
+        return switch (run.outcome()) {
+            case NOT_STARTED -> new AgentCheckResult(CHECK_NAME, "error",
+                    "GitHub Copilot CLI is not available: " + run.failure() + ". "
+                            + "Install GitHub Copilot CLI: " + INSTALL_HINT);
+            case INTERRUPTED -> new AgentCheckResult(CHECK_NAME, "warning",
+                    "GitHub Copilot CLI check was interrupted before it finished.");
+            case TIMED_OUT -> new AgentCheckResult(CHECK_NAME, "error",
+                    "GitHub Copilot CLI check timed out after " + timeout.toSeconds() + " seconds"
+                            + run.excerptSuffix() + ". Ensure that you are logged in "
+                            + "(run 'copilot login') and have network access.");
+            case COMPLETED -> run.succeededWith("AXIOM_OK")
+                    ? new AgentCheckResult(CHECK_NAME, "ok", "GitHub Copilot CLI is available and working.")
+                    : new AgentCheckResult(CHECK_NAME, "error",
+                            "GitHub Copilot CLI returned exit code " + run.exitCode()
+                                    + run.excerptSuffix() + ". Ensure that 'copilot' is installed "
+                                    + "and that you are authenticated (run 'copilot login'). "
+                                    + "Install: " + INSTALL_HINT);
+        };
     }
 
     /**
