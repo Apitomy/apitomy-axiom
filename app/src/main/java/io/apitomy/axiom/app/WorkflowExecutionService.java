@@ -51,6 +51,7 @@ import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -214,7 +215,7 @@ public class WorkflowExecutionService {
         entity.definitionId = definitionId;
         entity.definitionVersion = definition.currentVersion;
         entity.title = resolveTitle(request.title());
-        entity.labels = toJsonOrNull(request.labels());
+        entity.labels = RunLabels.normalize(request.labels());
         Map<String, Object> storedInputs = new LinkedHashMap<>(resolution.context());
         storedInputs.remove(StandardInputs.EVENT); // the event is linked as the run's trigger
         entity.inputs = storedInputs.isEmpty() ? null : toJsonOrNull(storedInputs);
@@ -568,6 +569,38 @@ public class WorkflowExecutionService {
         entity.title = resolveTitle(title);
         sseEvents.fire(SseEvent.workflowUpdated(entity.subjectId, entity.id, entity.status));
         return entity.title;
+    }
+
+    /**
+     * Replaces a run's labels. Labels are trimmed, blank ones dropped and duplicates removed. Backs the REST
+     * label update and the {@code axiom_add_run_label} / {@code axiom_remove_run_label} SDK functions.
+     *
+     * @param runId  the workflow run id
+     * @param labels the new labels; null clears them
+     * @return the stored labels
+     * @throws WebApplicationException 404 when the run does not exist, 400 when a label is too long
+     */
+    // Validation failures must not roll back the caller's transaction: an sdk: node reports them as a failed call.
+    @Transactional(dontRollbackOn = WebApplicationException.class)
+    public List<String> setRunLabels(long runId, List<String> labels) {
+        WorkflowRunEntity entity = WorkflowRunEntity.findById(runId);
+        if (entity == null) {
+            throw new WebApplicationException(Response.status(404)
+                    .entity(Map.of("message", "Workflow run not found: " + runId)).build());
+        }
+        String tooLong = RunLabels.findTooLong(labels);
+        if (tooLong != null) {
+            throw new WebApplicationException(Response.status(400)
+                    .entity(Map.of("message", "Labels must be at most " + RunLabels.MAX_LENGTH + " characters"))
+                    .build());
+        }
+        List<String> normalized = RunLabels.normalize(labels);
+        if (!normalized.equals(entity.labels)) {
+            entity.labels.clear();
+            entity.labels.addAll(normalized);
+            sseEvents.fire(SseEvent.workflowUpdated(entity.subjectId, entity.id, entity.status));
+        }
+        return new ArrayList<>(entity.labels);
     }
 
     /**

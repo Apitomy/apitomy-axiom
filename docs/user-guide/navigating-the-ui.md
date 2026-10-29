@@ -69,7 +69,7 @@ sections.
 **Runs** is the landing page (`/runs`). It lists every workflow run across all subjects with its status,
 start time and duration. The **Run** column names each run as `<subject> — <workflow> v<version>`, with the
 run's title below it when the run has one. Filter chips narrow the list by **Status**, **Workflow** (name or
-ID), **Subject ID**, and **Label** (`key:value`; add several labels to require all of them). Clicking a run's
+ID), **Subject ID**, and **Label** (add several labels to require all of them). Clicking a run's
 status adds it as a filter. Click anywhere else on a row to open the run's detail page, which shows the
 workflow graph with the current node highlighted, the run's resolved standard inputs (the `subject`; the
 event is shown as the triggering event instead) and labels, the triggering event, the tasks created by its

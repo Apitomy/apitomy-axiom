@@ -145,7 +145,7 @@ WorkflowScheduleTriggerScheduler
 Find or create the fixed Subject (ref "schedule:<subjectName>")
   │
   ▼
-WorkflowExecutionService.triggerWorkflow(subjectId, definitionId, inputs, label trigger=schedule)
+WorkflowExecutionService.triggerWorkflow(subjectId, definitionId, inputs, label trigger:schedule)
   │  lastOutcome = started | skipped (active run exists) | failed: <reason>
 ```
 

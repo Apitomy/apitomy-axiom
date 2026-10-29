@@ -306,7 +306,7 @@ function EventRunsTab({ eventId, refreshKey }: { eventId: string; refreshKey: nu
                         </Td>
                         <Td dataLabel="Title">
                             <Link to={`/runs/${r.runId}`}>{r.title || `Workflow Run #${r.runId}`}</Link>
-                            {r.labels?.trigger === "manual" && (
+                            {r.labels?.includes("trigger:manual") && (
                                 <Label isCompact color="purple" style={{ marginLeft: "8px" }}>manual</Label>
                             )}
                         </Td>

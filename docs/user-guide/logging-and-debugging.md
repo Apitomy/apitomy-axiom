@@ -193,7 +193,7 @@ Open the workflow definition and go to the **Triggers** tab. Each schedule trigg
 - **Last run** and **Last outcome** — `started`, `skipped` (the fixed subject already had an active run of
   this definition), or `failed: <reason>`
 
-Runs started by a schedule trigger carry the label `trigger: schedule`, so you can find them on the **Runs**
+Runs started by a schedule trigger carry the label `trigger:schedule`, so you can find them on the **Runs**
 page with the label filter `trigger:schedule`, or open the trigger's fixed subject to see its run timeline.
 
 ---

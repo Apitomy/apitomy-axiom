@@ -71,7 +71,7 @@ class EventManualRunTest {
 
         int runId = given()
                 .contentType(ContentType.JSON)
-                .body("{\"workflowDefinitionId\": %d, \"labels\": {\"trigger\": \"x\", \"team\": \"a\"}}"
+                .body("{\"workflowDefinitionId\": %d, \"labels\": [\"trigger:x\", \"team:a\"]}"
                         .formatted(definitionId))
             .when()
                 .post("/api/v1/stream/events/" + eventId + "/runs")
@@ -87,9 +87,7 @@ class EventManualRunTest {
         SubjectEntity subject = QuarkusTransaction.requiringNew().call(() ->
                 SubjectEntity.<SubjectEntity>findById(run.subjectId));
         assertEquals(eventRef(eventId), subject.ref);
-        JsonNode labels = objectMapper.readTree(run.labels);
-        assertEquals("manual", labels.path("trigger").asText());
-        assertEquals("a", labels.path("team").asText());
+        assertEquals(java.util.List.of("team:a", "trigger:manual"), run.labels);
         JsonNode context = objectMapper.readTree(run.instanceState).path("context");
         assertEquals(eventId.toString(), context.path("event").path("id").asText());
         assertEquals(0L, QuarkusTransaction.requiringNew().call(() ->
@@ -131,8 +129,7 @@ class EventManualRunTest {
         int rerunId = given().when().post("/api/v1/workflow/runs/" + firstRunId + "/rerun")
             .then().statusCode(200)
                 .body("triggerEventId", equalTo(eventId.toString()))
-                .body("labels.rerunOf", equalTo(String.valueOf(firstRunId)))
-                .body("labels.trigger", equalTo("manual"))
+                .body("labels", org.hamcrest.Matchers.contains("trigger:manual", "rerunOf:" + firstRunId))
                 .extract().path("runId");
         WorkflowRunEntity rerun = QuarkusTransaction.requiringNew().call(() ->
                 WorkflowRunEntity.<WorkflowRunEntity>findById((long) rerunId));

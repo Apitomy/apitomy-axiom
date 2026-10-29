@@ -62,7 +62,7 @@ public class WorkflowRunBeanMapper {
         bean.setDefinitionId(entity.definitionId);
         bean.setDefinitionVersion(entity.definitionVersion);
         bean.setTitle(entity.title);
-        bean.setLabels(readJson(entity.labels, io.apitomy.axiom.api.beans.Labels.class));
+        bean.setLabels(new java.util.ArrayList<>(entity.labels));
         bean.setInputs(readJson(entity.inputs, io.apitomy.axiom.api.beans.Inputs.class));
         bean.setStatus(entity.status);
         bean.setCurrentNodeId(entity.currentNodeId);
@@ -244,15 +244,13 @@ public class WorkflowRunBeanMapper {
     /**
      * Searches runs with optional subject/definition/status/label filters, newest first.
      * <p>
-     * Labels are stored as a JSON text column, so label filtering is a simplification: each
-     * {@code key:value} filter matches runs whose labels JSON contains the text
-     * {@code "key":"value"} (a {@code like} match on Jackson's compact serialization). All label
-     * filters must match. Filters without a {@code :} are ignored.
+     * A run matches the label filter when it has all of the given labels (AND semantics, as for subject
+     * labels). Blank filters are ignored.
      *
      * @param subjectId    optional subject filter (nullable)
      * @param definitionId optional definition filter (nullable)
      * @param status       optional comma-separated status filter (nullable)
-     * @param labels       optional label filters in {@code key:value} form (nullable)
+     * @param labels       optional labels the runs must all have (nullable)
      * @param page         1-based page number (nullable → 1)
      * @param limit        page size (nullable → 20)
      * @return paginated run summaries
@@ -270,7 +268,7 @@ public class WorkflowRunBeanMapper {
      * @param subjectId      optional subject filter (nullable)
      * @param definitionId   optional definition filter (nullable)
      * @param status         optional comma-separated status filter (nullable)
-     * @param labels         optional label filters in {@code key:value} form (nullable)
+     * @param labels         optional labels the runs must all have (nullable)
      * @param triggerEventId optional filter on the stream event that triggered the run (nullable)
      * @param page           1-based page number (nullable → 1)
      * @param limit          page size (nullable → 20)
@@ -301,18 +299,12 @@ public class WorkflowRunBeanMapper {
             params.put("statuses", java.util.Arrays.stream(status.split(","))
                     .map(String::trim).filter(s -> !s.isEmpty()).toList());
         }
-        if (labels != null) {
-            int index = 0;
-            for (String label : labels) {
-                int sep = label != null ? label.indexOf(':') : -1;
-                if (sep <= 0) {
-                    continue;
-                }
-                String param = "label" + index++;
-                hql.append(" and labels like :").append(param);
-                params.put(param, "%" + toJsonString(label.substring(0, sep)) + ":"
-                        + toJsonString(label.substring(sep + 1)) + "%");
-            }
+        List<String> labelFilters = RunLabels.normalize(labels);
+        if (!labelFilters.isEmpty()) {
+            hql.append(" and id in (select r.id from WorkflowRunEntity r join r.labels rl where rl in :labels"
+                    + " group by r.id having count(distinct rl) = :labelCount)");
+            params.put("labels", labelFilters);
+            params.put("labelCount", (long) labelFilters.size());
         }
 
         long totalCount = WorkflowRunEntity.count(hql.toString(), params);
@@ -375,7 +367,7 @@ public class WorkflowRunBeanMapper {
         summary.setDefinitionName(definitionNames.getOrDefault(run.definitionId, "Unknown"));
         summary.setDefinitionVersion(run.definitionVersion);
         summary.setTitle(run.title);
-        summary.setLabels(readJson(run.labels, io.apitomy.axiom.api.beans.Labels.class));
+        summary.setLabels(new java.util.ArrayList<>(run.labels));
         summary.setInputs(readJson(run.inputs, io.apitomy.axiom.api.beans.Inputs.class));
         summary.setStatus(run.status);
         if (run.traceId != null) {

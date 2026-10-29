@@ -4185,7 +4185,7 @@
           {
             "name": "label",
             "in": "query",
-            "description": "Filter by label in key:value form; repeatable (all must match)",
+            "description": "Filter by label; repeatable (runs must have all of them)",
             "schema": {
               "type": "array",
               "items": {
@@ -6756,7 +6756,7 @@
           "StreamEvents"
         ],
         "summary": "Start a workflow run from a stream event",
-        "description": "Runs the workflow on the event's subject (found or created from the event ref) with the event in the run context. The run is labelled trigger=manual; no processing (ledger) entry is recorded.",
+        "description": "Runs the workflow on the event's subject (found or created from the event ref) with the event in the run context. The run is labelled trigger:manual; no processing (ledger) entry is recorded.",
         "operationId": "triggerStreamEventWorkflow",
         "requestBody": {
           "content": {
@@ -6849,7 +6849,7 @@
           "WorkflowRuns"
         ],
         "summary": "Re-run a failed workflow run",
-        "description": "Starts a new run of the same workflow (latest published version) for the same subject, with the original title and labels (plus rerunOf=<runId>). A run started by a stream event is re-run from that event. Only failed runs can be re-run.",
+        "description": "Starts a new run of the same workflow (latest published version) for the same subject, with the original title and labels (plus rerunOf:<runId>). A run started by a stream event is re-run from that event. Only failed runs can be re-run.",
         "operationId": "rerunWorkflowRun",
         "responses": {
           "200": {
@@ -6870,6 +6870,56 @@
           },
           "409": {
             "description": "The run did not fail, or the subject already has an active run of the workflow"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Workflow run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/workflow/runs/{runId}/labels": {
+      "put": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Set a workflow run's labels",
+        "description": "Replaces the run's labels with the given list. Backs the axiom_add_run_label and axiom_remove_run_label SDK functions.",
+        "operationId": "setWorkflowRunLabels",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunLabels"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The run's labels after the update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunLabels"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A label is blank or longer than 255 characters"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
           }
         }
       },
@@ -10718,8 +10768,9 @@
             "description": "Title the run was started with; absent when none was given"
           },
           "labels": {
-            "type": "object",
-            "additionalProperties": {
+            "type": "array",
+            "description": "Run labels, free-form strings (built-in ones use key:value form, e.g. trigger:manual)",
+            "items": {
               "type": "string"
             }
           },
@@ -10849,8 +10900,9 @@
             "description": "Run title; defaults to \"<definition name> — <subject name>\""
           },
           "labels": {
-            "type": "object",
-            "additionalProperties": {
+            "type": "array",
+            "description": "Run labels, free-form strings (built-in ones use key:value form, e.g. trigger:manual)",
+            "items": {
               "type": "string"
             }
           }
@@ -10882,8 +10934,9 @@
             "description": "Title the run was started with; absent when none was given"
           },
           "labels": {
-            "type": "object",
-            "additionalProperties": {
+            "type": "array",
+            "description": "Run labels, free-form strings (built-in ones use key:value form, e.g. trigger:manual)",
+            "items": {
               "type": "string"
             }
           },
@@ -12510,6 +12563,22 @@
           },
           "subscriptionName": {
             "type": "string"
+          }
+        }
+      },
+      "WorkflowRunLabels": {
+        "type": "object",
+        "description": "A workflow run's labels",
+        "required": [
+          "labels"
+        ],
+        "properties": {
+          "labels": {
+            "type": "array",
+            "description": "The run's labels",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },

@@ -160,7 +160,7 @@ public class WorkflowScheduleTriggerScheduler {
 
     private void startRun(Attempt attempt) {
         workflowExecutionService.triggerWorkflow(attempt.subjectId(), attempt.definitionId(),
-                new RunRequest(null, Map.of("trigger", "schedule")), null);
+                new RunRequest(null, List.of(RunLabels.TRIGGER_SCHEDULE)), null);
     }
 
     /**

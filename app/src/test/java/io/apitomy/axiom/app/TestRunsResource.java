@@ -15,8 +15,6 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * Test-only REST endpoint that starts a workflow run directly on a subject, or reads its latest run. The public
@@ -60,15 +58,8 @@ public class TestRunsResource {
         if (data == null || data.getWorkflowDefinitionId() == null) {
             throw new WebApplicationException("Missing required 'workflowDefinitionId' field", 400);
         }
-        Map<String, String> labels = null;
-        if (data.getLabels() != null && data.getLabels().getAdditionalProperties() != null) {
-            labels = new LinkedHashMap<>();
-            for (Map.Entry<String, Object> e : data.getLabels().getAdditionalProperties().entrySet()) {
-                labels.put(e.getKey(), e.getValue() != null ? String.valueOf(e.getValue()) : null);
-            }
-        }
         WorkflowRunEntity run = workflowExecutionService.triggerWorkflow(subjectId, data.getWorkflowDefinitionId(),
-                new RunRequest(data.getTitle(), labels), null);
+                new RunRequest(data.getTitle(), data.getLabels()), null);
         return runBeanMapper.toBean(run);
     }
 

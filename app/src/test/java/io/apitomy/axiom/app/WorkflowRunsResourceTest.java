@@ -477,13 +477,13 @@ class WorkflowRunsResourceTest {
 
         Integer runA = given()
                 .contentType(ContentType.JSON)
-                .body("{\"workflowDefinitionId\": %d, \"title\": \"Run A\", \"labels\": {\"filter\": \"alpha\"}}"
+                .body("{\"workflowDefinitionId\": %d, \"title\": \"Run A\", \"labels\": [\"filter:alpha\", \"team:core\"]}"
                         .formatted(definitionId))
                 .when().post(TestRunsResource.path(subjectA))
                 .then().statusCode(200).body("title", equalTo("Run A")).extract().path("runId");
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"workflowDefinitionId\": %d, \"labels\": {\"filter\": \"beta\"}}"
+                .body("{\"workflowDefinitionId\": %d, \"labels\": [\"filter:beta\", \"team:core\"]}"
                         .formatted(definitionId))
                 .when().post(TestRunsResource.path(subjectB))
                 .then().statusCode(200).body("title", nullValue());
@@ -495,7 +495,7 @@ class WorkflowRunsResourceTest {
                     .body("totalCount", equalTo(1))
                     .body("items[0].runId", equalTo(runA))
                     .body("items[0].title", equalTo("Run A"))
-                    .body("items[0].labels.filter", equalTo("alpha"));
+                    .body("items[0].labels", org.hamcrest.Matchers.contains("filter:alpha", "team:core"));
 
         given()
                 .when().get("/api/v1/workflow/runs?status=waiting&subjectId=" + subjectB
@@ -510,6 +510,55 @@ class WorkflowRunsResourceTest {
                 .then()
                     .statusCode(200)
                     .body("totalCount", equalTo(0));
+
+        // Several labels are ANDed
+        given()
+                .when().get("/api/v1/workflow/runs?label=team:core&definitionId=" + definitionId)
+                .then().statusCode(200).body("totalCount", equalTo(2));
+        given()
+                .when().get("/api/v1/workflow/runs?label=team:core&label=filter:alpha&definitionId=" + definitionId)
+                .then().statusCode(200).body("totalCount", equalTo(1)).body("items[0].runId", equalTo(runA));
+        given()
+                .when().get("/api/v1/workflow/runs?label=filter:alpha&label=filter:beta&definitionId=" + definitionId)
+                .then().statusCode(200).body("totalCount", equalTo(0));
+    }
+
+    /**
+     * A run's labels can be replaced through REST; labels are trimmed and de-duplicated (#526).
+     */
+    @Test
+    void setsRunLabels() {
+        long subjectId = TestFixtures.createSubject("labels-edit-subject");
+        long definitionId = TestFixtures.createWaitDefinition("Labels Edit WF");
+        Integer runId = given()
+                .contentType(ContentType.JSON)
+                .body("{\"workflowDefinitionId\": %d, \"labels\": [\"old\"]}".formatted(definitionId))
+                .when().post(TestRunsResource.path(subjectId))
+                .then().statusCode(200).extract().path("runId");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"labels\": [\" urgent \", \"team:core\", \"urgent\", \"\"]}")
+                .when().put("/api/v1/workflow/runs/" + runId + "/labels")
+                .then()
+                    .statusCode(200)
+                    .body("labels", org.hamcrest.Matchers.contains("urgent", "team:core"));
+        given()
+                .when().get("/api/v1/workflow/runs/" + runId)
+                .then()
+                    .statusCode(200)
+                    .body("labels", org.hamcrest.Matchers.contains("urgent", "team:core"));
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"labels\": [\"%s\"]}".formatted("x".repeat(256)))
+                .when().put("/api/v1/workflow/runs/" + runId + "/labels")
+                .then().statusCode(400);
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"labels\": []}")
+                .when().put("/api/v1/workflow/runs/999999999/labels")
+                .then().statusCode(404);
     }
 
     @Test

@@ -27,22 +27,14 @@ import {
 } from "../config/api";
 
 /**
- * Parses labels typed as `key:value, key:value`.
+ * Parses labels typed as a comma-separated list: trims them, drops empty ones and removes duplicates.
  *
  * @param raw the typed text
- * @returns the labels, or null when an entry is not of the form `key:value`
+ * @returns the labels
  */
-export function parseLabels(raw: string): Record<string, string> | null {
-    const labels: Record<string, string> = {};
+export function parseLabels(raw: string): string[] {
     const entries: string[] = raw.split(",").map((e) => e.trim()).filter((e) => e.length > 0);
-    for (const entry of entries) {
-        const idx: number = entry.indexOf(":");
-        if (idx <= 0 || idx === entry.length - 1) {
-            return null;
-        }
-        labels[entry.substring(0, idx).trim()] = entry.substring(idx + 1).trim();
-    }
-    return labels;
+    return Array.from(new Set(entries));
 }
 
 /** Props of {@link RunWorkflowFromEventModal}. */
@@ -97,15 +89,15 @@ export function RunWorkflowFromEventModal({ eventId, isOpen, onClose, onStarted 
 
     const labels = parseLabels(labelsText);
     const selectedSuggestion = suggestions.find((s) => String(s.workflowDefinitionId) === selectedId);
-    const canRun: boolean = !!selectedId && labels !== null && !submitting;
+    const canRun: boolean = !!selectedId && !submitting;
 
     const run = () => {
-        if (!canRun || labels === null) {
+        if (!canRun) {
             return;
         }
         const body: TriggerStreamEventWorkflowRequest = { workflowDefinitionId: Number(selectedId) };
         if (title.trim()) body.title = title.trim();
-        if (Object.keys(labels).length > 0) body.labels = labels;
+        if (labels.length > 0) body.labels = labels;
         setSubmitting(true);
         setError(null);
         triggerStreamEventWorkflow(eventId, body)
@@ -155,14 +147,11 @@ export function RunWorkflowFromEventModal({ eventId, isOpen, onClose, onStarted 
                         <TextInput id="run-wf-event-title-input" value={title} onChange={(_e, v) => setTitle(v)} />
                     </FormGroup>
                     <FormGroup label="Labels" fieldId="run-wf-event-labels">
-                        <TextInput id="run-wf-event-labels" value={labelsText} placeholder="key:value, key:value"
-                            validated={labels === null ? "error" : "default"}
+                        <TextInput id="run-wf-event-labels" value={labelsText} placeholder="label, label"
                             onChange={(_e, v) => setLabelsText(v)} />
-                        {labels === null && (
-                            <FormHelperText><HelperText><HelperTextItem variant="error">
-                                Labels must be key:value pairs separated by commas.
-                            </HelperTextItem></HelperText></FormHelperText>
-                        )}
+                        <FormHelperText><HelperText><HelperTextItem>
+                            Separate labels with commas. The run is also labeled trigger:manual.
+                        </HelperTextItem></HelperText></FormHelperText>
                     </FormGroup>
                 </Form>
             </ModalBody>

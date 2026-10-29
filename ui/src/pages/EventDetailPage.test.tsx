@@ -38,7 +38,7 @@ beforeEach(() => {
         items: [
             { runId: 11, title: "Manual run", subjectId: 7, definitionId: 2, definitionName: "Triage",
                 definitionVersion: 1, status: "running", startedOn: "2026-10-01T00:00:00Z",
-                labels: { trigger: "manual" } },
+                labels: ["trigger:manual"] },
             { runId: 12, title: "Routed run", subjectId: 7, definitionId: 2, definitionName: "Triage",
                 definitionVersion: 1, status: "completed", startedOn: "2026-10-01T00:00:00Z" },
         ], totalCount: 2, page: 1, limit: 100,
