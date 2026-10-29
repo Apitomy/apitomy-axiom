@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
 import io.apitomy.axiom.app.EventOperationsService;
 import io.apitomy.axiom.app.EventStreamOrchestrator;
+import io.apitomy.axiom.app.RunLabels;
 import io.apitomy.axiom.app.RunRequest;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.api.beans.Actor;
@@ -282,13 +283,12 @@ public class StreamEventsResourceImpl implements StreamResource {
                     "Missing required 'workflowDefinitionId' field", 400);
         }
         StreamEventEntity event = findEventOrThrow(eventId);
-        Map<String, String> labels = new LinkedHashMap<>();
-        if (data.getLabels() != null && data.getLabels().getAdditionalProperties() != null) {
-            data.getLabels().getAdditionalProperties().forEach((key, value) ->
-                    labels.put(key, value != null ? String.valueOf(value) : null));
+        String tooLong = RunLabels.findTooLong(data.getLabels());
+        if (tooLong != null) {
+            throw new WebApplicationException("Labels must be at most " + RunLabels.MAX_LENGTH + " characters", 400);
         }
-        labels.put("trigger", "manual");
-        RunRequest request = new RunRequest(data.getTitle(), labels);
+        RunRequest request = new RunRequest(data.getTitle(),
+                RunLabels.withKeyed(data.getLabels(), "trigger", "manual"));
         WorkflowRunEntity run = orchestrator.startRunFromEvent(event, data.getWorkflowDefinitionId(),
                 request, null);
         return runBeanMapper.toBean(run);

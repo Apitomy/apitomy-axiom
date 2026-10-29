@@ -354,7 +354,7 @@ saving.
 
 | Type | What Happens |
 |------|--------------|
-| **`create-workflow`** | Finds or creates the subject from the event's `ref` URL, then starts a run of the configured workflow definition on that subject (with its declared `subject` and `event` inputs in context). If the subject already has an active run of that definition, the run is skipped and the skip is recorded in the routing outcome. |
+| **`create-workflow`** | Finds or creates the subject from the event's `ref` URL, then starts a run of the configured workflow definition on that subject (with its declared `subject` and `event` inputs in context). The run, and the subject when it is newly created, get a copy of the subscription's labels; an existing subject's labels are left unchanged. If the subject already has an active run of that definition, the run is skipped and the skip is recorded in the routing outcome. |
 | **`workflow-dispatch`** | Broadcasts the event to **every** waiting run on the correlated subject that is parked at a `receive-event` node with a matching event type (and EL match). If the event does not correlate to a subject, it is delivered to all waiting runs with a matching event type. |
 
 A subscription with no routing rules matches events silently, which is useful for previewing matches

@@ -56,7 +56,7 @@ export function normalizeRunFilter(type: string, raw: string): string | null {
         case "subject":
             return /^\d+$/.test(value) ? value : null;
         case "label":
-            return /^[^:\s]+:.+$/.test(value) ? value : null;
+            return value.trim() || null;
         default:
             return value;
     }

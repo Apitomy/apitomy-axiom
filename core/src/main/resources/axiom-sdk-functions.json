@@ -175,6 +175,24 @@
     "sdkCallSupported": true
   },
   {
+    "name": "axiom_add_run_label",
+    "description": "Add a label to a workflow run, shown in the Runs list and usable as a Runs filter. In a workflow sdk: action node, runId defaults to the node's own run.",
+    "parameters": [
+      { "name": "runId", "type": "number", "description": "The workflow run ID", "required": true },
+      { "name": "label", "type": "string", "description": "The label to add", "required": true }
+    ],
+    "sdkCallSupported": true
+  },
+  {
+    "name": "axiom_remove_run_label",
+    "description": "Remove a label from a workflow run. In a workflow sdk: action node, runId defaults to the node's own run.",
+    "parameters": [
+      { "name": "runId", "type": "number", "description": "The workflow run ID", "required": true },
+      { "name": "label", "type": "string", "description": "The label to remove", "required": true }
+    ],
+    "sdkCallSupported": true
+  },
+  {
     "name": "axiom_list_subject_runs",
     "description": "List workflow runs for a subject, newest first (at most 50 runs).",
     "parameters": [

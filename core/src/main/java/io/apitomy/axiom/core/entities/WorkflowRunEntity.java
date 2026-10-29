@@ -1,11 +1,17 @@
 package io.apitomy.axiom.core.entities;
 
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -29,9 +35,11 @@ public class WorkflowRunEntity extends PanacheEntity {
     @Column(length = 500)
     public String title;
 
-    /** Run labels as a JSON object of string values; null for none. */
-    @Column(columnDefinition = "TEXT")
-    public String labels;
+    /** Free-form run labels; built-in ones use the {@code key:value} form, e.g. {@code trigger:manual}. */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "workflow_run_label", joinColumns = @JoinColumn(name = "workflow_run_id"))
+    @Column(name = "label", nullable = false)
+    public List<String> labels = new ArrayList<>();
 
     /** Workflow inputs supplied when the run was started, as a JSON object; null for none. */
     @Column(columnDefinition = "TEXT")

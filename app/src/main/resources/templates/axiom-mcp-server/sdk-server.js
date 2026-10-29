@@ -155,7 +155,7 @@ const HANDLERS = {
             definitionId: run.definitionId,
             definitionVersion: run.definitionVersion,
             subjectId: run.subjectId,
-            labels: run.labels || {},
+            labels: run.labels || [],
             inputs: run.inputs || {},
             currentNodeId: run.currentNodeId || null,
             startedOn: run.startedOn,
@@ -169,6 +169,25 @@ const HANDLERS = {
         const title = (args.title || "").trim();
         await axiomApi("PUT", `/workflow/runs/${args.runId}/title`, { title });
         return title ? `Title of run ${args.runId} set to '${title}'` : `Title of run ${args.runId} cleared`;
+    },
+    axiom_add_run_label: async (args) => {
+        if (!args.runId) {
+            throw new Error("runId is required");
+        }
+        const run = JSON.parse(await axiomApi("GET", `/workflow/runs/${args.runId}`));
+        const labels = run.labels || [];
+        if (!labels.includes(args.label)) {
+            labels.push(args.label);
+        }
+        return await axiomApi("PUT", `/workflow/runs/${args.runId}/labels`, { labels });
+    },
+    axiom_remove_run_label: async (args) => {
+        if (!args.runId) {
+            throw new Error("runId is required");
+        }
+        const run = JSON.parse(await axiomApi("GET", `/workflow/runs/${args.runId}`));
+        const labels = (run.labels || []).filter(l => l !== args.label);
+        return await axiomApi("PUT", `/workflow/runs/${args.runId}/labels`, { labels });
     },
     axiom_list_subject_runs: async (args) => {
         const params = new URLSearchParams();

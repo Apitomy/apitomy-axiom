@@ -79,7 +79,8 @@ describe("WorkflowRunsPage", () => {
         expect(normalizeRunFilter("subject", "12")).toBe("12");
         expect(normalizeRunFilter("subject", "abc")).toBeNull();
         expect(normalizeRunFilter("label", "team:core")).toBe("team:core");
-        expect(normalizeRunFilter("label", "team")).toBeNull();
+        expect(normalizeRunFilter("label", " triaged ")).toBe("triaged");
+        expect(normalizeRunFilter("label", "  ")).toBeNull();
         expect(normalizeRunFilter("workflow", "  ")).toBeNull();
     });
 

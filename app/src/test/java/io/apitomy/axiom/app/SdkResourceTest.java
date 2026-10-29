@@ -34,7 +34,7 @@ class SdkResourceTest {
                 .get(SDK_PATH)
             .then()
                 .statusCode(200)
-                .body("size()", equalTo(20))
+                .body("size()", equalTo(22))
                 .body("name", hasItems(
                     "axiom_add_subject_label",
                     "axiom_fire_event",
@@ -42,6 +42,8 @@ class SdkResourceTest {
                     "axiom_get_subject",
                     "axiom_list_agents",
                     "axiom_get_workflow_run",
+                    "axiom_add_run_label",
+                    "axiom_remove_run_label",
                     "axiom_list_subject_runs"))
                 .body("[0].name", notNullValue())
                 .body("[0].description", notNullValue())
@@ -167,6 +169,40 @@ class SdkResourceTest {
     }
 
     /**
+     * axiom_add_run_label and axiom_remove_run_label change a run's labels; adding an existing label is a no-op.
+     */
+    @Test
+    void addAndRemoveRunLabel() {
+        long subjectId = TestFixtures.createSubject("sdk-run-labels");
+        long definitionId = TestFixtures.createWaitDefinition("SDK Run Labels");
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(subjectId, definitionId,
+                        new RunRequest(null, java.util.List.of("trigger:manual")), null));
+
+        SdkCallService.SdkCallResult added = QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_add_run_label", Map.of("runId", run.id, "label", "triaged")));
+        assertTrue(added.success(), added.output());
+        QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_add_run_label", Map.of("runId", run.id, "label", "triaged")));
+        assertEquals(java.util.List.of("trigger:manual", "triaged"), runLabels(run.id));
+
+        SdkCallService.SdkCallResult removed = QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_remove_run_label",
+                        Map.of("runId", run.id, "label", "trigger:manual")));
+        assertTrue(removed.success(), removed.output());
+        assertEquals(java.util.List.of("triaged"), runLabels(run.id));
+
+        SdkCallService.SdkCallResult missing = QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_add_run_label", Map.of("runId", 99999999L, "label", "x")));
+        assertFalse(missing.success());
+    }
+
+    private static java.util.List<String> runLabels(long runId) {
+        return QuarkusTransaction.requiringNew().call(() ->
+                new java.util.ArrayList<>(WorkflowRunEntity.<WorkflowRunEntity>findById(runId).labels));
+    }
+
+    /**
      * axiom_get_workflow_run returns the run's title and labels.
      */
     @Test
@@ -175,14 +211,14 @@ class SdkResourceTest {
         long definitionId = TestFixtures.createWaitDefinition("SDK Get Run");
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(subjectId, definitionId,
-                        new RunRequest("SDK run", Map.of("team", "core")), null));
+                        new RunRequest("SDK run", java.util.List.of("team:core")), null));
 
         SdkCallService.SdkCallResult result = QuarkusTransaction.requiringNew().call(() ->
                 sdkCallService.execute("axiom_get_workflow_run", Map.of("runId", run.id)));
 
         assertTrue(result.success(), result.output());
         assertEquals("SDK run", result.outputMap().get("title"));
-        assertEquals(Map.of("team", "core"), result.outputMap().get("labels"));
+        assertEquals(java.util.List.of("team:core"), result.outputMap().get("labels"));
         assertEquals(subjectId, result.outputMap().get("subjectId"));
         assertEquals("waiting", result.outputMap().get("status"));
 

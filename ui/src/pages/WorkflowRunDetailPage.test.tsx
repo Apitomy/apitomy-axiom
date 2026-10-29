@@ -10,10 +10,11 @@ vi.mock("../config/api", () => ({
     getWorkflowRun: vi.fn().mockResolvedValue({
         runId: 7, subjectId: 3, subjectName: "EricWittmann/cb-test-project#12", title: "Run seven",
         status: "completed", definitionId: 1, definitionName: "Apitomy Renovate PR Auto-Merge",
-        definitionVersion: 4, startedOn: "2026-10-01T00:00:00Z", labels: {}, inputs: {}, workflowContent: null, instance: null,
+        definitionVersion: 4, startedOn: "2026-10-01T00:00:00Z", labels: [], inputs: {}, workflowContent: null, instance: null,
     }),
     fetchSubjectTasks: vi.fn().mockResolvedValue([]),
     cancelWorkflowRun: vi.fn(),
+    setWorkflowRunLabels: vi.fn(),
 }));
 vi.mock("../config/sse", () => ({ sseClient: { subscribe: vi.fn(() => () => {}) } }));
 vi.mock("@apitomy/flow-ui", () => ({ WorkflowViewer: () => <div data-testid="workflow-viewer" /> }));
@@ -51,7 +52,7 @@ describe("WorkflowRunDetailPage", () => {
         vi.mocked(api.getWorkflowRun).mockResolvedValueOnce({
             runId: 8, subjectId: 3, subjectName: "Subj", status: "running", definitionId: 1,
             definitionName: "Flow", definitionVersion: 2, startedOn: "2026-10-01T00:00:00Z",
-            labels: {}, inputs: {}, workflowContent: null,
+            labels: [], inputs: {}, workflowContent: null,
         } as never);
         renderWithRouter(
             <Routes><Route path="/runs/:runId" element={<WorkflowRunDetailPage />} /></Routes>,
@@ -59,5 +60,25 @@ describe("WorkflowRunDetailPage", () => {
         expect(await screen.findByRole("heading", { name: /Subj — Flow v2/ })).toBeInTheDocument();
         await userEvent.click(screen.getByRole("tab", { name: "Overview" }));
         expect(screen.queryByText("Title")).toBeNull();
+    });
+
+    it("shows the run's labels and saves edited labels", async () => {
+        vi.mocked(api.getWorkflowRun).mockResolvedValueOnce({
+            runId: 9, subjectId: 3, subjectName: "Subj", status: "running", definitionId: 1,
+            definitionName: "Flow", definitionVersion: 2, startedOn: "2026-10-01T00:00:00Z",
+            labels: ["trigger:manual"], inputs: {}, workflowContent: null,
+        } as never);
+        vi.mocked(api.setWorkflowRunLabels).mockResolvedValue(["trigger:manual", "urgent"]);
+        renderWithRouter(
+            <Routes><Route path="/runs/:runId" element={<WorkflowRunDetailPage />} /></Routes>,
+            "/runs/9");
+        await userEvent.click(await screen.findByRole("tab", { name: "Overview" }));
+        expect(screen.getByText("trigger:manual")).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "Edit labels" }));
+        const dialog = await screen.findByRole("dialog");
+        await userEvent.type(within(dialog).getByRole("textbox"), "urgent{Enter}");
+        await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+        expect(api.setWorkflowRunLabels).toHaveBeenCalledWith(9, ["trigger:manual", "urgent"]);
+        expect(await screen.findByText("urgent")).toBeInTheDocument();
     });
 });

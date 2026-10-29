@@ -709,7 +709,7 @@ public class EventStreamOrchestrator {
                 case RoutingRule.TYPE_WORKFLOW_DISPATCH ->
                         routeToWorkflowDispatch(event, eventMap, ledgerId);
                 case RoutingRule.TYPE_CREATE_WORKFLOW ->
-                        routeToCreateWorkflow(event, rule, ledgerId);
+                        routeToCreateWorkflow(event, rule, sub.labels(), ledgerId);
                 default -> throw new IllegalStateException(
                         "Unsupported routing type: " + rule.type());
             };
@@ -834,17 +834,22 @@ public class EventStreamOrchestrator {
         return outcome;
     }
 
+    /**
+     * Handles a create-workflow routing rule: finds or creates the event's subject and starts the rule's workflow
+     * on it. The new run, and the subject when it is newly created, get a copy of the subscription's labels; an
+     * existing subject's labels are left unchanged.
+     */
     private RoutingOutcomeEntity routeToCreateWorkflow(StreamEventEntity event, RoutingRule rule,
-                                                        Long ledgerId) {
+                                                        List<String> subscriptionLabels, Long ledgerId) {
         if (rule.workflowDefinitionId() == null) {
             throw new IllegalStateException(
                     "create-workflow routing rule missing workflowDefinitionId");
         }
-        Long subjectId = findOrCreateSubjectForEvent(event, null);
+        Long subjectId = findOrCreateSubjectForEvent(event, null, subscriptionLabels);
         WorkflowRunEntity run;
         try {
             run = startRunFromEvent(event, subjectId, rule.workflowDefinitionId(),
-                    RunRequest.EMPTY, ledgerId);
+                    new RunRequest(null, subscriptionLabels), ledgerId);
         } catch (WorkflowRunConflictException e) {
             String summary = "Skipped: subject already has an active run of definition "
                     + rule.workflowDefinitionId();
@@ -905,8 +910,20 @@ public class EventStreamOrchestrator {
     }
 
     private Long findOrCreateSubjectForEvent(StreamEventEntity event, UUID traceId) {
+        return findOrCreateSubjectForEvent(event, traceId, null);
+    }
+
+    /**
+     * Finds or creates the event's subject in a new transaction.
+     *
+     * @param event     the stream event
+     * @param traceId   the trace id for activity entries, or null
+     * @param newLabels labels given to the subject only when it is newly created; null for none
+     * @return the subject id
+     */
+    private Long findOrCreateSubjectForEvent(StreamEventEntity event, UUID traceId, List<String> newLabels) {
         return QuarkusTransaction.requiringNew().call(() ->
-                findOrCreateSubjectForStreamEvent(event, traceId).id);
+                findOrCreateSubjectForStreamEvent(event, traceId, newLabels).id);
     }
 
     /**
@@ -923,7 +940,7 @@ public class EventStreamOrchestrator {
     }
 
     private SubjectEntity findOrCreateSubjectForStreamEvent(StreamEventEntity event,
-                                                            UUID traceId) {
+                                                            UUID traceId, List<String> newLabels) {
         // Try to find existing subject by ref
         SubjectEntity subject = SubjectEntity.find("ref", event.ref).firstResult();
         if (subject != null) {
@@ -940,6 +957,7 @@ public class EventStreamOrchestrator {
 
         // Auto-create with metadata from the payload
         subject = newSubjectFor(event);
+        subject.labels.addAll(RunLabels.normalize(newLabels));
         subject.persist();
 
         LOG.infof("Auto-created subject %d for %s", subject.id, event.ref);

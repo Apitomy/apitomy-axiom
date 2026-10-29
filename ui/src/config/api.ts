@@ -1756,7 +1756,7 @@ export interface WorkflowInstanceInfo {
     definitionName: string;
     /** Title the run was started with; absent when none was given. */
     title?: string;
-    labels?: Record<string, string>;
+    labels?: string[];
     inputs?: Record<string, unknown>;
     status: string;
     currentNodeId?: string;
@@ -1807,7 +1807,7 @@ export interface HistoryEntryInfo {
 
 /**
  * Re-runs a failed workflow run: starts a new run of the same workflow (latest published version) for the same
- * subject, with the original title and labels (plus rerunOf).
+ * subject, with the original title and labels (plus rerunOf:<runId>).
  * @param runId the failed run
  * @returns the new run
  */
@@ -1817,6 +1817,25 @@ export async function rerunWorkflowRun(runId: number): Promise<WorkflowInstanceI
         throw new Error(await extractErrorMessage(response, "Failed to re-run workflow run"));
     }
     return response.json();
+}
+
+/**
+ * Replaces a workflow run's labels.
+ * @param runId the run
+ * @param labels the new labels
+ * @returns the run's labels as stored (trimmed, without blanks or duplicates)
+ */
+export async function setWorkflowRunLabels(runId: number, labels: string[]): Promise<string[]> {
+    const response = await fetch(`${API}/workflow/runs/${runId}/labels`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ labels }),
+    });
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to update run labels"));
+    }
+    const result: { labels: string[] } = await response.json();
+    return result.labels;
 }
 
 export async function cancelWorkflowRun(
@@ -1841,7 +1860,7 @@ export interface WorkflowRunSummary {
     definitionVersion: number;
     /** Title the run was started with; absent when none was given. */
     title?: string;
-    labels?: Record<string, string>;
+    labels?: string[];
     inputs?: Record<string, unknown>;
     status: string;
     currentNodeName?: string;
@@ -1890,7 +1909,7 @@ export async function getWorkflowRun(runId: number): Promise<WorkflowInstanceInf
 export interface TriggerStreamEventWorkflowRequest {
     workflowDefinitionId: number;
     title?: string;
-    labels?: Record<string, string>;
+    labels?: string[];
 }
 
 /** A workflow suggested for a stream event because a subscription matching the event uses it. */

@@ -61,7 +61,7 @@ describe("RunWorkflowFromEventModal", () => {
         await waitFor(() => expect(onStarted).toHaveBeenCalled());
         expect(api.triggerStreamEventWorkflow).toHaveBeenCalledWith(EVENT_ID, {
             workflowDefinitionId: 2, title: "Manual triage",
-            labels: { team: "core", prio: "high" },
+            labels: ["team:core", "prio:high"],
         });
     });
 
@@ -89,8 +89,7 @@ describe("RunWorkflowFromEventModal", () => {
     });
 
     it("parses labels and inputs", () => {
-        expect(parseLabels("")).toEqual({});
-        expect(parseLabels("a:b, c:d:e")).toEqual({ a: "b", c: "d:e" });
-        expect(parseLabels("bad")).toBeNull();
+        expect(parseLabels("")).toEqual([]);
+        expect(parseLabels("a:b, c:d:e, plain, , plain")).toEqual(["a:b", "c:d:e", "plain"]);
     });
 });

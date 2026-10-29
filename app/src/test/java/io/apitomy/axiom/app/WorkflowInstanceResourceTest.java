@@ -425,7 +425,7 @@ class WorkflowInstanceResourceTest {
         int subjectId = createSubject("WF Rerun Subject");
         int definitionId = createAndPublishDefinition("Rerun WF");
         long failedRunId = persistRun(subjectId, definitionId, "failed",
-                "{\"team\":\"core\"}", "{\"attempts\":2}");
+                java.util.List.of("team:core", "rerunOf:1"), "{\"attempts\":2}");
 
         int newRunId = given().contentType(ContentType.JSON)
                 .when().post("/api/v1/workflow/runs/" + failedRunId + "/rerun")
@@ -434,8 +434,7 @@ class WorkflowInstanceResourceTest {
                 .body("definitionId", equalTo(definitionId))
                 .body("definitionVersion", equalTo(1))
                 .body("title", equalTo("Original title"))
-                .body("labels.team", equalTo("core"))
-                .body("labels.rerunOf", equalTo(String.valueOf(failedRunId)))
+                .body("labels", org.hamcrest.Matchers.contains("team:core", "rerunOf:" + failedRunId))
                 .extract().path("runId");
         org.junit.jupiter.api.Assertions.assertNotEquals(failedRunId, (long) newRunId);
     }
@@ -450,14 +449,15 @@ class WorkflowInstanceResourceTest {
     }
 
     /** Persists a terminal run directly (no engine), as the run to re-run. */
-    private static long persistRun(int subjectId, int definitionId, String status, String labels, String inputs) {
+    private static long persistRun(int subjectId, int definitionId, String status, java.util.List<String> labels,
+            String inputs) {
         return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> {
             io.apitomy.axiom.core.entities.WorkflowRunEntity run = new io.apitomy.axiom.core.entities.WorkflowRunEntity();
             run.subjectId = (long) subjectId;
             run.definitionId = (long) definitionId;
             run.definitionVersion = 1;
             run.title = "Original title";
-            run.labels = labels;
+            run.labels = labels == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(labels);
             run.inputs = inputs;
             run.instanceState = "{}";
             run.status = status;

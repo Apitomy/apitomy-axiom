@@ -6,7 +6,6 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
 
 import jakarta.ws.rs.WebApplicationException;
 
@@ -45,7 +44,7 @@ class WorkflowRunMetadataTest {
     void suppliedMetadataIsPersisted() {
         long subjectId = TestFixtures.createSubject("meta-supplied");
         long defId = TestFixtures.createWaitDefinition("Meta Def 2");
-        RunRequest request = new RunRequest("Custom", Map.of("team", "core"));
+        RunRequest request = new RunRequest("Custom", java.util.List.of(" team:core", "team:core", " "));
 
         WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
                 workflowExecutionService.triggerWorkflow(subjectId, defId, request, null));
@@ -53,7 +52,7 @@ class WorkflowRunMetadataTest {
         WorkflowRunEntity loaded = QuarkusTransaction.requiringNew().call(() ->
                 WorkflowRunEntity.findById(run.id));
         assertEquals("Custom", loaded.title);
-        assertTrue(loaded.labels.contains("\"team\":\"core\""));
+        assertEquals(java.util.List.of("team:core"), loaded.labels);
     }
 
     /**

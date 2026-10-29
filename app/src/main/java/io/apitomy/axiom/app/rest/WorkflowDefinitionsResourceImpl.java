@@ -514,6 +514,20 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
      * {@inheritDoc}
      */
     @Override
+    public io.apitomy.axiom.api.beans.WorkflowRunLabels setWorkflowRunLabels(long runId,
+            io.apitomy.axiom.api.beans.WorkflowRunLabels data) {
+        if (data == null || data.getLabels() == null) {
+            throw new jakarta.ws.rs.WebApplicationException("Missing required 'labels' field", 400);
+        }
+        io.apitomy.axiom.api.beans.WorkflowRunLabels result = new io.apitomy.axiom.api.beans.WorkflowRunLabels();
+        result.setLabels(workflowExecutionService.setRunLabels(runId, data.getLabels()));
+        return result;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
     public void setWorkflowRunTitle(long runId, io.apitomy.axiom.api.beans.WorkflowRunTitle data) {
         workflowExecutionService.setRunTitle(runId, data.getTitle());
     }
@@ -534,8 +548,8 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                             + original.status + "."))
                     .build());
         }
-        java.util.Map<String, String> labels = new java.util.LinkedHashMap<>(readMap(original.labels, String.class));
-        labels.put("rerunOf", String.valueOf(runId));
+        java.util.List<String> labels = io.apitomy.axiom.app.RunLabels.withKeyed(original.labels, "rerunOf",
+                String.valueOf(runId));
         io.apitomy.axiom.app.RunRequest request = new io.apitomy.axiom.app.RunRequest(original.title, labels);
         io.apitomy.axiom.core.entities.StreamEventEntity event = original.triggerEventId == null ? null
                 : io.apitomy.axiom.core.entities.StreamEventEntity.findById(original.triggerEventId);
@@ -544,19 +558,6 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
                 ? orchestrator.startRunFromEvent(event, original.definitionId, request, null)
                 : workflowExecutionService.triggerWorkflow(original.subjectId, original.definitionId, request, null);
         return runBeanMapper.toBean(rerun);
-    }
-
-    /** Reads a JSON object column into a map; null or invalid JSON gives an empty map. */
-    private <V> java.util.Map<String, V> readMap(String json, Class<V> valueType) {
-        if (json == null || json.isBlank()) {
-            return java.util.Map.of();
-        }
-        try {
-            return objectMapper.readValue(json, objectMapper.getTypeFactory()
-                    .constructMapType(java.util.LinkedHashMap.class, String.class, valueType));
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            return java.util.Map.of();
-        }
     }
 
     /**

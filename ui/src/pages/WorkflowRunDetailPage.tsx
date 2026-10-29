@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
     Breadcrumb, BreadcrumbItem, Button, CodeBlock, CodeBlockCode, Flex, FlexItem, Form, FormGroup, Label,
-    LabelGroup, PageSection, Tab, TabTitleText, Tabs, Title,
+    PageSection, Tab, TabTitleText, Tabs, Title,
 } from "@patternfly/react-core";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import { WorkflowViewer } from "@apitomy/flow-ui";
@@ -13,8 +13,10 @@ import { TraceGraph } from "../components/TraceGraph";
 import { LineagePanel } from "../components/LineagePanel";
 import { WorkflowStepTimeline } from "../components/WorkflowStepTimeline";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
+import { LabelDisplay } from "../components/LabelDisplay";
+import { EditLabelsModal } from "../components/EditLabelsModal";
 import {
-    cancelWorkflowRun, fetchSubjectTasks, getWorkflowRun,
+    cancelWorkflowRun, fetchSubjectTasks, getWorkflowRun, setWorkflowRunLabels,
     type Task, type WorkflowInstanceInfo,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
@@ -46,6 +48,7 @@ export function WorkflowRunDetailPage() {
     const [activeTab, setActiveTab] = useState(1);
     const [refreshKey, setRefreshKey] = useState(0);
     const [isLogOpen, setIsLogOpen] = useState(false);
+    const [isLabelsOpen, setIsLabelsOpen] = useState(false);
     const [logTaskId, setLogTaskId] = useState<number | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const effectiveTheme = useEffectiveTheme();
@@ -185,13 +188,7 @@ export function WorkflowRunDetailPage() {
                             </OverviewField>
                         )}
                         <OverviewField label="Labels" id="run-labels">
-                            {Object.keys(run.labels ?? {}).length === 0 ? "—" : (
-                                <LabelGroup numLabels={20}>
-                                    {Object.entries(run.labels ?? {}).map(([k, v]) => (
-                                        <Label key={k} isCompact>{k}: {v}</Label>
-                                    ))}
-                                </LabelGroup>
-                            )}
+                            <LabelDisplay labels={run.labels ?? []} onEdit={() => setIsLabelsOpen(true)} />
                         </OverviewField>
                         <OverviewField label="Inputs" id="run-inputs">
                             {Object.keys(run.inputs ?? {}).length === 0 ? "—" : (
@@ -247,6 +244,15 @@ export function WorkflowRunDetailPage() {
                 )}
             </div>
 
+            <EditLabelsModal
+                isOpen={isLabelsOpen}
+                labels={run.labels ?? []}
+                onSave={async (labels) => {
+                    const stored: string[] = await setWorkflowRunLabels(run.runId ?? run.id, labels);
+                    setRun((prev) => prev ? { ...prev, labels: stored } : prev);
+                }}
+                onClose={() => setIsLabelsOpen(false)}
+            />
             <ExecutionLogModal
                 isOpen={isLogOpen}
                 subjectId={run.subjectId}

@@ -18,6 +18,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +79,8 @@ public class SdkCallService {
             case "axiom_update_subject_body" -> updateSubjectBody(params);
             case "axiom_get_workflow_run" -> getWorkflowRun(params);
             case "axiom_set_workflow_run_title" -> setWorkflowRunTitle(params);
+            case "axiom_add_run_label" -> addRunLabel(params);
+            case "axiom_remove_run_label" -> removeRunLabel(params);
             case "axiom_list_subject_runs" -> listSubjectRuns(params);
             default -> SdkCallResult.error("Unknown SDK function: " + functionName);
         };
@@ -268,7 +271,7 @@ public class SdkCallService {
         result.put("definitionId", run.definitionId);
         result.put("definitionVersion", run.definitionVersion);
         result.put("subjectId", run.subjectId);
-        result.put("labels", readJsonObject(run.labels));
+        result.put("labels", new ArrayList<>(run.labels));
         result.put("inputs", readJsonObject(run.inputs));
         result.put("currentNodeId", run.currentNodeId);
         result.put("startedOn", run.startedOn.toString());
@@ -280,6 +283,44 @@ public class SdkCallService {
      * Sets a run's title; a blank title clears it. {@code runId} defaults to the calling run, which the
      * workflow engine supplies for {@code sdk:} nodes.
      */
+    private SdkCallResult addRunLabel(Map<String, Object> params) {
+        return changeRunLabel(params, true);
+    }
+
+    private SdkCallResult removeRunLabel(Map<String, Object> params) {
+        return changeRunLabel(params, false);
+    }
+
+    /** Adds or removes one run label through {@link WorkflowExecutionService#setRunLabels}. */
+    private SdkCallResult changeRunLabel(Map<String, Object> params, boolean add) {
+        Long runId = toLong(params.get("runId"));
+        String label = toString(params.get("label"));
+        if (runId == null) return SdkCallResult.error("runId is required");
+        if (label == null || label.isBlank()) return SdkCallResult.error("label is required");
+        String trimmed = label.trim();
+        WorkflowRunEntity run = WorkflowRunEntity.findById(runId);
+        if (run == null) return SdkCallResult.error("Workflow run not found: " + runId);
+        List<String> labels = new ArrayList<>(run.labels);
+        if (add) {
+            labels.add(trimmed);
+        } else {
+            labels.remove(trimmed);
+        }
+        try {
+            List<String> stored = workflowExecutionService.get().setRunLabels(runId, labels);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("runId", runId);
+            result.put("labels", stored);
+            return SdkCallResult.ok(add ? "Label '" + trimmed + "' added to run " + runId
+                    : "Label '" + trimmed + "' removed from run " + runId, result);
+        } catch (WebApplicationException e) {
+            Object entity = e.getResponse().getEntity();
+            String message = entity instanceof Map<?, ?> m && m.get("message") != null
+                    ? String.valueOf(m.get("message")) : e.getMessage();
+            return SdkCallResult.error(message);
+        }
+    }
+
     private SdkCallResult setWorkflowRunTitle(Map<String, Object> params) {
         Long runId = toLong(params.get("runId"));
         if (runId == null) return SdkCallResult.error("runId is required");

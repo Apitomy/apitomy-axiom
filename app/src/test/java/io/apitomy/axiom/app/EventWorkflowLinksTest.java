@@ -140,6 +140,61 @@ class EventWorkflowLinksTest {
     }
 
     /**
+     * A run started by a create-workflow rule, and the subject newly created for its event, get a copy of the
+     * subscription's labels (#526).
+     */
+    @Test
+    void createWorkflowCopiesSubscriptionLabelsToRunAndNewSubject() {
+        long definitionId = createDefinition("Links Labels WF", "links-await-" + UUID.randomUUID());
+        createEventAndSubscription(UUID.randomUUID(), "issue.created",
+                "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":" + definitionId + "}]",
+                List.of("team:core", "triage"));
+
+        orchestrator.processNewEvents();
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.<WorkflowRunEntity>find("definitionId", definitionId).singleResult());
+        assertEquals(List.of("team:core", "triage"), run.labels);
+        SubjectEntity subject = QuarkusTransaction.requiringNew().call(() ->
+                SubjectEntity.<SubjectEntity>findById(run.subjectId));
+        assertEquals(List.of("team:core", "triage"), subject.labels);
+    }
+
+    /**
+     * When the event reuses an existing subject, the subject's labels are left unchanged; the run still gets
+     * the subscription's labels (#526).
+     */
+    @Test
+    void createWorkflowLeavesExistingSubjectLabelsUnchanged() {
+        long definitionId = createDefinition("Links Reuse Labels WF", "links-await-" + UUID.randomUUID());
+        UUID eventId = UUID.randomUUID();
+        long subjectId = QuarkusTransaction.requiringNew().call(() -> {
+            SubjectEntity subject = new SubjectEntity();
+            subject.name = "Existing";
+            subject.type = "issue";
+            subject.ref = eventRef(eventId);
+            subject.labels.add("keep-me");
+            subject.createdOn = Instant.now();
+            subject.updatedOn = Instant.now();
+            subject.persist();
+            return subject.id;
+        });
+        createEventAndSubscription(eventId, "issue.created",
+                "[{\"type\":\"create-workflow\",\"workflowDefinitionId\":" + definitionId + "}]",
+                List.of("team:core"));
+
+        orchestrator.processNewEvents();
+
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.<WorkflowRunEntity>find("definitionId", definitionId).singleResult());
+        assertEquals(subjectId, run.subjectId);
+        assertEquals(List.of("team:core"), run.labels);
+        SubjectEntity subject = QuarkusTransaction.requiringNew().call(() ->
+                SubjectEntity.<SubjectEntity>findById(subjectId));
+        assertEquals(List.of("keep-me"), subject.labels);
+    }
+
+    /**
      * A second create-workflow event for the same subject is skipped (and recorded as such) while the
      * first run of the same definition is still active.
      */
@@ -528,13 +583,17 @@ class EventWorkflowLinksTest {
     }
 
     private UUID createEventAndSubscription(String eventType, String routing) {
-        UUID eventId = UUID.randomUUID();
+        return createEventAndSubscription(UUID.randomUUID(), eventType, routing, List.of());
+    }
+
+    private UUID createEventAndSubscription(UUID eventId, String eventType, String routing, List<String> labels) {
         createEvent(eventId, eventType, eventRef(eventId));
         QuarkusTransaction.requiringNew().run(() -> {
             EventSubscriptionEntity sub = new EventSubscriptionEntity();
             sub.name = "links-" + UUID.randomUUID();
             sub.enabled = true;
             sub.routing = routing;
+            sub.labels.addAll(labels);
             sub.createdOn = Instant.now();
             sub.modifiedOn = Instant.now();
             sub.persist();
