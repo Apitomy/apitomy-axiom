@@ -356,6 +356,28 @@ class McpConfigGeneratorTest {
         }
     }
 
+    @Test
+    @Transactional
+    void testActiveExternalServerNamesExcludesDisabled() {
+        McpServerEntity on = new McpServerEntity();
+        on.name = "test-active-on";
+        on.serverCommand = "npx";
+        on.persist();
+        McpServerEntity off = new McpServerEntity();
+        off.name = "test-active-off";
+        off.serverCommand = "npx";
+        off.enabled = false;
+        off.persist();
+        try {
+            java.util.Set<String> names = generator.activeExternalServerNames();
+            assertTrue(names.contains("test-active-on"));
+            assertFalse(names.contains("test-active-off"));
+        } finally {
+            on.delete();
+            off.delete();
+        }
+    }
+
     // ── Edge cases ───────────────────────────────────────────────────
 
     @Test
