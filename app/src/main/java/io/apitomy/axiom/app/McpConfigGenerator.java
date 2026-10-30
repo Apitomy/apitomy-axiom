@@ -111,8 +111,9 @@ public class McpConfigGenerator {
     /**
      * Generates the MCP config file for a task, filtered by the action type's
      * allowed tools list. Only MCP tools that appear in the allowed list are
-     * included in the config. If the allowed list is null or empty, all tools
-     * are included (no restriction).
+     * included in the config. If the allowed list is null or empty, all built-in
+     * Axiom tools are included, but no user-defined MCP servers: those are only
+     * loaded when referenced ({@code mcp__<name>__...}).
      *
      * @param taskId the task ID (for unique temp file naming)
      * @param environment environment variables to pass to MCP servers
@@ -136,7 +137,8 @@ public class McpConfigGenerator {
                         || allowedTools.contains(AXIOM_TOOLS_PREFIX + t.name))
                 .toList();
 
-        // External MCP servers referenced by the allowed tools (all if unrestricted)
+        // External MCP servers referenced by the allowed tools (never implicit). External servers get only
+        // their own configured env, never the task environment.
         Map<String, McpServerDefinition> externalServers = mcpServerResolver.resolveForAllowedTools(allowedTools);
 
         // Check if any SDK tools are in the allowed list

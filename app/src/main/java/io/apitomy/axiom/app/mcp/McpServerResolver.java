@@ -60,8 +60,8 @@ public class McpServerResolver {
     }
 
     /**
-     * Resolves the user-defined servers referenced by an allowed-tools list. If the list is null or
-     * empty, all servers are returned (current task-execution semantics).
+     * Resolves the user-defined servers referenced by an allowed-tools list ({@code mcp__<name>__...}).
+     * Servers are never included implicitly: a null or empty list selects none.
      *
      * @param allowedTools the allowed tools
      * @return name to definition, sorted by name
@@ -76,8 +76,8 @@ public class McpServerResolver {
     }
 
     /**
-     * Selects servers whose {@code mcp__<name>__} prefix appears in the allowed tools. If the list is
-     * null or empty, all servers are selected.
+     * Selects servers whose {@code mcp__<name>__} prefix appears in the allowed tools. A null or empty
+     * list selects none.
      *
      * @param servers candidate servers
      * @param allowedTools the allowed tools
@@ -86,7 +86,7 @@ public class McpServerResolver {
     public static List<McpServerEntity> selectByAllowedTools(List<McpServerEntity> servers,
                                                              List<String> allowedTools) {
         if (allowedTools == null || allowedTools.isEmpty()) {
-            return servers;
+            return List.of();
         }
         return servers.stream()
                 .filter(s -> allowedTools.stream().anyMatch(t -> t.startsWith(TOOL_PREFIX + s.name + "__")))
