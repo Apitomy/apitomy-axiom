@@ -424,14 +424,18 @@ available to the agent. This keeps tool lists manageable and consistent across m
 
 ### MCP Servers
 
-An MCP (Model Context Protocol) Server provides tools to AI agents via the MCP standard. Axiom can connect
-to MCP servers using two transport modes:
+An MCP (Model Context Protocol) server provides tools to AI agents through the MCP standard. Axiom connects to
+MCP servers using one of three transports:
 
-- **stdio** — Axiom launches the server as a subprocess using a configured command and arguments
-- **HTTP** — Axiom connects to a running server at a configured URL
+- **stdio**: Axiom starts the server as a local process with a configured command and arguments, usually on
+  demand with `npx`, `uvx` or `docker`
+- **HTTP**: Axiom connects to a remote server at a URL (streamable HTTP)
+- **SSE**: Axiom connects to a remote server that uses the older HTTP + server-sent events transport
 
-MCP servers extend the tool ecosystem beyond built-in shell commands. For example, you might run a custom
-MCP server that provides database query tools, API clients, or domain-specific analysis capabilities.
+MCP servers extend the tool ecosystem beyond built-in shell commands, for example with GitHub, Jira or
+database tools. A server's tools are named `mcp__<server>__<tool>`. Action types and session templates select
+the servers their agents get; credentials are usually `${secret:NAME}` references. Popular servers can be
+added from a built-in catalog or the official MCP Registry. See [MCP Servers](mcp-servers.md).
 
 ### Secrets
 

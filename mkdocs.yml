@@ -53,6 +53,7 @@ nav:
     - Workflows: user-guide/workflows.md
     - Workflow Workbench: user-guide/workbench.md
     - AI Assistant: user-guide/ai-assistant.md
+    - MCP Servers: user-guide/mcp-servers.md
     - Logging and Debugging: user-guide/logging-and-debugging.md
   - Developer Guide:
     - Stack & Architecture: developer-guide/stack-and-architecture.md
