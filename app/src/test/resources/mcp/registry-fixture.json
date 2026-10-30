@@ -1,0 +1,229 @@
+{
+ "servers": [
+  {
+   "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.github/github-mcp-server",
+    "description": "Connect AI assistants to GitHub - manage repos, issues, PRs, and workflows through natural language.",
+    "title": "GitHub",
+    "repository": {
+     "url": "https://github.com/github/github-mcp-server",
+     "source": "github"
+    },
+    "version": "2.0.3",
+    "packages": [
+     {
+      "registryType": "oci",
+      "identifier": "ghcr.io/github/github-mcp-server:2.0.3",
+      "transport": {
+       "type": "stdio"
+      },
+      "runtimeArguments": [
+       {
+        "description": "Publish the OAuth callback port to loopback so the in-container login callback is reachable",
+        "type": "named",
+        "name": "-p",
+        "value": "127.0.0.1:8085:8085"
+       },
+       {
+        "description": "Fixed OAuth callback port, matching the published port above",
+        "type": "named",
+        "name": "-e",
+        "value": "GITHUB_OAUTH_CALLBACK_PORT=8085"
+       },
+       {
+        "description": "Optional GitHub Personal Access Token. Omit to log in with OAuth on first use.",
+        "variables": {
+         "token": {
+          "format": "string",
+          "isSecret": true
+         }
+        },
+        "type": "named",
+        "name": "-e",
+        "value": "GITHUB_PERSONAL_ACCESS_TOKEN={token}"
+       }
+      ]
+     }
+    ],
+    "remotes": [
+     {
+      "type": "streamable-http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": [
+       {
+        "description": "Authorization header with authentication token (PAT or App token)",
+        "isSecret": true,
+        "name": "Authorization"
+       }
+      ]
+     }
+    ]
+   },
+   "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+     "status": "active",
+     "statusChangedAt": "2026-10-21T09:53:50.501608Z",
+     "publishedAt": "2026-10-21T09:53:50.501608Z",
+     "updatedAt": "2026-10-21T09:53:50.501608Z",
+     "isLatest": true
+    }
+   }
+  },
+  {
+   "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name": "io.github.upstash/context7",
+    "description": "Up-to-date docs for AI agents",
+    "title": "Context7",
+    "repository": {
+     "url": "https://github.com/upstash/context7",
+     "source": "github"
+    },
+    "version": "4.4.4",
+    "websiteUrl": "https://context7.com",
+    "icons": [
+     {
+      "src": "https://raw.githubusercontent.com/upstash/context7/master/public/icon.png",
+      "mimeType": "image/png"
+     }
+    ],
+    "packages": [
+     {
+      "registryType": "npm",
+      "identifier": "@upstash/context7-mcp",
+      "version": "4.4.4",
+      "transport": {
+       "type": "stdio"
+      },
+      "environmentVariables": [
+       {
+        "description": "API key for authentication",
+        "isSecret": true,
+        "name": "CONTEXT7_API_KEY"
+       }
+      ]
+     },
+     {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/upstash/context7/releases/download/mcpb-v4.4.4/context7.mcpb",
+      "version": "4.4.4",
+      "fileSha256": "25cabf3767cc61171e3435c4ce5427e03ffe7ab671cc0e2d5b89e04eef246949",
+      "transport": {
+       "type": "stdio"
+      },
+      "environmentVariables": [
+       {
+        "description": "API key for authentication",
+        "isSecret": true,
+        "name": "CONTEXT7_API_KEY"
+       }
+      ]
+     }
+    ],
+    "remotes": [
+     {
+      "type": "streamable-http",
+      "url": "https://mcp.context7.com/mcp",
+      "headers": [
+       {
+        "description": "API key for authentication. Accepts \"Bearer <key>\" or the raw key.",
+        "isSecret": true,
+        "name": "Authorization"
+       }
+      ]
+     }
+    ]
+   },
+   "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+     "status": "active",
+     "statusChangedAt": "2026-10-19T13:48:33.320442Z",
+     "publishedAt": "2026-10-19T13:48:33.320442Z",
+     "updatedAt": "2026-10-19T13:48:33.320442Z",
+     "isLatest": true
+    }
+   }
+  },
+  {
+   "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "name": "ai.smithery/renCosta2025-context7fork",
+    "description": "Get up-to-date, version-specific documentation and code examples from official sources directly in\u2026",
+    "repository": {
+     "url": "https://github.com/renCosta2025/context7fork",
+     "source": "github"
+    },
+    "version": "1.0.13",
+    "remotes": [
+     {
+      "type": "streamable-http",
+      "url": "https://server.smithery.ai/@renCosta2025/context7fork/mcp",
+      "headers": [
+       {
+        "description": "Bearer token for Smithery authentication",
+        "value": "Bearer {smithery_api_key}",
+        "name": "Authorization"
+       }
+      ]
+     }
+    ]
+   },
+   "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+     "status": "active",
+     "statusChangedAt": "2025-09-29T10:26:07.372529Z",
+     "publishedAt": "2025-09-29T10:26:07.372529Z",
+     "updatedAt": "2025-09-29T10:26:07.372529Z",
+     "isLatest": true
+    }
+   }
+  },
+  {
+   "server": {
+    "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+    "name": "io.example/time",
+    "description": "Time tools",
+    "version": "2026.10.28",
+    "repository": {
+     "url": "https://github.com/example/time",
+     "source": "github"
+    },
+    "packages": [
+     {
+      "registryType": "pypi",
+      "identifier": "mcp-server-time",
+      "version": "2026.10.28",
+      "transport": {
+       "type": "stdio"
+      },
+      "packageArguments": [
+       {
+        "type": "named",
+        "name": "--local-timezone",
+        "description": "Default time zone",
+        "valueHint": "timezone",
+        "default": "UTC"
+       },
+       {
+        "type": "positional",
+        "description": "Data directory",
+        "valueHint": "data_dir",
+        "isRequired": true
+       }
+      ]
+     }
+    ]
+   },
+   "_meta": {
+    "io.modelcontextprotocol.registry/official": {
+     "status": "active",
+     "isLatest": true
+    }
+   }
+  }
+ ],
+ "metadata": {
+  "count": 3
+ }
+}

@@ -1,0 +1,178 @@
+{
+  "servers": [
+    {
+      "id": "github",
+      "name": "github",
+      "title": "GitHub",
+      "description": "GitHub's official remote MCP server: repositories, issues, pull requests, Actions and code search.",
+      "homepage": "https://github.com/github/github-mcp-server",
+      "transport": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": [
+        {"name": "Authorization", "description": "GitHub personal access token", "required": true, "secret": true,
+         "template": "Bearer {value}"}
+      ],
+      "notes": "Create a fine-grained personal access token at https://github.com/settings/personal-access-tokens with access to the repositories the agent should use."
+    },
+    {
+      "id": "atlassian",
+      "name": "atlassian",
+      "title": "Jira & Confluence",
+      "description": "Jira and Confluence (Cloud and Data Center) via the community mcp-atlassian server: search, read and update issues and pages.",
+      "homepage": "https://github.com/sooperset/mcp-atlassian",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
+      "env": [
+        {"name": "JIRA_URL", "description": "Jira base URL, e.g. https://your-company.atlassian.net", "required": true},
+        {"name": "JIRA_USERNAME", "description": "Jira account email (Cloud)", "required": true},
+        {"name": "JIRA_API_TOKEN", "description": "Atlassian API token", "required": true, "secret": true},
+        {"name": "CONFLUENCE_URL", "description": "Confluence base URL, e.g. https://your-company.atlassian.net/wiki"},
+        {"name": "CONFLUENCE_USERNAME", "description": "Confluence account email (Cloud)"},
+        {"name": "CONFLUENCE_API_TOKEN", "description": "Atlassian API token for Confluence", "secret": true}
+      ],
+      "notes": "Create an API token at https://id.atlassian.com/manage-profile/security/api-tokens. Leave the Confluence values empty to use Jira only."
+    },
+    {
+      "id": "slack",
+      "name": "slack",
+      "title": "Slack",
+      "description": "Read and search Slack channels, threads and users (community slack-mcp-server).",
+      "homepage": "https://github.com/korotovsky/slack-mcp-server",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "slack-mcp-server@latest", "--transport", "stdio"],
+      "env": [
+        {"name": "SLACK_MCP_XOXP_TOKEN", "description": "Slack user OAuth token (xoxp-...)", "required": true, "secret": true}
+      ]
+    },
+    {
+      "id": "notion",
+      "name": "notion",
+      "title": "Notion",
+      "description": "Notion's official MCP server: search, read and edit pages and databases.",
+      "homepage": "https://github.com/makenotion/notion-mcp-server",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": [
+        {"name": "NOTION_TOKEN", "description": "Notion integration secret (ntn_...)", "required": true, "secret": true}
+      ]
+    },
+    {
+      "id": "postgres",
+      "name": "postgres",
+      "title": "PostgreSQL",
+      "description": "Query and analyze a PostgreSQL database (read-only by default) with Postgres MCP Pro.",
+      "homepage": "https://github.com/crystaldba/postgres-mcp",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["postgres-mcp", "--access-mode=restricted"],
+      "env": [
+        {"name": "DATABASE_URI", "description": "Connection string, e.g. postgresql://user:password@host:5432/db", "required": true, "secret": true}
+      ]
+    },
+    {
+      "id": "filesystem",
+      "name": "filesystem",
+      "title": "Filesystem",
+      "description": "Read, write and search files under a directory on the Axiom host (MCP reference server).",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "{arg:directory}"],
+      "arguments": [
+        {"name": "directory", "description": "Directory the server may access", "required": true}
+      ]
+    },
+    {
+      "id": "git",
+      "name": "git",
+      "title": "Git",
+      "description": "Inspect and work with a local Git repository (MCP reference server).",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/git",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "{arg:repository}"],
+      "arguments": [
+        {"name": "repository", "description": "Path to the Git repository", "required": true}
+      ]
+    },
+    {
+      "id": "fetch",
+      "name": "fetch",
+      "title": "Fetch",
+      "description": "Fetch web pages and convert them to markdown (MCP reference server).",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/fetch",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    {
+      "id": "brave-search",
+      "name": "brave-search",
+      "title": "Brave Search",
+      "description": "Web, news, image and local search with the Brave Search API.",
+      "homepage": "https://github.com/brave/brave-search-mcp-server",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@brave/brave-search-mcp-server"],
+      "env": [
+        {"name": "BRAVE_API_KEY", "description": "Brave Search API key", "required": true, "secret": true}
+      ]
+    },
+    {
+      "id": "context7",
+      "name": "context7",
+      "title": "Context7",
+      "description": "Up-to-date library and framework documentation for coding agents.",
+      "homepage": "https://github.com/upstash/context7",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"],
+      "env": [
+        {"name": "CONTEXT7_API_KEY", "description": "Optional API key for higher rate limits", "secret": true}
+      ]
+    },
+    {
+      "id": "playwright",
+      "name": "playwright",
+      "title": "Playwright",
+      "description": "Browser automation with Playwright: navigate, click, fill forms and take snapshots.",
+      "homepage": "https://github.com/microsoft/playwright-mcp",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--headless"]
+    },
+    {
+      "id": "memory",
+      "name": "memory",
+      "title": "Memory",
+      "description": "A persistent knowledge graph the agent can read and write (MCP reference server).",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/memory",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    {
+      "id": "time",
+      "name": "time",
+      "title": "Time",
+      "description": "Current time and time zone conversions (MCP reference server).",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/time",
+      "transport": "stdio",
+      "command": "uvx",
+      "args": ["mcp-server-time"]
+    },
+    {
+      "id": "everything",
+      "name": "everything",
+      "title": "Everything (test server)",
+      "description": "The MCP reference test server that exercises every protocol feature. Useful to check that MCP works.",
+      "homepage": "https://github.com/modelcontextprotocol/servers/tree/main/src/everything",
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"]
+    }
+  ]
+}

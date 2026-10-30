@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.McpResource;
 import io.apitomy.axiom.api.beans.Headers;
+import io.apitomy.axiom.api.beans.McpCatalogEntry;
+import io.apitomy.axiom.api.beans.McpRuntimeStatus;
 import io.apitomy.axiom.api.beans.McpServer;
 import io.apitomy.axiom.api.beans.McpServerInUseError;
 import io.apitomy.axiom.api.beans.McpServerTestResult;
@@ -11,6 +13,7 @@ import io.apitomy.axiom.api.beans.McpServerTool;
 import io.apitomy.axiom.api.beans.McpServerUsage;
 import io.apitomy.axiom.api.beans.NewMcpServer;
 import io.apitomy.axiom.api.beans.ServerEnv;
+import io.apitomy.axiom.app.mcp.McpCatalogService;
 import io.apitomy.axiom.app.mcp.McpConnectionTester;
 import io.apitomy.axiom.app.mcp.McpServerConflictException;
 import io.apitomy.axiom.app.mcp.McpServerInUseException;
@@ -48,6 +51,9 @@ public class McpServersResourceImpl implements McpResource {
 
     @Inject
     McpServerReferences references;
+
+    @Inject
+    McpCatalogService catalog;
 
     /**
      * {@inheritDoc}
@@ -133,6 +139,44 @@ public class McpServersResourceImpl implements McpResource {
             tool.setDescription(t.description());
             return tool;
         }).toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<McpCatalogEntry> searchMcpCatalog(String source, String search) {
+        if (source == null || source.isBlank() || "curated".equals(source)) {
+            return catalog.curated(search);
+        }
+        if ("registry".equals(source)) {
+            return catalog.registry(search);
+        }
+        throw new McpServerValidationException("Unknown catalog source: " + source + " (expected curated or registry)");
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public McpRuntimeStatus getMcpRuntimeStatus() {
+        Map<String, Boolean> runtimes = catalog.runtimes();
+        McpRuntimeStatus status = new McpRuntimeStatus();
+        status.setNode(runtimes.get("node"));
+        status.setUv(runtimes.get("uv"));
+        status.setDocker(runtimes.get("docker"));
+        return status;
+    }
+
+    /**
+     * Maps an unreachable MCP Registry to 502.
+     *
+     * @param e the exception
+     * @return a 502 response
+     */
+    @ServerExceptionMapper
+    public Response mapRegistryUnavailable(McpCatalogService.RegistryUnavailableException e) {
+        return error(502, e.getMessage());
     }
 
     /**

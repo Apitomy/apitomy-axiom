@@ -771,6 +771,58 @@ export function mcpServerUsageRoute(usage: McpServerUsage): string {
     }
 }
 
+/** A value the user supplies when adding a catalog MCP server. */
+export interface McpCatalogInput {
+    name: string;
+    description?: string;
+    required?: boolean;
+    secret?: boolean;
+    defaultValue?: string;
+    /** How the value is embedded, with {value} as the placeholder (e.g. "Bearer {value}"). */
+    template?: string;
+}
+
+/** An MCP server from the curated catalog or the MCP Registry. */
+export interface McpCatalogEntry {
+    id: string;
+    source: "curated" | "registry";
+    name: string;
+    title: string;
+    description?: string;
+    homepage?: string;
+    version?: string;
+    transport: McpTransport;
+    command?: string;
+    args?: string[];
+    url?: string;
+    runtime?: "node" | "uv" | "docker" | "remote";
+    env?: McpCatalogInput[];
+    headers?: McpCatalogInput[];
+    arguments?: McpCatalogInput[];
+    notes?: string;
+}
+
+/** Which MCP server runtimes are installed on the Axiom host. */
+export interface McpRuntimeStatus {
+    node?: boolean;
+    uv?: boolean;
+    docker?: boolean;
+}
+
+export async function searchMcpCatalog(source: "curated" | "registry", search?: string): Promise<McpCatalogEntry[]> {
+    const params = new URLSearchParams({ source });
+    if (search?.trim()) params.set("search", search.trim());
+    const response = await fetch(`${API}/mcp-servers/catalog?${params}`);
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "search the catalog for"));
+    return response.json();
+}
+
+export async function fetchMcpRuntimeStatus(): Promise<McpRuntimeStatus> {
+    const response = await fetch(`${API}/mcp-servers/catalog/runtimes`);
+    if (!response.ok) throw new Error(`Failed to check MCP runtimes: ${response.status}`);
+    return response.json();
+}
+
 export async function testMcpServer(id: number): Promise<McpServerTestResult> {
     const response = await fetch(`${API}/mcp-servers/${id}/test`, { method: "POST" });
     if (!response.ok) throw new Error(await mcpErrorMessage(response, "test"));
