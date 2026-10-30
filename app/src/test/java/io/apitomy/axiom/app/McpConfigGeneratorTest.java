@@ -30,6 +30,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class McpConfigGeneratorTest {
 
     @Inject
+    io.apitomy.axiom.app.assistant.AssistantContextBuilder contextBuilder;
+
+    @Inject
+    io.apitomy.axiom.app.mcp.McpServerResolver resolver;
+
+    @Inject
     McpConfigGenerator generator;
 
     @Inject
@@ -296,6 +302,57 @@ class McpConfigGeneratorTest {
             assertEquals("http://localhost:8080/mcp", extServer.get("url").asText());
         } finally {
             mcpTool.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testInvalidExternalServerIsOmittedAndConfigStaysValidJson() throws Exception {
+        McpServerEntity broken = new McpServerEntity();
+        broken.name = "test-broken";
+        broken.serverCommand = "npx";
+        broken.serverArgs = "not-json";
+        broken.persist();
+        McpServerEntity noTransport = new McpServerEntity();
+        noTransport.name = "test-no-transport";
+        noTransport.persist();
+        McpServerEntity ok = new McpServerEntity();
+        ok.name = "test-ok";
+        ok.serverCommand = "npx";
+        ok.serverArgs = "[\"arg with \\\"quotes\\\"\"]";
+        ok.persist();
+
+        try {
+            List<String> allowed = List.of("mcp__test-broken__x", "mcp__test-no-transport__x", "mcp__test-ok__x");
+            Path configFile = generator.generateMcpConfig(9013L, Map.of(), allowed);
+            JsonNode servers = objectMapper.readTree(Files.readString(configFile)).get("mcpServers");
+            assertFalse(servers.has("test-broken"));
+            assertFalse(servers.has("test-no-transport"));
+            assertEquals("arg with \"quotes\"", servers.get("test-ok").get("args").get(0).asText());
+        } finally {
+            broken.delete();
+            noTransport.delete();
+            ok.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testTaskAndSessionPathsProduceSameExternalServerConfig() throws Exception {
+        McpServerEntity mcp = new McpServerEntity();
+        mcp.name = "test-same";
+        mcp.serverCommand = "npx";
+        mcp.serverArgs = "[\"-y\"]";
+        mcp.serverEnv = "{\"K\":\"v\"}";
+        mcp.persist();
+        try {
+            Path configFile = generator.generateMcpConfig(9014L, Map.of(), List.of("mcp__test-same__x"));
+            JsonNode taskNode = objectMapper.readTree(Files.readString(configFile)).get("mcpServers").get("test-same");
+            String sessionJson = contextBuilder.buildMcpConfig(resolver.resolveByName(List.of("test-same")));
+            JsonNode sessionNode = objectMapper.readTree(sessionJson).get("mcpServers").get("test-same");
+            assertEquals(sessionNode, taskNode);
+        } finally {
+            mcp.delete();
         }
     }
 

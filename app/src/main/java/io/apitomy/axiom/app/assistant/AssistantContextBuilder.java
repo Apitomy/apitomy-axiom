@@ -1,5 +1,8 @@
 package io.apitomy.axiom.app.assistant;
 
+import io.apitomy.axiom.app.mcp.ClaudeMcpConfigWriter;
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+
 import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -120,59 +123,7 @@ public class AssistantContextBuilder {
      * @param resolvedServers map of server name to MCP server config objects
      * @return the JSON config string
      */
-    public String buildMcpConfig(Map<String, McpServerConfig> resolvedServers) {
-        if (resolvedServers.isEmpty()) {
-            return null;
-        }
-        ObjectNode root = objectMapper.createObjectNode();
-        ObjectNode servers = root.putObject("mcpServers");
-        for (var entry : resolvedServers.entrySet()) {
-            ObjectNode serverNode = servers.putObject(entry.getKey());
-            McpServerConfig config = entry.getValue();
-            if (config.isHttpTransport()) {
-                serverNode.put("type", config.type());
-                serverNode.put("url", config.url());
-            } else {
-                serverNode.put("command", config.command());
-                ArrayNode argsNode = serverNode.putArray("args");
-                config.args().forEach(argsNode::add);
-                if (!config.env().isEmpty()) {
-                    ObjectNode envNode = serverNode.putObject("env");
-                    config.env().forEach(envNode::put);
-                }
-            }
-        }
-        return root.toPrettyString();
-    }
-
-    /**
-     * Resolved MCP server configuration ready for the mcp-config.json file.
-     * Supports both stdio transport (command + args) and HTTP transport (url).
-     */
-    public record McpServerConfig(String command, List<String> args,
-                                    Map<String, String> env,
-                                    String type, String url) {
-
-        /**
-         * Creates a stdio-transport MCP server configuration.
-         */
-        public static McpServerConfig stdio(String command, List<String> args,
-                                             Map<String, String> env) {
-            return new McpServerConfig(command, args, env, null, null);
-        }
-
-        /**
-         * Creates an HTTP-transport MCP server configuration.
-         */
-        public static McpServerConfig http(String url) {
-            return new McpServerConfig(null, List.of(), Map.of(), "http", url);
-        }
-
-        /**
-         * Returns whether this config uses HTTP transport.
-         */
-        public boolean isHttpTransport() {
-            return "http".equals(type);
-        }
+    public String buildMcpConfig(Map<String, McpServerDefinition> resolvedServers) {
+        return ClaudeMcpConfigWriter.toJson(objectMapper, resolvedServers);
     }
 }

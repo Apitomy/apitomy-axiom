@@ -1,0 +1,136 @@
+package io.apitomy.axiom.app.mcp;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.apitomy.axiom.core.entities.McpServerEntity;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import org.jboss.logging.Logger;
+
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+/**
+ * Single place that turns user-defined MCP servers ({@link McpServerEntity}) into resolved
+ * {@link McpServerDefinition}s. Used by both the task execution path and assistant sessions.
+ */
+@ApplicationScoped
+public class McpServerResolver {
+
+    private static final Logger LOG = Logger.getLogger(McpServerResolver.class);
+    private static final String TOOL_PREFIX = "mcp__";
+
+    private final ObjectMapper objectMapper;
+
+    /**
+     * CDI constructor.
+     *
+     * @param objectMapper the object mapper
+     */
+    @Inject
+    public McpServerResolver(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Resolves the named user-defined servers. Unknown or invalid servers are logged and omitted.
+     *
+     * @param names server names, in order
+     * @return name to definition, preserving order
+     */
+    public Map<String, McpServerDefinition> resolveByName(Collection<String> names) {
+        Map<String, McpServerDefinition> result = new LinkedHashMap<>();
+        for (String name : names) {
+            McpServerEntity entity = McpServerEntity.find("name", name).firstResult();
+            if (entity == null) {
+                LOG.warnf("MCP server not found: %s", name);
+                continue;
+            }
+            toDefinition(entity).ifPresent(def -> result.put(name, def));
+        }
+        return result;
+    }
+
+    /**
+     * Resolves the user-defined servers referenced by an allowed-tools list. If the list is null or
+     * empty, all servers are returned (current task-execution semantics).
+     *
+     * @param allowedTools the allowed tools
+     * @return name to definition, sorted by name
+     */
+    public Map<String, McpServerDefinition> resolveForAllowedTools(List<String> allowedTools) {
+        List<McpServerEntity> all = McpServerEntity.listAll();
+        Map<String, McpServerDefinition> result = new LinkedHashMap<>();
+        selectByAllowedTools(all, allowedTools).stream()
+                .sorted((a, b) -> a.name.compareTo(b.name))
+                .forEach(e -> toDefinition(e).ifPresent(def -> result.put(e.name, def)));
+        return result;
+    }
+
+    /**
+     * Selects servers whose {@code mcp__<name>__} prefix appears in the allowed tools. If the list is
+     * null or empty, all servers are selected.
+     *
+     * @param servers candidate servers
+     * @param allowedTools the allowed tools
+     * @return the selected servers
+     */
+    public static List<McpServerEntity> selectByAllowedTools(List<McpServerEntity> servers,
+                                                             List<String> allowedTools) {
+        if (allowedTools == null || allowedTools.isEmpty()) {
+            return servers;
+        }
+        return servers.stream()
+                .filter(s -> allowedTools.stream().anyMatch(t -> t.startsWith(TOOL_PREFIX + s.name + "__")))
+                .toList();
+    }
+
+    /**
+     * Extracts the server name from a tool name of the form {@code mcp__<server>__<tool>}.
+     *
+     * @param toolName the tool name
+     * @return the server name, if the tool name has that form
+     */
+    public static Optional<String> serverNameOf(String toolName) {
+        if (toolName == null || !toolName.startsWith(TOOL_PREFIX)) {
+            return Optional.empty();
+        }
+        int sep = toolName.indexOf("__", TOOL_PREFIX.length());
+        if (sep <= TOOL_PREFIX.length()) {
+            return Optional.empty();
+        }
+        return Optional.of(toolName.substring(TOOL_PREFIX.length(), sep));
+    }
+
+    /**
+     * Converts an entity to a definition. Returns empty (and logs a warning) if the entity has no
+     * transport or has malformed args/env.
+     *
+     * @param entity the entity
+     * @return the definition, if valid
+     */
+    public Optional<McpServerDefinition> toDefinition(McpServerEntity entity) {
+        if (entity.serverUrl != null && !entity.serverUrl.isBlank()) {
+            return Optional.of(McpServerDefinition.http(entity.serverUrl.trim()));
+        }
+        if (entity.serverCommand == null || entity.serverCommand.isBlank()) {
+            LOG.warnf("MCP server '%s' has neither a URL nor a command; skipping", entity.name);
+            return Optional.empty();
+        }
+        try {
+            List<String> args = entity.serverArgs == null || entity.serverArgs.isBlank()
+                    ? List.of()
+                    : objectMapper.readValue(entity.serverArgs, new TypeReference<List<String>>() { });
+            Map<String, String> env = entity.serverEnv == null || entity.serverEnv.isBlank()
+                    ? Map.of()
+                    : objectMapper.readValue(entity.serverEnv, new TypeReference<LinkedHashMap<String, String>>() { });
+            return Optional.of(McpServerDefinition.stdio(entity.serverCommand.trim(), args, env));
+        } catch (Exception e) {
+            LOG.warnf("MCP server '%s' has malformed args/env; skipping: %s", entity.name, e.getMessage());
+            return Optional.empty();
+        }
+    }
+}

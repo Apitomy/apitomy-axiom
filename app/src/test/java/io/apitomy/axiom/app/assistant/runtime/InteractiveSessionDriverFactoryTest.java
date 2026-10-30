@@ -1,5 +1,7 @@
 package io.apitomy.axiom.app.assistant.runtime;
 
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.app.assistant.AssistantContextBuilder;
@@ -160,7 +162,7 @@ class InteractiveSessionDriverFactoryTest {
                 List.of(), Map.of(), null, null, event -> {
                 }, event -> {
                 }, "github-copilot/claude-sonnet-5", "Session",
-                Map.of("axiom", AssistantContextBuilder.McpServerConfig.stdio("node", List.of("server.js"), Map.of())),
+                Map.of("axiom", McpServerDefinition.stdio("node", List.of("server.js"), Map.of())),
                 null, List.of()));
 
         Path configFile = sessionDir.resolve("opencode.json");
