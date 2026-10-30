@@ -95,6 +95,7 @@ public class McpConfigGenerator {
         LOG.info("Registered McpConfigGenerator as ClaudeCodeMcpManager delegate");
 
         openCodeMcpManager.setDelegate(this::getMcpServersForOpenCode);
+        openCodeMcpManager.setActiveServerNames(this::activeExternalServerNames);
         LOG.info("Registered McpConfigGenerator as OpenCodeMcpManager delegate");
 
         copilotMcpManager.setDelegate(this::generateMcpConfig);
@@ -398,6 +399,19 @@ public class McpConfigGenerator {
                 .forEach((name, def) -> configs.add(toOpenCodeConfig(name, def)));
 
         return configs;
+    }
+
+    /**
+     * Returns the names of user-defined MCP servers that exist and are enabled.
+     *
+     * @return the names
+     */
+    java.util.Set<String> activeExternalServerNames() {
+        return io.quarkus.narayana.jta.QuarkusTransaction.joiningExisting().call(() ->
+                io.apitomy.axiom.core.entities.McpServerEntity.<io.apitomy.axiom.core.entities.McpServerEntity>stream(
+                                "enabled", true)
+                        .map(e -> e.name)
+                        .collect(java.util.stream.Collectors.toSet()));
     }
 
     /**

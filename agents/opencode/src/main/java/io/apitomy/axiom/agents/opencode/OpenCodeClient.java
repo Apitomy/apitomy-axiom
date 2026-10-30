@@ -306,6 +306,27 @@ public class OpenCodeClient {
     }
 
     /**
+     * Disconnects an MCP server ({@code POST /mcp/{name}/disconnect}). OpenCode has no delete endpoint;
+     * a disconnected server is reported as disabled and can be replaced by adding it again.
+     *
+     * @param name the server name
+     * @throws IOException on I/O failure
+     * @throws InterruptedException if interrupted
+     */
+    public void disconnectMcpServer(String name) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/mcp/" + java.net.URLEncoder.encode(name,
+                        java.nio.charset.StandardCharsets.UTF_8) + "/disconnect"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .timeout(Duration.ofSeconds(30))
+                .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() != 200) {
+            LOG.warnf("Failed to disconnect MCP server '%s': HTTP %d", name, response.statusCode());
+        }
+    }
+
+    /**
      * Gets the server version string.
      *
      * @return the version string, or null if unavailable
