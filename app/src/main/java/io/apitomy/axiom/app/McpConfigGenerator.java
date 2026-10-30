@@ -4,11 +4,13 @@ import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager;
-import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.agents.copilot.CopilotMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager.McpServerConfig;
+import io.apitomy.axiom.app.mcp.ClaudeMcpConfigWriter;
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+import io.apitomy.axiom.app.mcp.McpServerResolver;
 import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -65,6 +67,9 @@ public class McpConfigGenerator {
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
+
+    @Inject
+    McpServerResolver mcpServerResolver;
 
     @Inject
     ObjectMapper objectMapper;
@@ -128,100 +133,47 @@ public class McpConfigGenerator {
                         || allowedTools.contains(AXIOM_TOOLS_PREFIX + t.name))
                 .toList();
 
-        // Filter external MCP servers: include only those with at least one
-        // allowed tool matching the mcp__<serverName>__ prefix
-        List<McpServerEntity> mcpServers = McpServerEntity.<McpServerEntity>listAll()
-                .stream()
-                .filter(s -> !hasRestrictions
-                        || allowedTools.stream().anyMatch(a -> a.startsWith("mcp__" + s.name + "__")))
-                .toList();
+        // External MCP servers referenced by the allowed tools (all if unrestricted)
+        Map<String, McpServerDefinition> externalServers = mcpServerResolver.resolveForAllowedTools(allowedTools);
 
         // Check if any SDK tools are in the allowed list
         boolean hasSdkTools = !hasRestrictions
                 || allowedTools.stream().anyMatch(a -> a.startsWith(AXIOM_SDK_PREFIX));
 
-        if (scriptTools.isEmpty() && mcpServers.isEmpty() && !hasSdkTools) {
+        if (scriptTools.isEmpty() && externalServers.isEmpty() && !hasSdkTools) {
             LOG.debugf("No MCP tools matched allowed list for task %d, skipping MCP config", taskId);
             return null;
         }
 
         try {
-            // Build the MCP config JSON
-            StringBuilder configJson = new StringBuilder();
-            configJson.append("{\"mcpServers\":{");
-
-            boolean first = true;
-
+            Map<String, McpServerDefinition> servers = new java.util.LinkedHashMap<>();
             Path serverDir = (hasSdkTools || !scriptTools.isEmpty())
                     ? ensureMcpServerInstalled() : null;
 
             // SDK tools → axiom-sdk server (no tools JSON, no script execution)
             if (hasSdkTools && serverDir != null) {
-                if (first) first = false; else configJson.append(",");
-                configJson.append("\"axiom-sdk\":{");
-                configJson.append("\"command\":\"node\",");
-                configJson.append("\"args\":[\"")
-                        .append(escapeJson(serverDir.resolve("sdk-server.js")
-                                .toAbsolutePath().toString()))
-                        .append("\"],");
-                configJson.append("\"env\":{\"AXIOM_API_URL\":\"")
-                        .append(escapeJson(env.get("AXIOM_API_URL")))
-                        .append("\"}}");
+                servers.put("axiom-sdk", McpServerDefinition.stdio("node",
+                        List.of(serverDir.resolve("sdk-server.js").toAbsolutePath().toString()),
+                        Map.of("AXIOM_API_URL", env.get("AXIOM_API_URL"))));
             }
 
             // Script tools → axiom-tools server (loads tools from JSON file)
             if (!scriptTools.isEmpty() && serverDir != null) {
                 Path toolsJson = writeToolsJson(scriptTools, taskId);
-
-                if (first) first = false; else configJson.append(",");
-                configJson.append("\"axiom-tools\":{");
-                configJson.append("\"command\":\"node\",");
-                configJson.append("\"args\":[\"")
-                        .append(escapeJson(serverDir.resolve("tools-server.js")
-                                .toAbsolutePath().toString()))
-                        .append("\",\"")
-                        .append(escapeJson(toolsJson.toAbsolutePath().toString()))
-                        .append("\"],");
-                configJson.append("\"env\":{");
-                boolean envFirst = true;
-                for (Map.Entry<String, String> entry : env.entrySet()) {
-                    if (envFirst) envFirst = false; else configJson.append(",");
-                    configJson.append("\"").append(escapeJson(entry.getKey())).append("\":\"")
-                            .append(escapeJson(entry.getValue())).append("\"");
-                }
-                configJson.append("}}");
+                servers.put("axiom-tools", McpServerDefinition.stdio("node",
+                        List.of(serverDir.resolve("tools-server.js").toAbsolutePath().toString(),
+                                toolsJson.toAbsolutePath().toString()),
+                        env));
             }
 
-            // Add external MCP servers
-            for (McpServerEntity mcp : mcpServers) {
-                if (first) first = false; else configJson.append(",");
-                configJson.append("\"").append(escapeJson(mcp.name)).append("\":{");
-
-                if (mcp.serverUrl != null && !mcp.serverUrl.isBlank()) {
-                    // HTTP transport
-                    configJson.append("\"type\":\"http\",");
-                    configJson.append("\"url\":\"").append(escapeJson(mcp.serverUrl)).append("\"");
-                } else if (mcp.serverCommand != null) {
-                    // Stdio transport
-                    configJson.append("\"command\":\"").append(escapeJson(mcp.serverCommand)).append("\"");
-                    if (mcp.serverArgs != null) {
-                        configJson.append(",\"args\":").append(mcp.serverArgs);
-                    }
-                    if (mcp.serverEnv != null) {
-                        configJson.append(",\"env\":").append(mcp.serverEnv);
-                    }
-                }
-                configJson.append("}");
-            }
-
-            configJson.append("}}");
+            externalServers.forEach(servers::putIfAbsent);
 
             // Write config file to ~/.axiom/tasks/{taskId}/
             Path taskDir = getTaskDirectory(taskId);
             Path configFile = taskDir.resolve("mcp-config.json");
-            Files.writeString(configFile, configJson.toString());
+            Files.writeString(configFile, ClaudeMcpConfigWriter.toJson(objectMapper, servers));
             LOG.infof("Generated MCP config for task %d: %s (%d script tools, %d MCP servers)",
-                    taskId, configFile, scriptTools.size(), mcpServers.size());
+                    taskId, configFile, scriptTools.size(), externalServers.size());
             return configFile;
 
         } catch (Exception e) {
@@ -439,56 +391,26 @@ public class McpConfigGenerator {
         }
 
         // External MCP servers
-        List<McpServerEntity> mcpServers = McpServerEntity.<McpServerEntity>listAll()
-                .stream()
-                .filter(s -> !hasRestrictions
-                        || allowedTools.stream().anyMatch(a -> a.startsWith("mcp__" + s.name + "__")))
-                .toList();
-
-        for (McpServerEntity mcp : mcpServers) {
-            if (mcp.serverUrl != null && !mcp.serverUrl.isBlank()) {
-                // Remote/HTTP server
-                configs.add(McpServerConfig.remote(mcp.name, mcp.serverUrl));
-            } else if (mcp.serverCommand != null) {
-                // Local/stdio server
-                List<String> command = new ArrayList<>();
-                command.add(mcp.serverCommand);
-                if (mcp.serverArgs != null) {
-                    try {
-                        List<String> args = objectMapper.readValue(mcp.serverArgs,
-                                new TypeReference<>() {});
-                        command.addAll(args);
-                    } catch (Exception e) {
-                        LOG.warnf("Failed to parse args for MCP server '%s': %s",
-                                mcp.name, e.getMessage());
-                    }
-                }
-
-                Map<String, String> env = new java.util.LinkedHashMap<>();
-                if (mcp.serverEnv != null) {
-                    try {
-                        env = objectMapper.readValue(mcp.serverEnv, new TypeReference<>() {});
-                    } catch (Exception e) {
-                        LOG.warnf("Failed to parse env for MCP server '%s': %s",
-                                mcp.name, e.getMessage());
-                    }
-                }
-
-                configs.add(McpServerConfig.local(mcp.name, command, env));
-            }
-        }
+        mcpServerResolver.resolveForAllowedTools(allowedTools)
+                .forEach((name, def) -> configs.add(toOpenCodeConfig(name, def)));
 
         return configs;
     }
 
     /**
-     * Escapes a string for safe inclusion in a JSON value.
+     * Converts a resolved definition to the OpenCode task MCP manager's config type.
      *
-     * @param s the string to escape
-     * @return the escaped string
+     * @param name the server name
+     * @param def the resolved definition
+     * @return the OpenCode config
      */
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"");
+    static McpServerConfig toOpenCodeConfig(String name, McpServerDefinition def) {
+        if (def.isHttpTransport()) {
+            return McpServerConfig.remote(name, def.url());
+        }
+        List<String> command = new ArrayList<>();
+        command.add(def.command());
+        command.addAll(def.args());
+        return McpServerConfig.local(name, command, def.env());
     }
 }

@@ -1,9 +1,10 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.agents.opencode.OpenCodeServerManager;
-import io.apitomy.axiom.app.assistant.AssistantContextBuilder.McpServerConfig;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -65,7 +66,7 @@ class OpenCodeSessionServerProcessTest {
     void realOpenCodeLoadsMcpServersFromGeneratedConfig(@TempDir Path sessionDir) throws Exception {
         Assumptions.assumeTrue(OpenCodeServerManager.isOpenCodeAvailable());
         Path config = OpenCodeConfigWriter.writeConfig(sessionDir, Map.of(
-                "axiom-it-bogus", McpServerConfig.stdio("/nonexistent/axiom-it-cmd", List.of(), Map.of())));
+                "axiom-it-bogus", McpServerDefinition.stdio("/nonexistent/axiom-it-cmd", List.of(), Map.of())));
         OpenCodeSessionServerProcess process = new OpenCodeSessionServerProcess(
                 "opencode", "127.0.0.1", 0, 30, Map.of("OPENCODE_CONFIG", config.toString()));
         try {

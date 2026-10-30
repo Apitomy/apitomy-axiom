@@ -1,5 +1,7 @@
 package io.apitomy.axiom.app.assistant.runtime;
 
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+
 import io.apitomy.axiom.app.assistant.AssistantContextBuilder;
 import io.apitomy.axiom.app.assistant.AssistantEventParser;
 import io.apitomy.axiom.app.assistant.runtime.opencode.OpenCodeCapabilityProbe;
@@ -64,7 +66,7 @@ public interface InteractiveSessionDriverFactory {
                          Consumer<AssistantEventParser.SseEvent> autoApprovalSink,
                          String model,
                          String sessionTitle,
-                         Map<String, AssistantContextBuilder.McpServerConfig> mcpServers,
+                         Map<String, McpServerDefinition> mcpServers,
                          String systemPrompt,
                          List<String> allowedTools) {
 
