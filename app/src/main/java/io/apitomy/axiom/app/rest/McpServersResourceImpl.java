@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.McpResource;
 import io.apitomy.axiom.api.beans.McpServer;
 import io.apitomy.axiom.api.beans.NewMcpServer;
+import io.apitomy.axiom.api.beans.ServerEnv;
 import io.apitomy.axiom.app.mcp.McpServerConflictException;
 import io.apitomy.axiom.app.mcp.McpServerNotFoundException;
 import io.apitomy.axiom.app.mcp.McpServerService;
@@ -126,6 +127,13 @@ public class McpServersResourceImpl implements McpResource {
                 server.setServerArgs(objectMapper.readValue(entity.serverArgs, new TypeReference<List<String>>() { }));
             } catch (Exception e) {
                 LOG.warnf("Invalid serverArgs JSON for MCP server '%s': %s", entity.name, e.getMessage());
+            }
+        }
+        if (entity.serverEnv != null) {
+            try {
+                server.setServerEnv(objectMapper.readValue(entity.serverEnv, ServerEnv.class));
+            } catch (Exception e) {
+                LOG.warnf("Invalid serverEnv JSON for MCP server '%s': %s", entity.name, e.getMessage());
             }
         }
         return server;

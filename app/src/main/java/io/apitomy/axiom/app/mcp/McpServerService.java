@@ -175,12 +175,12 @@ public class McpServerService {
         entity.description = data.getDescription();
         entity.serverCommand = trimToNull(data.getServerCommand());
         entity.serverUrl = trimToNull(data.getServerUrl());
-        if (data.getServerArgs() != null) {
-            entity.serverArgs = toJson(data.getServerArgs());
-        }
-        if (data.getServerEnv() != null) {
-            entity.serverEnv = toJson(data.getServerEnv());
-        }
+        // Full-replace semantics: absent/empty args or env clear the stored value.
+        entity.serverArgs = data.getServerArgs() == null || data.getServerArgs().isEmpty()
+                ? null : toJson(data.getServerArgs());
+        entity.serverEnv = data.getServerEnv() == null
+                || data.getServerEnv().getAdditionalProperties().isEmpty()
+                ? null : toJson(data.getServerEnv());
     }
 
     private String toJson(Object value) {

@@ -10,9 +10,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.List;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.anyOf;
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 /**
  * REST tests for the MCP servers API, focusing on CRUD and validation.
@@ -131,5 +135,31 @@ class McpServersResourceTest {
     void unknownIdReturns404() {
         given().get(BASE + "/{id}", 999999).then().statusCode(404);
         given().delete(BASE + "/{id}", 999999).then().statusCode(404);
+    }
+    @Test
+    void serverEnvIsReturned() {
+        int id = create("{\"name\":\"env\",\"serverCommand\":\"npx\",\"serverEnv\":{\"TOKEN\":\"abc\"}}");
+        given().get(BASE + "/{id}", id).then().statusCode(200).body("serverEnv.TOKEN", equalTo("abc"));
+        given().get(BASE).then().statusCode(200).body("[0].serverEnv.TOKEN", equalTo("abc"));
+    }
+
+    @Test
+    void updateWithoutArgsAndEnvClearsThem() {
+        int id = create("{\"name\":\"clr\",\"serverCommand\":\"npx\",\"serverArgs\":[\"a\"],"
+                + "\"serverEnv\":{\"K\":\"v\"}}");
+        given().contentType(ContentType.JSON).body("{\"name\":\"clr\",\"serverCommand\":\"npx\"}")
+                .put(BASE + "/{id}", id).then().statusCode(200)
+                .body("serverArgs", anyOf(nullValue(), empty())).body("serverEnv", nullValue());
+    }
+
+    @Test
+    void updateReplacesArgsAndEnv() {
+        int id = create("{\"name\":\"rep\",\"serverCommand\":\"npx\",\"serverArgs\":[\"a\"],"
+                + "\"serverEnv\":{\"K\":\"v\",\"OLD\":\"x\"}}");
+        given().contentType(ContentType.JSON)
+                .body("{\"name\":\"rep\",\"serverCommand\":\"npx\",\"serverArgs\":[\"b\"],\"serverEnv\":{\"K\":\"w\"}}")
+                .put(BASE + "/{id}", id).then().statusCode(200)
+                .body("serverArgs", contains("b")).body("serverEnv.K", equalTo("w"))
+                .body("serverEnv.OLD", nullValue());
     }
 }
