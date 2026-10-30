@@ -8772,7 +8772,8 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts."
           },
           "serverUrl": {
             "type": "string"
@@ -8791,7 +8792,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`."
+            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`. Values may contain `${secret:NAME}` references, resolved when a session or task starts."
           },
           "timeout": {
             "type": "integer",
@@ -8810,6 +8811,14 @@
           "modifiedOn": {
             "type": "string",
             "format": "date-time"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true,
+            "description": "Non-blocking problems, e.g. `${secret:NAME}` references to secrets that do not exist (yet)."
           }
         }
       },
@@ -8839,7 +8848,8 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts."
           },
           "serverUrl": {
             "type": "string"
@@ -8858,7 +8868,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`."
+            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`. Values may contain `${secret:NAME}` references, resolved when a session or task starts."
           },
           "timeout": {
             "type": "integer",

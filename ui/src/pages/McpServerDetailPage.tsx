@@ -115,6 +115,10 @@ export function McpServerDetailPage() {
                 </FlexItem>
             </Flex>
 
+            {server.warnings?.map((w) => (
+                <Alert key={w} variant="warning" isInline title={w} style={{ marginBottom: "16px" }} />
+            ))}
+
             {saveError && (
                 <Alert variant="danger" isInline title={saveError} style={{ marginBottom: "16px" }} />
             )}

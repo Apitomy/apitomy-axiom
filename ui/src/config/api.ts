@@ -586,9 +586,10 @@ export interface McpServer {
     enabled: boolean;
     createdOn?: string;
     modifiedOn?: string;
+    warnings?: string[];
 }
 
-export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "transport" | "enabled"> & {
+export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "transport" | "enabled" | "warnings"> & {
     transport?: McpTransport;
     enabled?: boolean;
 };

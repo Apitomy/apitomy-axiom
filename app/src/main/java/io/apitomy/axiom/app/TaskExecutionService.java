@@ -333,7 +333,15 @@ public class TaskExecutionService {
 
         // Generate MCP config filtered to only the tools allowed by this action type
         List<String> allowedTools = getToolsFromActionType(task.actionType);
-        Path mcpConfig = mcpConfigGenerator.generateMcpConfig(task.id, env, allowedTools);
+        Path mcpConfig;
+        try {
+            mcpConfig = mcpConfigGenerator.generateMcpConfig(task.id, env, allowedTools);
+        } catch (MissingSecretException e) {
+            releaseLease.run();
+            LOG.errorf("Task %d cannot start: %s", task.id, e.getMessage());
+            failTask(task.id, e.getMessage());
+            return;
+        }
         // Also let the agent's MCP manager configure its own MCP servers
         // (required for OpenCode, which registers servers dynamically
         // via HTTP rather than consuming the config file above).

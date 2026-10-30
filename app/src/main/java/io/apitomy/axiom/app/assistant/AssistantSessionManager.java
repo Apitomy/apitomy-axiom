@@ -262,14 +262,26 @@ public class AssistantSessionManager {
 
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
-            Map<String, McpServerDefinition> mcpConfigs =
-                    resolveMcpServers(sessionId, mcpToken, template, subject, compositionId, sessionDir,
-                            resolvedEnv, resolvedAllowedTools);
+            Map<String, McpServerDefinition> mcpConfigs;
+            try {
+                mcpConfigs = resolveMcpServers(sessionId, mcpToken, template, subject, compositionId,
+                        sessionDir, resolvedEnv, resolvedAllowedTools);
+            } catch (MissingSecretException e) {
+                throw new IllegalArgumentException(
+                        "Session template '" + template.name() + "': " + e.getMessage(), e);
+            }
 
-            // Build and write MCP config JSON to session directory
+            // Build and write MCP config JSON to session directory (owner-only: may contain secrets)
             String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
             if (mcpConfig != null) {
-                Files.writeString(sessionDir.resolve("mcp-config.json"), mcpConfig);
+                Path mcpConfigFile = sessionDir.resolve("mcp-config.json");
+                Files.writeString(mcpConfigFile, mcpConfig);
+                try {
+                    Files.setPosixFilePermissions(mcpConfigFile,
+                            java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                } catch (UnsupportedOperationException e) {
+                    // Non-POSIX filesystem; leave default permissions.
+                }
             }
 
             // Determine working directory

@@ -41,4 +41,13 @@ describe("McpServerDetailPage", () => {
             transport: "sse", headers: { Authorization: "Bearer t" }, timeout: 5000, enabled: false,
         }));
     });
+
+    it("shows warnings returned by the server", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({
+            id: 5, name: "gh", transport: "stdio", serverCommand: "npx", enabled: true,
+            warnings: ["Secret 'GH_TOKEN' does not exist"],
+        } as never);
+        renderPage();
+        expect(await screen.findByText(/Secret 'GH_TOKEN' does not exist/)).toBeInTheDocument();
+    });
 });
