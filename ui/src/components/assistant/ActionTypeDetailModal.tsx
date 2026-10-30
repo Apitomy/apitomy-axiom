@@ -45,6 +45,7 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
     const maxSteps = content.maxSteps as number | undefined;
     const maxBudgetUsd = content.maxBudgetUsd as number | undefined;
     const timeoutSeconds = content.timeoutSeconds as number | undefined;
+    const mcpServers = Array.isArray(content.mcpServers) ? content.mcpServers as string[] : [];
 
     const toolsList = Array.isArray(rawAllowedTools)
         ? rawAllowedTools as string[]
@@ -81,6 +82,12 @@ export function ActionTypeDetailModal({ isOpen, onClose, name, content, errors }
                                     <DescriptionListTerm>Description</DescriptionListTerm>
                                     <DescriptionListDescription>{description || "—"}</DescriptionListDescription>
                                 </DescriptionListGroup>
+                                {mcpServers.length > 0 && (
+                                    <DescriptionListGroup>
+                                        <DescriptionListTerm style={{ whiteSpace: "nowrap" }}>MCP Servers</DescriptionListTerm>
+                                        <DescriptionListDescription>{mcpServers.join(", ")}</DescriptionListDescription>
+                                    </DescriptionListGroup>
+                                )}
                                 <DescriptionListGroup>
                                     <DescriptionListTerm style={{ whiteSpace: "nowrap" }}>Execution Mode</DescriptionListTerm>
                                     <DescriptionListDescription>

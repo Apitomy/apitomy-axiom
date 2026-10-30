@@ -63,6 +63,7 @@ export function ActionTypeDetailPage() {
                     maxBudgetUsd: at.maxBudgetUsd,
                     timeoutSeconds: at.timeoutSeconds,
                     labels: at.labels || [],
+                    mcpServers: at.mcpServers || [],
                 });
                 setDirty(false);
             })

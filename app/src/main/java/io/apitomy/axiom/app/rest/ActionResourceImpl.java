@@ -207,6 +207,10 @@ public class ActionResourceImpl implements ActionResource {
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
         }
+        entity.mcpServers.clear();
+        if (data.getMcpServers() != null) {
+            data.getMcpServers().stream().distinct().forEach(entity.mcpServers::add);
+        }
     }
 
     private ActionTypeEntity findOrThrow(long id) {
@@ -239,6 +243,7 @@ public class ActionResourceImpl implements ActionResource {
         actionType.setTimeoutSeconds(entity.timeoutSeconds);
         actionType.setEnvironment(jsonToEnvironment(entity.environment));
         actionType.setLabels(entity.labels);
+        actionType.setMcpServers(new java.util.ArrayList<>(entity.mcpServers));
         return actionType;
     }
 

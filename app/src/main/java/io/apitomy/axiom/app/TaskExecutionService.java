@@ -332,7 +332,7 @@ public class TaskExecutionService {
         }
 
         // Generate MCP config filtered to only the tools allowed by this action type
-        List<String> allowedTools = getToolsFromActionType(task.actionType);
+        List<String> allowedTools = effectiveAllowedTools(task.actionType);
         Path mcpConfig;
         try {
             mcpConfig = mcpConfigGenerator.generateMcpConfig(task.id, env, allowedTools);
@@ -385,21 +385,36 @@ public class TaskExecutionService {
     }
 
     /**
-     * Reads the allowed tools from the ActionTypeEntity's allowedTools field.
-     * Falls back to a minimal read-only set if not configured.
+     * Returns the tools a task of the given action type may use: the action type's allowed tools (or a
+     * minimal read-only set if none are configured), plus {@code mcp__<name>__*} for each MCP server the
+     * action type selects, which also causes those servers to be loaded.
+     *
+     * @param actionType the action type name
+     * @return the effective allowed tools
      */
-    private List<String> getToolsFromActionType(String actionType) {
+    public List<String> effectiveAllowedTools(String actionType) {
         ActionTypeEntity actionTypeEntity = ActionTypeEntity.find("name", actionType).firstResult();
+        List<String> tools = new java.util.ArrayList<>();
         if (actionTypeEntity != null
                 && actionTypeEntity.allowedTools != null
                 && !actionTypeEntity.allowedTools.isBlank()) {
-            return toolsetResolver.resolve(actionTypeEntity.allowedTools);
+            tools.addAll(toolsetResolver.resolve(actionTypeEntity.allowedTools));
+        } else {
+            // Fallback: minimal read-only tools. Recent Claude Code builds dropped the Glob and Grep
+            // tools (2.1.117, native macOS and Linux builds); file search goes through Bash instead.
+            LOG.warnf("No allowed tools configured for action type '%s', using minimal read-only defaults",
+                    actionType);
+            tools.addAll(List.of("Read", "Bash(grep *)", "Bash(find *)"));
         }
-        // Fallback: minimal read-only tools. Recent Claude Code builds dropped the Glob and Grep
-        // tools (2.1.117, native macOS and Linux builds); file search goes through Bash instead.
-        LOG.warnf("No allowed tools configured for action type '%s', using minimal read-only defaults",
-                actionType);
-        return List.of("Read", "Bash(grep *)", "Bash(find *)");
+        if (actionTypeEntity != null) {
+            for (String server : actionTypeEntity.mcpServers) {
+                String wildcard = "mcp__" + server + "__*";
+                if (!tools.contains(wildcard)) {
+                    tools.add(wildcard);
+                }
+            }
+        }
+        return tools;
     }
 
     /**
