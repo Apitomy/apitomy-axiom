@@ -267,8 +267,11 @@ export interface PackImportValidationError {
     problems: Record<string, PackImportProblem[]>;
 }
 
-export async function importPack(packJson: string): Promise<ImportResult> {
-    const response = await fetch(`${API}/system/packs/import`, {
+/** How a pack import treats items that already exist. */
+export type PackConflictMode = "fail" | "skip" | "overwrite";
+
+export async function importPack(packJson: string, onConflict: PackConflictMode = "fail"): Promise<ImportResult> {
+    const response = await fetch(`${API}/system/packs/import?onConflict=${onConflict}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: packJson,

@@ -14,6 +14,16 @@ const SECRET_NAME = /(token|secret|password|passwd|api[_-]?key|apikey|authorizat
 
 type Json = Record<string, unknown>;
 
+/**
+ * Returns the env/header keys of a server whose values are plain text but whose names suggest a
+ * credential (token, secret, password, API key, authorization...).
+ */
+export function plainCredentialKeys(server: { serverEnv?: Record<string, string>; headers?: Record<string, string> }): string[] {
+    return Object.entries({ ...server.serverEnv, ...server.headers })
+        .filter(([key, value]) => SECRET_NAME.test(key) && value && !value.includes("${secret:"))
+        .map(([key]) => key);
+}
+
 function isObject(value: unknown): value is Json {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -92,11 +102,7 @@ export function parseMcpServersJson(text: string): ParsedMcpServers {
             continue;
         }
         result.servers.push(server);
-        for (const [key, value] of Object.entries({ ...server.serverEnv, ...server.headers })) {
-            if (SECRET_NAME.test(key) && value && !value.includes("${secret:")) {
-                result.secretWarnings.push(`${name}: ${key}`);
-            }
-        }
+        plainCredentialKeys(server).forEach((key) => result.secretWarnings.push(`${name}: ${key}`));
     }
     if (result.servers.length === 0 && result.errors.length === 0) {
         result.errors.push("No MCP servers found");
