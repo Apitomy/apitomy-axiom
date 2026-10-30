@@ -217,6 +217,7 @@ public class SystemResourceImpl implements SystemResource {
                     check.setName(r.name());
                     check.setStatus(StartupCheck.Status.fromValue(r.status()));
                     check.setMessage(r.message());
+                    check.setRequired(r.required());
                     return check;
                 })
                 .toList());

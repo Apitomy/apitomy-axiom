@@ -35,7 +35,7 @@ describe("McpCatalogModal", () => {
         render(<McpCatalogModal isOpen onClose={() => {}} onCreated={() => {}} />);
         expect(await screen.findByText("GitHub")).toBeInTheDocument();
         expect(screen.getByText("Jira & Confluence")).toBeInTheDocument();
-        expect(screen.getByText(/uvx is not installed/)).toBeInTheDocument();
+        expect(screen.getByText(/uvx is not available/)).toBeInTheDocument();
         expect(api.searchMcpCatalog).toHaveBeenCalledWith("curated", "");
     });
 

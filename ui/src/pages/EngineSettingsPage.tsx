@@ -73,7 +73,10 @@ export function EngineSettingsPage() {
 
     const engines = config.engines || [];
     const defaultEngine = config.defaultEngine;
-    const nodeJsCheck = (config.checks || []).find((c) => c.name === "Node.js");
+    // Prerequisites: Node.js (required) and the optional MCP server runtimes; engine checks have no flag.
+    const prerequisites = (config.checks || [])
+        .filter((c) => c.required !== undefined && c.required !== null)
+        .sort((a, b) => Number(b.required) - Number(a.required));
 
     const handleDefaultEngineChange = (_event: FormEvent<HTMLSelectElement>, value: string) => {
         if (!value) {
@@ -147,23 +150,35 @@ export function EngineSettingsPage() {
                     </Card>
                 </FlexItem>
 
-                {/* Node.js check (shared prerequisite) */}
-                {nodeJsCheck && (
+                {/* Shared prerequisites: Node.js (required) and optional MCP server runtimes */}
+                {prerequisites.length > 0 && (
                     <FlexItem>
                         <Card>
                             <CardTitle>Prerequisites</CardTitle>
                             <CardBody>
                                 <DescriptionList isHorizontal>
-                                    <DescriptionListGroup>
-                                        <DescriptionListTerm>
-                                            <StatusIcon status={nodeJsCheck.status} />{" "}
-                                            {nodeJsCheck.name}
-                                        </DescriptionListTerm>
-                                        <DescriptionListDescription>
-                                            {nodeJsCheck.message}
-                                        </DescriptionListDescription>
-                                    </DescriptionListGroup>
+                                    {prerequisites.map((check) => (
+                                        <DescriptionListGroup key={check.name} data-testid={`prerequisite-${check.name}`}>
+                                            <DescriptionListTerm>
+                                                <StatusIcon status={check.status} />{" "}
+                                                {check.name}
+                                            </DescriptionListTerm>
+                                            <DescriptionListDescription>
+                                                <Label isCompact color={check.required ? "blue" : "grey"}
+                                                    style={{ marginRight: "8px" }}>
+                                                    {check.required ? "Required" : "Optional"}
+                                                </Label>
+                                                {check.message}
+                                            </DescriptionListDescription>
+                                        </DescriptionListGroup>
+                                    ))}
                                 </DescriptionList>
+                                {prerequisites.some((c) => !c.required) && (
+                                    <p className="axiom-text-subtle" style={{ marginTop: "12px", fontSize: "13px" }}>
+                                        Optional tools are only needed by MCP servers that run with them. They are
+                                        checked when Axiom starts; restart Axiom after installing one.
+                                    </p>
+                                )}
                             </CardBody>
                         </Card>
                     </FlexItem>

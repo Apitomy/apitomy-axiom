@@ -227,4 +227,20 @@ class McpServersResourceTest {
     void runtimeStatusIsReported() {
         given().get(BASE + "/catalog/runtimes").then().statusCode(200).body("node", notNullValue());
     }
+
+    @Test
+    void startupChecksIncludeOptionalRuntimesAndMarkNodeRequired() {
+        given().get("/api/v1/system/config").then().statusCode(200)
+                .body("checks.find { it.name == 'Node.js' }.required", equalTo(true))
+                .body("checks.find { it.name == 'npx' }.required", equalTo(false))
+                .body("checks.find { it.name == 'uvx' }.required", equalTo(false))
+                .body("checks.find { it.name == 'Docker' }.required", equalTo(false));
+    }
+
+    @Test
+    void catalogRuntimesMatchTheStartupChecks() {
+        String npxStatus = given().get("/api/v1/system/config").then().extract()
+                .path("checks.find { it.name == 'npx' }.status");
+        given().get(BASE + "/catalog/runtimes").then().statusCode(200).body("node", equalTo("ok".equals(npxStatus)));
+    }
 }
