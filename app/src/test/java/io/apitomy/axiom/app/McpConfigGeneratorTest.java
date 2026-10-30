@@ -258,7 +258,7 @@ class McpConfigGeneratorTest {
         mcpTool.persist();
 
         try {
-            Path configFile = generator.generateMcpConfig(9010L, Map.of(), null);
+            Path configFile = generator.generateMcpConfig(9010L, Map.of(), List.of("mcp__test-external-stdio__*"));
             JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
             JsonNode servers = config.get("mcpServers");
@@ -290,7 +290,7 @@ class McpConfigGeneratorTest {
         mcpTool.persist();
 
         try {
-            Path configFile = generator.generateMcpConfig(9011L, Map.of(), null);
+            Path configFile = generator.generateMcpConfig(9011L, Map.of(), List.of("mcp__test-external-http__*"));
             JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
             JsonNode servers = config.get("mcpServers");
@@ -375,6 +375,46 @@ class McpConfigGeneratorTest {
         } finally {
             on.delete();
             off.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testUnrestrictedToolsDoNotLoadExternalServers() throws Exception {
+        McpServerEntity mcp = new McpServerEntity();
+        mcp.name = "test-implicit";
+        mcp.serverCommand = "npx";
+        mcp.persist();
+        try {
+            for (List<String> allowed : java.util.Arrays.asList(null, List.<String>of())) {
+                Path configFile = generator.generateMcpConfig(9020L, Map.of(), allowed);
+                if (configFile != null) {
+                    JsonNode servers = objectMapper.readTree(Files.readString(configFile)).get("mcpServers");
+                    assertFalse(servers.has("test-implicit"), "external servers must be selected explicitly");
+                }
+            }
+        } finally {
+            mcp.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testExternalStdioServerGetsOnlyItsOwnEnvironment() throws Exception {
+        McpServerEntity mcp = new McpServerEntity();
+        mcp.name = "test-own-env";
+        mcp.serverCommand = "npx";
+        mcp.serverEnv = "{\"OWN\":\"1\"}";
+        mcp.persist();
+        try {
+            Path configFile = generator.generateMcpConfig(9021L, Map.of("TASK_SECRET", "s", "AXIOM_TRACE_ID", "t"),
+                    List.of("mcp__test-own-env__*"));
+            JsonNode env = objectMapper.readTree(Files.readString(configFile))
+                    .get("mcpServers").get("test-own-env").get("env");
+            assertEquals(1, env.size());
+            assertEquals("1", env.get("OWN").asText());
+        } finally {
+            mcp.delete();
         }
     }
 

@@ -8787,7 +8787,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts."
+            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts. This is the server's complete environment: it does not receive the task's or session's environment variables."
           },
           "serverUrl": {
             "type": "string"
@@ -8863,7 +8863,7 @@
             "additionalProperties": {
               "type": "string"
             },
-            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts."
+            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts. This is the server's complete environment: it does not receive the task's or session's environment variables."
           },
           "serverUrl": {
             "type": "string"

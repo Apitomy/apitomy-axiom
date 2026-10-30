@@ -82,6 +82,13 @@ class McpServerResolverTest {
     }
 
     @Test
+    void noAllowedToolsSelectsNoServers() {
+        List<McpServerEntity> all = List.of(entity("gh", "npx", null, null, null));
+        assertTrue(McpServerResolver.selectByAllowedTools(all, null).isEmpty());
+        assertTrue(McpServerResolver.selectByAllowedTools(all, List.of()).isEmpty());
+    }
+
+    @Test
     void extractsServerNameFromToolName() {
         assertEquals(Optional.of("gh"), McpServerResolver.serverNameOf("mcp__gh__list_repos"));
         assertEquals(Optional.of("gh"), McpServerResolver.serverNameOf("mcp__gh__*"));
