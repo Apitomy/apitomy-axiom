@@ -127,6 +127,7 @@ public class McpServersResourceImpl implements McpResource {
         server.setTransport(McpServer.Transport.fromValue(entity.transport));
         server.setTimeout(entity.timeoutMs);
         server.setEnabled(entity.enabled);
+        server.setWarnings(service.warnings(entity));
         server.setCreatedOn(entity.createdOn == null ? null : Date.from(entity.createdOn));
         server.setModifiedOn(entity.modifiedOn == null ? null : Date.from(entity.modifiedOn));
         if (entity.headers != null) {

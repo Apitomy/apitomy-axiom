@@ -117,6 +117,8 @@ public class McpConfigGenerator {
      * @param environment environment variables to pass to MCP servers
      * @param allowedTools the action type's allowed tools list (may be null)
      * @return path to the generated MCP config file, or null if no tools match
+     * @throws io.apitomy.axiom.core.services.MissingSecretException if an included MCP server references a
+     *         secret that does not exist
      */
     public Path generateMcpConfig(Long taskId, Map<String, String> environment,
                                    List<String> allowedTools) {
@@ -172,6 +174,7 @@ public class McpConfigGenerator {
             Path taskDir = getTaskDirectory(taskId);
             Path configFile = taskDir.resolve("mcp-config.json");
             Files.writeString(configFile, ClaudeMcpConfigWriter.toJson(objectMapper, servers));
+            restrictToOwner(configFile);
             LOG.infof("Generated MCP config for task %d: %s (%d script tools, %d MCP servers)",
                     taskId, configFile, scriptTools.size(), externalServers.size());
             return configFile;
@@ -395,6 +398,19 @@ public class McpConfigGenerator {
                 .forEach((name, def) -> configs.add(toOpenCodeConfig(name, def)));
 
         return configs;
+    }
+
+    /**
+     * Restricts a file to owner read/write; it may contain resolved secrets.
+     *
+     * @param file the file
+     */
+    private static void restrictToOwner(Path file) {
+        try {
+            Files.setPosixFilePermissions(file, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        } catch (UnsupportedOperationException | IOException e) {
+            LOG.debugf("Could not restrict permissions on %s: %s", file, e.getMessage());
+        }
     }
 
     /**

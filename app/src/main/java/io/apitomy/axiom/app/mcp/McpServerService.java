@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.NewMcpServer;
 import io.apitomy.axiom.core.entities.McpServerEntity;
+import io.apitomy.axiom.core.entities.SecretEntity;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -41,6 +42,8 @@ public class McpServerService {
 
     /** Server-sent events transport. */
     public static final String TRANSPORT_SSE = "sse";
+
+    private static final Pattern SECRET_REF = Pattern.compile("\\$\\{secret:([^}]+)}");
 
     @Inject
     ObjectMapper objectMapper;
@@ -117,6 +120,40 @@ public class McpServerService {
     @Transactional
     public void delete(long id) {
         get(id).delete();
+    }
+
+    /**
+     * Returns non-blocking warnings for a server, e.g. references to secrets that do not exist.
+     *
+     * @param entity the server
+     * @return warning messages (empty if none)
+     */
+    public List<String> warnings(McpServerEntity entity) {
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();
+        collectSecretNames(entity.serverEnv, names);
+        collectSecretNames(entity.headers, names);
+        return names.stream()
+                .filter(name -> SecretEntity.count("name", name) == 0)
+                .map(name -> "Secret '" + name + "' does not exist")
+                .toList();
+    }
+
+    private void collectSecretNames(String json, java.util.Set<String> names) {
+        if (json == null || json.isBlank()) {
+            return;
+        }
+        try {
+            java.util.Map<String, String> map = objectMapper.readValue(json,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, String>>() { });
+            map.values().stream().filter(java.util.Objects::nonNull).forEach(value -> {
+                java.util.regex.Matcher m = SECRET_REF.matcher(value);
+                while (m.find()) {
+                    names.add(m.group(1));
+                }
+            });
+        } catch (JsonProcessingException e) {
+            // Malformed JSON is reported elsewhere; no secret warnings.
+        }
     }
 
     /**

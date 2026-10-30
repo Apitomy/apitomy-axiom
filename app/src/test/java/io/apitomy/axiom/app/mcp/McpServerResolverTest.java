@@ -2,6 +2,7 @@ package io.apitomy.axiom.app.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.McpServerEntity;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -17,7 +18,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class McpServerResolverTest {
 
-    private final McpServerResolver resolver = new McpServerResolver(new ObjectMapper());
+    /** Passes values through unchanged (secret resolution is covered by {@code McpServerSecretsTest}). */
+    private static final EnvironmentResolver PASS_THROUGH = new EnvironmentResolver() {
+        @Override
+        public Map<String, String> resolve(String environmentJson) {
+            try {
+                return new ObjectMapper().readValue(environmentJson,
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() { });
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }
+    };
+
+    private final McpServerResolver resolver = new McpServerResolver(new ObjectMapper(), PASS_THROUGH);
 
     private static McpServerEntity entity(String name, String command, String args, String env, String url) {
         McpServerEntity e = new McpServerEntity();

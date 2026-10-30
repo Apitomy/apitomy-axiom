@@ -3,6 +3,8 @@ package io.apitomy.axiom.app.mcp;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.McpServerEntity;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
@@ -24,15 +26,18 @@ public class McpServerResolver {
     private static final String TOOL_PREFIX = "mcp__";
 
     private final ObjectMapper objectMapper;
+    private final EnvironmentResolver environmentResolver;
 
     /**
      * CDI constructor.
      *
      * @param objectMapper the object mapper
+     * @param environmentResolver resolves {@code ${secret:NAME}} references in env values and headers
      */
     @Inject
-    public McpServerResolver(ObjectMapper objectMapper) {
+    public McpServerResolver(ObjectMapper objectMapper, EnvironmentResolver environmentResolver) {
         this.objectMapper = objectMapper;
+        this.environmentResolver = environmentResolver;
     }
 
     /**
@@ -106,11 +111,13 @@ public class McpServerResolver {
     }
 
     /**
-     * Converts an entity to a definition. Returns empty (and logs a warning) if the entity has no
-     * transport or has malformed args/env.
+     * Converts an entity to a definition, resolving {@code ${secret:NAME}} references in env values and
+     * headers. Returns empty (and logs a warning) if the entity is disabled, has no transport, or has
+     * malformed args/env/headers.
      *
      * @param entity the entity
      * @return the definition, if valid
+     * @throws MissingSecretException if a referenced secret does not exist or cannot be decrypted
      */
     public Optional<McpServerDefinition> toDefinition(McpServerEntity entity) {
         if (!entity.enabled) {
@@ -121,7 +128,7 @@ public class McpServerResolver {
             if (entity.serverUrl != null && !entity.serverUrl.isBlank()) {
                 String type = "sse".equals(entity.transport) ? "sse" : "http";
                 return Optional.of(McpServerDefinition.remote(type, entity.serverUrl.trim(),
-                        readMap(entity.headers), entity.timeoutMs));
+                        resolveMap(entity, entity.headers), entity.timeoutMs));
             }
             if (entity.serverCommand == null || entity.serverCommand.isBlank()) {
                 LOG.warnf("MCP server '%s' has neither a URL nor a command; skipping", entity.name);
@@ -131,16 +138,29 @@ public class McpServerResolver {
                     ? List.of()
                     : objectMapper.readValue(entity.serverArgs, new TypeReference<List<String>>() { });
             return Optional.of(new McpServerDefinition(entity.serverCommand.trim(), args,
-                    readMap(entity.serverEnv), null, null, Map.of(), entity.timeoutMs));
+                    resolveMap(entity, entity.serverEnv), null, null, Map.of(), entity.timeoutMs));
+        } catch (MissingSecretException e) {
+            throw e;
         } catch (Exception e) {
             LOG.warnf("MCP server '%s' has malformed configuration; skipping: %s", entity.name, e.getMessage());
             return Optional.empty();
         }
     }
 
-    private Map<String, String> readMap(String json) throws java.io.IOException {
-        return json == null || json.isBlank()
-                ? Map.of()
-                : objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, String>>() { });
+    private Map<String, String> resolveMap(McpServerEntity entity, String json) throws java.io.IOException {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        // Validate the shape first so malformed JSON is reported as such.
+        LinkedHashMap<String, String> raw = objectMapper.readValue(json,
+                new TypeReference<LinkedHashMap<String, String>>() { });
+        try {
+            Map<String, String> resolved = environmentResolver.resolve(json);
+            Map<String, String> ordered = new LinkedHashMap<>();
+            raw.keySet().forEach(k -> ordered.put(k, resolved.get(k)));
+            return ordered;
+        } catch (MissingSecretException e) {
+            throw new MissingSecretException("MCP server '" + entity.name + "': " + e.getMessage());
+        }
     }
 }
