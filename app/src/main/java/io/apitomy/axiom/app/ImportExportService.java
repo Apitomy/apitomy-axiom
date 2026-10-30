@@ -572,6 +572,7 @@ public class ImportExportService {
                     entity.labels.add(l.asText());
                 }
             }
+            readMcpServers(item, entity.mcpServers);
             entity.persist();
             count++;
         }
@@ -686,6 +687,8 @@ public class ImportExportService {
                     entity.labels.add(l.asText());
                 }
             }
+            entity.mcpServers.clear();
+            readMcpServers(item, entity.mcpServers);
             entity.persist();
             if (isNew) created++;
             else updated++;
@@ -846,7 +849,22 @@ public class ImportExportService {
             var labelsArr = n.putArray("labels");
             e.labels.forEach(labelsArr::add);
         }
+        if (e.mcpServers != null && !e.mcpServers.isEmpty()) {
+            var mcpArr = n.putArray("mcpServers");
+            e.mcpServers.forEach(mcpArr::add);
+        }
         return n;
+    }
+
+    private static void readMcpServers(JsonNode item, List<String> target) {
+        JsonNode node = item.path("mcpServers");
+        if (node.isArray()) {
+            for (JsonNode s : node) {
+                if (!target.contains(s.asText())) {
+                    target.add(s.asText());
+                }
+            }
+        }
     }
 
     private void serializeField(ObjectNode n, ActionTypeField f) {

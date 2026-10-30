@@ -422,6 +422,7 @@ export interface ActionType {
     timeoutSeconds?: number;
     environment?: Record<string, string>;
     labels?: string[];
+    mcpServers?: string[];
     inputs?: ActionTypeField[];
     outputs?: ActionTypeField[];
 }

@@ -8169,6 +8169,13 @@
             "items": {
               "$ref": "#/components/schemas/ActionTypeField"
             }
+          },
+          "mcpServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of MCP servers available to tasks of this type. Each selected server is loaded and all of its tools are allowed (`mcp__<name>__*`), in addition to `allowedTools`."
           }
         }
       },
@@ -8262,6 +8269,13 @@
             "items": {
               "$ref": "#/components/schemas/ActionTypeField"
             }
+          },
+          "mcpServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of MCP servers available to tasks of this type. Each selected server is loaded and all of its tools are allowed (`mcp__<name>__*`), in addition to `allowedTools`."
           }
         }
       },

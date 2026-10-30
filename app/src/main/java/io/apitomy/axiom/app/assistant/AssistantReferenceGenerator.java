@@ -406,7 +406,10 @@ public class AssistantReferenceGenerator {
                 .append("structure, including arrays (e.g. a list of label names); there is no separate array type.\n\n")
                 .append("`allowedTools` entry formats: `mcp__axiom-tools__<tool>` (a tool), `@<toolset>` ")
                 .append("(a toolset), or one of the Axiom SDK tools: ")
-                .append(codeList(SdkFunctionRegistry.allToolNames())).append(".\n\n");
+                .append(codeList(SdkFunctionRegistry.allToolNames())).append(".\n\n")
+                .append("`mcpServers` (agent action types): names of configured MCP servers. Each selected server ")
+                .append("is loaded for the task and all of its tools are allowed (`mcp__<server>__*`); list a ")
+                .append("specific `mcp__<server>__<tool>` in `allowedTools` instead to allow only that tool.\n\n");
     }
 
     private static void appendEvents(StringBuilder sb) {

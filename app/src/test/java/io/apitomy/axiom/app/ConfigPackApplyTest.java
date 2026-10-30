@@ -94,6 +94,34 @@ class ConfigPackApplyTest {
         });
     }
 
+    /** Action type MCP server selections survive export and import. */
+    @Test
+    void actionTypeMcpServersRoundTripThroughPack() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        Long id = QuarkusTransaction.requiringNew().call(() -> {
+            ActionTypeEntity at = new ActionTypeEntity();
+            at.name = "atm-" + sfx;
+            at.executionMode = "agent";
+            at.promptTemplate = "Do it";
+            at.mcpServers.addAll(List.of("github", "jira"));
+            at.persist();
+            return at.id;
+        });
+        JsonNode item = QuarkusTransaction.requiringNew().call(() ->
+                importExportService.serializeActionType(ActionTypeEntity.findById(id)));
+        assertEquals("github", item.path("mcpServers").get(0).asText());
+        QuarkusTransaction.requiringNew().run(() -> ActionTypeEntity.deleteById(id));
+
+        ObjectNode pack = mapper.createObjectNode();
+        pack.putArray("actionTypes").add(item);
+        importExportService.importOrUpdatePack(pack);
+        QuarkusTransaction.requiringNew().run(() -> {
+            ActionTypeEntity at = ActionTypeEntity.find("name", "atm-" + sfx).firstResult();
+            assertEquals(List.of("github", "jira"), at.mcpServers);
+            at.delete();
+        });
+    }
+
     /** A pack with an action type, a workflow using it, and a subscription naming the workflow applies. */
     @Test
     void packWithCrossReferencesApplies() throws Exception {

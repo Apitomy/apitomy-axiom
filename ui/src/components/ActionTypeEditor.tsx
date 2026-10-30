@@ -34,6 +34,7 @@ import { ActionTypeFieldsTab } from "./ActionTypeFieldsTab";
 import { LabelDisplay } from "./LabelDisplay";
 import { ToolListEditor } from "./ToolListEditor";
 import { NodeCodeTab } from "./NodeCodeTab";
+import { McpServerPicker } from "./McpServerPicker";
 import { ValidationProblemsPanel } from "./ValidationProblemsPanel";
 import type { editor as MonacoEditor } from "monaco-editor";
 import {
@@ -139,6 +140,7 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
             visible.add(1);
             visible.add(3);
             visible.add(10);
+            visible.add(12);
         }
         if (form.executionMode === "script") {
             visible.add(4);
@@ -213,6 +215,21 @@ export function ActionTypeEditor({ value, onChange, readOnly = false, problems, 
                                     }
                                 />
                             </fieldset>
+                        </TabContent>
+                    </Tab>
+                )}
+                {form.executionMode === "agent" && (
+                    <Tab eventKey={12} title={<TabTitleText>MCP Servers ({(form.mcpServers || []).length})</TabTitleText>}>
+                        <TabContent id="mcp-tab" eventKey={12} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                            <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
+                                Each selected MCP server is started for tasks of this type and all of its tools
+                                are allowed. To allow only some of a server's tools, leave it unselected and add
+                                its tools (e.g. <code>mcp__github__list_issues</code>) under Allowed Tools instead.
+                            </p>
+                            {activeTab === 12 && (
+                                <McpServerPicker selected={form.mcpServers || []} readOnly={readOnly}
+                                    onChange={(mcpServers) => updateForm({ mcpServers })} />
+                            )}
                         </TabContent>
                     </Tab>
                 )}
