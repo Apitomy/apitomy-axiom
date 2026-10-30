@@ -33,6 +33,15 @@ public class McpServerService {
      */
     private static final Pattern NAME_PATTERN = Pattern.compile("^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?$");
 
+    /** stdio transport. */
+    public static final String TRANSPORT_STDIO = "stdio";
+
+    /** Streamable HTTP transport. */
+    public static final String TRANSPORT_HTTP = "http";
+
+    /** Server-sent events transport. */
+    public static final String TRANSPORT_SSE = "sse";
+
     @Inject
     ObjectMapper objectMapper;
 
@@ -145,8 +154,22 @@ public class McpServerService {
             throw new McpServerValidationException(
                     "Specify either a server command (stdio) or a server URL (HTTP), but not both");
         }
+        String transport = effectiveTransport(data);
+        if (TRANSPORT_STDIO.equals(transport) && !hasCommand) {
+            throw new McpServerValidationException("The stdio transport requires a server command");
+        }
+        if (!TRANSPORT_STDIO.equals(transport) && !hasUrl) {
+            throw new McpServerValidationException("The " + transport + " transport requires a server URL");
+        }
         if (hasUrl) {
             validateUrl(data.getServerUrl());
+        }
+        if (TRANSPORT_STDIO.equals(transport) && data.getHeaders() != null
+                && !data.getHeaders().getAdditionalProperties().isEmpty()) {
+            throw new McpServerValidationException("Headers are only supported for http and sse transports");
+        }
+        if (data.getTimeout() != null && data.getTimeout() <= 0) {
+            throw new McpServerValidationException("Timeout must be a positive number of milliseconds");
         }
         findByName(data.getName())
                 .filter(other -> existingId == null || !other.id.equals(existingId))
@@ -154,6 +177,19 @@ public class McpServerService {
                     throw new McpServerConflictException(
                             "An MCP server named '" + data.getName() + "' already exists");
                 });
+    }
+
+    /**
+     * Returns the explicit transport, or infers it from the populated fields.
+     *
+     * @param data the definition
+     * @return {@code stdio}, {@code http} or {@code sse}
+     */
+    private static String effectiveTransport(NewMcpServer data) {
+        if (data.getTransport() != null) {
+            return data.getTransport().value();
+        }
+        return notBlank(data.getServerUrl()) ? TRANSPORT_HTTP : TRANSPORT_STDIO;
     }
 
     private static void validateUrl(String url) {
@@ -175,6 +211,11 @@ public class McpServerService {
         entity.description = data.getDescription();
         entity.serverCommand = trimToNull(data.getServerCommand());
         entity.serverUrl = trimToNull(data.getServerUrl());
+        entity.transport = effectiveTransport(data);
+        entity.headers = data.getHeaders() == null || data.getHeaders().getAdditionalProperties().isEmpty()
+                ? null : toJson(data.getHeaders());
+        entity.timeoutMs = data.getTimeout();
+        entity.enabled = data.getEnabled() == null || data.getEnabled();
         // Full-replace semantics: absent/empty args or env clear the stored value.
         entity.serverArgs = data.getServerArgs() == null || data.getServerArgs().isEmpty()
                 ? null : toJson(data.getServerArgs());

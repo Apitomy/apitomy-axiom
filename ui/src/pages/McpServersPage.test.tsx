@@ -26,7 +26,7 @@ describe("McpServersPage create modal", () => {
         expect(create).toBeDisabled();
         await userEvent.type(within(dialog).getByLabelText(/^Command/), "npx");
         await userEvent.click(create);
-        expect(api.createMcpServer).toHaveBeenCalledWith({ name: "gh", serverCommand: "npx" });
+        expect(api.createMcpServer).toHaveBeenCalledWith({ name: "gh", transport: "stdio", serverCommand: "npx" });
     });
 
     it("creates an HTTP server with a URL", async () => {
@@ -38,7 +38,7 @@ describe("McpServersPage create modal", () => {
         await userEvent.click(within(dialog).getByLabelText(/HTTP/));
         await userEvent.type(within(dialog).getByLabelText(/^URL/), "https://x.io/mcp");
         await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
-        expect(api.createMcpServer).toHaveBeenCalledWith({ name: "r", serverUrl: "https://x.io/mcp" });
+        expect(api.createMcpServer).toHaveBeenCalledWith({ name: "r", transport: "http", serverUrl: "https://x.io/mcp" });
     });
 
     it("shows the server's error message when create fails", async () => {

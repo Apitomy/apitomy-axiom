@@ -8743,7 +8743,9 @@
       "McpServer": {
         "required": [
           "id",
-          "name"
+          "name",
+          "transport",
+          "enabled"
         ],
         "type": "object",
         "properties": {
@@ -8774,6 +8776,40 @@
           },
           "serverUrl": {
             "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "stdio",
+              "http",
+              "sse"
+            ],
+            "description": "Transport. `stdio` requires `serverCommand`; `http` (streamable HTTP) and `sse` require `serverUrl`. Inferred from the populated fields when omitted on create/update."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`."
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "description": "Connection/request timeout in milliseconds. Honoured by engines that support a per-server timeout (OpenCode)."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the server is included in sessions and tasks. Defaults to true."
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modifiedOn": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -8807,6 +8843,32 @@
           },
           "serverUrl": {
             "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "stdio",
+              "http",
+              "sse"
+            ],
+            "description": "Transport. `stdio` requires `serverCommand`; `http` (streamable HTTP) and `sse` require `serverUrl`. Inferred from the populated fields when omitted on create/update."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`."
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "description": "Connection/request timeout in milliseconds. Honoured by engines that support a per-server timeout (OpenCode)."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the server is included in sessions and tasks. Defaults to true."
           }
         }
       },

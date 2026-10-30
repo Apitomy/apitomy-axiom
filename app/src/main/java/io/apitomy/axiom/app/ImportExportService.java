@@ -534,6 +534,12 @@ public class ImportExportService {
             entity.serverArgs = jsonOrNull(item, "serverArgs");
             entity.serverEnv = jsonOrNull(item, "serverEnv");
             entity.serverUrl = textOrNull(item, "serverUrl");
+            String transport = textOrNull(item, "transport");
+            entity.transport = transport != null ? transport
+                    : (entity.serverUrl != null && !entity.serverUrl.isBlank() ? "http" : "stdio");
+            entity.headers = jsonOrNull(item, "headers");
+            entity.timeoutMs = item.hasNonNull("timeout") ? item.get("timeout").asInt() : null;
+            entity.enabled = !item.has("enabled") || item.get("enabled").asBoolean(true);
             entity.persist();
             count++;
         }
@@ -798,6 +804,12 @@ public class ImportExportService {
         putJsonIfPossible(n, "serverArgs", e.serverArgs);
         putJsonIfPossible(n, "serverEnv", e.serverEnv);
         putIfNotNull(n, "serverUrl", e.serverUrl);
+        putIfNotNull(n, "transport", e.transport);
+        putJsonIfPossible(n, "headers", e.headers);
+        if (e.timeoutMs != null) {
+            n.put("timeout", e.timeoutMs);
+        }
+        n.put("enabled", e.enabled);
         return n;
     }
 

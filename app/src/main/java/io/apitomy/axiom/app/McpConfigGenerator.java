@@ -406,11 +406,11 @@ public class McpConfigGenerator {
      */
     static McpServerConfig toOpenCodeConfig(String name, McpServerDefinition def) {
         if (def.isHttpTransport()) {
-            return McpServerConfig.remote(name, def.url());
+            return new McpServerConfig(name, "remote", null, null, def.url(), def.headers(), def.timeoutMs());
         }
         List<String> command = new ArrayList<>();
         command.add(def.command());
         command.addAll(def.args());
-        return McpServerConfig.local(name, command, def.env());
+        return new McpServerConfig(name, "local", command, def.env(), null, null, def.timeoutMs());
     }
 }

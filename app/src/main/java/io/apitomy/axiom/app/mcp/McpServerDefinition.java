@@ -11,11 +11,13 @@ import java.util.Map;
  * @param command the stdio command (stdio only)
  * @param args the stdio arguments (never null)
  * @param env the stdio environment (never null)
- * @param type the transport type: {@code null} for stdio, {@code "http"} for HTTP
- * @param url the server URL (HTTP only)
+ * @param type the transport type: {@code null} for stdio, {@code "http"} or {@code "sse"} for remote
+ * @param url the server URL (remote only)
+ * @param headers HTTP headers (remote only; never null)
+ * @param timeoutMs timeout in milliseconds, or {@code null} for the engine default
  */
 public record McpServerDefinition(String command, List<String> args, Map<String, String> env,
-                                  String type, String url) {
+                                  String type, String url, Map<String, String> headers, Integer timeoutMs) {
 
     /**
      * Normalizes null collections.
@@ -23,6 +25,7 @@ public record McpServerDefinition(String command, List<String> args, Map<String,
     public McpServerDefinition {
         args = args == null ? List.of() : List.copyOf(args);
         env = env == null ? Map.of() : env;
+        headers = headers == null ? Map.of() : headers;
     }
 
     /**
@@ -34,7 +37,7 @@ public record McpServerDefinition(String command, List<String> args, Map<String,
      * @return the definition
      */
     public static McpServerDefinition stdio(String command, List<String> args, Map<String, String> env) {
-        return new McpServerDefinition(command, args, env, null, null);
+        return new McpServerDefinition(command, args, env, null, null, Map.of(), null);
     }
 
     /**
@@ -44,15 +47,29 @@ public record McpServerDefinition(String command, List<String> args, Map<String,
      * @return the definition
      */
     public static McpServerDefinition http(String url) {
-        return new McpServerDefinition(null, List.of(), Map.of(), "http", url);
+        return remote("http", url, Map.of(), null);
     }
 
     /**
-     * Returns whether this definition uses HTTP transport.
+     * Creates a remote-transport definition.
      *
-     * @return true for HTTP transport
+     * @param type {@code "http"} or {@code "sse"}
+     * @param url the server URL
+     * @param headers HTTP headers
+     * @param timeoutMs timeout in milliseconds, or {@code null}
+     * @return the definition
+     */
+    public static McpServerDefinition remote(String type, String url, Map<String, String> headers,
+                                             Integer timeoutMs) {
+        return new McpServerDefinition(null, List.of(), Map.of(), type, url, headers, timeoutMs);
+    }
+
+    /**
+     * Returns whether this definition uses a remote (HTTP or SSE) transport.
+     *
+     * @return true for remote transports
      */
     public boolean isHttpTransport() {
-        return "http".equals(type);
+        return "http".equals(type) || "sse".equals(type);
     }
 }

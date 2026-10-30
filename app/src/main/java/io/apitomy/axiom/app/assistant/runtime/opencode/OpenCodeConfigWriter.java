@@ -106,6 +106,10 @@ public final class OpenCodeConfigWriter {
         if (config.isHttpTransport()) {
             node.put("type", "remote");
             node.put("url", config.url());
+            if (!config.headers().isEmpty()) {
+                ObjectNode headers = node.putObject("headers");
+                config.headers().forEach(headers::put);
+            }
         } else {
             node.put("type", "local");
             ArrayNode command = node.putArray("command");
@@ -115,6 +119,9 @@ public final class OpenCodeConfigWriter {
                 ObjectNode environment = node.putObject("environment");
                 config.env().forEach(environment::put);
             }
+        }
+        if (config.timeoutMs() != null) {
+            node.put("timeout", config.timeoutMs());
         }
         node.put("enabled", true);
         return node;
