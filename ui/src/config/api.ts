@@ -673,6 +673,11 @@ export async function validateTool(tool: NewToolDefinition): Promise<ToolValidat
     return response.json();
 }
 
+async function mcpErrorMessage(response: Response, action: string): Promise<string> {
+    const body = await response.json().catch(() => ({}));
+    return body.message || `Failed to ${action} MCP server: ${response.status}`;
+}
+
 export async function fetchMcpServers(): Promise<McpServer[]> {
     const response = await fetch(`${API}/mcp-servers`);
     if (!response.ok) throw new Error(`Failed to fetch MCP servers: ${response.status}`);
@@ -691,7 +696,7 @@ export async function createMcpServer(server: NewMcpServer): Promise<McpServer> 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(server),
     });
-    if (!response.ok) throw new Error(`Failed to create MCP server: ${response.status}`);
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "create"));
     return response.json();
 }
 
@@ -701,7 +706,7 @@ export async function updateMcpServer(id: number, server: NewMcpServer): Promise
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(server),
     });
-    if (!response.ok) throw new Error(`Failed to update MCP server: ${response.status}`);
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "update"));
     return response.json();
 }
 

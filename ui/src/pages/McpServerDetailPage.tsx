@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
+    Alert,
     Breadcrumb,
     BreadcrumbItem,
     Button,
@@ -36,6 +37,7 @@ export function McpServerDetailPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState(0);
 
     const loadData = useCallback(() => {
@@ -64,9 +66,10 @@ export function McpServerDetailPage() {
 
     const handleSave = () => {
         setSaving(true);
+        setSaveError(null);
         updateMcpServer(id, form)
             .then((updated) => { setServer(updated); setDirty(false); })
-            .catch(console.error)
+            .catch((e: Error) => setSaveError(e.message))
             .finally(() => setSaving(false));
     };
 
@@ -107,6 +110,10 @@ export function McpServerDetailPage() {
                 </FlexItem>
             </Flex>
 
+            {saveError && (
+                <Alert variant="danger" isInline title={saveError} style={{ marginBottom: "16px" }} />
+            )}
+
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                 <Tab eventKey={0} title={<TabTitleText>Info</TabTitleText>}>
                     <TabContent id="info-tab" eventKey={0} activeKey={activeTab}
@@ -129,7 +136,7 @@ export function McpServerDetailPage() {
                         <Form style={{ maxWidth: "600px" }}>
                             <p className="axiom-text-subtle" style={{ marginBottom: "16px" }}>
                                 Configure the MCP server connection. Use either an HTTP URL
-                                (for HTTP/SSE transport) or a command (for stdio transport).
+                                or a command (for stdio transport), but not both.
                             </p>
                             <FormGroup label="Server URL (HTTP transport)" fieldId="serverUrl">
                                 <TextInput id="serverUrl" value={form.serverUrl || ""}

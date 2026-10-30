@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+    Alert,
     Button,
     EmptyState,
     EmptyStateBody,
@@ -16,6 +17,7 @@ import {
     Title,
     Form,
     FormGroup,
+    Radio,
 } from "@patternfly/react-core";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-icon";
@@ -35,6 +37,17 @@ export function McpServersPage() {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
     const [newName, setNewName] = useState("");
+    const [newTransport, setNewTransport] = useState<"stdio" | "http">("stdio");
+    const [newTarget, setNewTarget] = useState("");
+    const [createError, setCreateError] = useState<string | null>(null);
+
+    const openCreate = () => {
+        setNewName("");
+        setNewTransport("stdio");
+        setNewTarget("");
+        setCreateError(null);
+        setIsCreateOpen(true);
+    };
 
     const load = useCallback(() => {
         setLoading(true);
@@ -44,13 +57,17 @@ export function McpServersPage() {
     useEffect(() => { load(); }, [load]);
 
     const handleCreate = () => {
-        createMcpServer({ name: newName })
+        const target = newTarget.trim();
+        const server = newTransport === "stdio"
+            ? { name: newName.trim(), serverCommand: target }
+            : { name: newName.trim(), serverUrl: target };
+        setCreateError(null);
+        createMcpServer(server)
             .then((created) => {
                 setIsCreateOpen(false);
-                setNewName("");
                 navigate(`/mcp-servers/${created.id}`);
             })
-            .catch(console.error);
+            .catch((e: Error) => setCreateError(e.message));
     };
 
     const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -74,7 +91,7 @@ export function McpServersPage() {
                 </FlexItem>
                 <FlexItem>
                     <Button variant="primary" icon={<PlusCircleIcon />}
-                        onClick={() => { setNewName(""); setIsCreateOpen(true); }}>
+                        onClick={openCreate}>
                         Add MCP Server
                     </Button>
                 </FlexItem>
@@ -130,14 +147,32 @@ export function McpServersPage() {
                 <ModalHeader title="Add MCP Server" />
                 <ModalBody>
                     <Form>
+                        {createError && <Alert variant="danger" isInline title={createError} />}
                         <FormGroup label="Name" isRequired fieldId="name">
                             <TextInput id="name" isRequired value={newName}
                                 onChange={(_e, v) => setNewName(v)} />
                         </FormGroup>
+                        <FormGroup label="Transport" isRequired role="radiogroup" fieldId="transport" isInline>
+                            <Radio id="transport-stdio" name="transport" label="stdio (local command)"
+                                isChecked={newTransport === "stdio"} onChange={() => setNewTransport("stdio")} />
+                            <Radio id="transport-http" name="transport" label="HTTP (remote URL)"
+                                isChecked={newTransport === "http"} onChange={() => setNewTransport("http")} />
+                        </FormGroup>
+                        {newTransport === "stdio" ? (
+                            <FormGroup label="Command" isRequired fieldId="new-command">
+                                <TextInput id="new-command" isRequired value={newTarget}
+                                    onChange={(_e, v) => setNewTarget(v)} placeholder="e.g. npx, python3, node" />
+                            </FormGroup>
+                        ) : (
+                            <FormGroup label="URL" isRequired fieldId="new-url">
+                                <TextInput id="new-url" isRequired value={newTarget}
+                                    onChange={(_e, v) => setNewTarget(v)} placeholder="https://mcp.example.com/mcp" />
+                            </FormGroup>
+                        )}
                     </Form>
                 </ModalBody>
                 <ModalFooter>
-                    <Button variant="primary" onClick={handleCreate} isDisabled={!newName.trim()}>
+                    <Button variant="primary" onClick={handleCreate} isDisabled={!newName.trim() || !newTarget.trim()}>
                         Create
                     </Button>
                     <Button variant="link" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
