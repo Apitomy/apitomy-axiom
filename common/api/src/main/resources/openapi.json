@@ -8906,6 +8906,10 @@
           "message": {
             "description": "Details or instructions",
             "type": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "For prerequisite checks: true if Axiom needs it (Node.js), false if only some features do (npx, uvx, Docker for MCP servers). Absent for engine checks."
           }
         }
       },

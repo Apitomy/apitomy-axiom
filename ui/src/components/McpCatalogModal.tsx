@@ -70,7 +70,7 @@ function RuntimeLabel({ entry, runtimes }: { entry: McpCatalogEntry; runtimes: M
             <Label isCompact color={missing ? "orange" : "green"}>{info.label}</Label>
             {missing && (
                 <span className="axiom-text-subtle" style={{ marginLeft: "8px", fontSize: "12px" }}>
-                    {info.command} is not installed on the Axiom host
+                    {info.command} is not available on the Axiom host (see Settings → AI Engine)
                 </span>
             )}
         </>

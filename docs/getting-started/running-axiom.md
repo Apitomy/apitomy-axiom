@@ -18,6 +18,17 @@ downloads and runs the latest release automatically.
 | OpenCode | `opencode` | `opencode` | `curl -fsSL https://opencode.ai/install \| bash` |
 | GitHub Copilot CLI | `copilot` | `copilot` | `npm install -g @github/copilot` |
 
+Optional, for external MCP servers that run locally:
+
+- **npx** (comes with Node.js) for servers distributed as npm packages
+- **uvx** ([uv](https://docs.astral.sh/uv/getting-started/installation/)) for servers distributed as Python
+  packages, such as Jira & Confluence
+- **Docker** (client and a running daemon) for servers distributed as container images
+
+Axiom checks for these when it starts and shows the results under **Prerequisites** on **Settings → AI
+Engine**. A missing optional tool is only a warning: MCP servers that need it won't start. Restart Axiom after
+installing one.
+
 - An API key for your LLM provider (e.g., `ANTHROPIC_API_KEY` environment variable)
 
 ## Run Axiom

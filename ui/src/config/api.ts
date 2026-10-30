@@ -65,6 +65,8 @@ export interface StartupCheck {
     name: string;
     status: "ok" | "warning" | "error";
     message: string;
+    /** Prerequisites only: true if Axiom needs it, false if only some features do. Absent for engine checks. */
+    required?: boolean;
 }
 
 export interface EngineInfo {

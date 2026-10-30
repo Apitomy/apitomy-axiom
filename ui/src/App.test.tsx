@@ -70,4 +70,17 @@ describe("App", () => {
         expect(await screen.findByText("Application Configuration Required")).toBeInTheDocument();
         expect(screen.queryByRole("heading", { name: "Runs" })).not.toBeInTheDocument();
     });
+
+    it("opens when an optional MCP runtime is missing", async () => {
+        mockConfig({
+            engines: [engine("claude-code", true)],
+            checks: [
+                { name: "Node.js", status: "ok", required: true },
+                { name: "uvx", status: "warning", required: false, message: "uvx not found" },
+                { name: "Docker", status: "warning", required: false, message: "daemon not reachable" },
+            ],
+        });
+        renderWithRouter(<App />, "/");
+        expect(await screen.findByRole("heading", { name: "Runs" })).toBeInTheDocument();
+    });
 });

@@ -108,12 +108,23 @@ public class McpCatalogService {
         }
     }
 
+    /** Startup checks, the source of runtime availability; null in unit tests. */
+    @Inject
+    io.apitomy.axiom.app.StartupCheckService startupChecks;
+
     /**
-     * Reports which runtimes used by catalog servers are installed.
+     * Reports which runtimes used by catalog servers are available, from the startup checks (falling back to
+     * a PATH lookup if they have not run).
      *
      * @return {@code node}, {@code uv} and {@code docker} availability
      */
     public Map<String, Boolean> runtimes() {
+        if (startupChecks != null) {
+            Map<String, Boolean> fromChecks = startupChecks.runtimeAvailability();
+            if (fromChecks.size() == 3) {
+                return fromChecks;
+            }
+        }
         return findRuntimes(System.getenv("PATH"));
     }
 
