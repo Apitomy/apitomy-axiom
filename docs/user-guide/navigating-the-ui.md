@@ -183,7 +183,7 @@ The **Components** section contains workflows and the building blocks they and t
 | **Action Types** | Define the kinds of work that workflow `action` nodes run — execution mode (agent, script or Node.js), prompt, script or code template, inputs and outputs, allowed tools, and model/engine overrides |
 | **Agents** | Register AI agent slots with capabilities that determine which work they're eligible for |
 | **AI Assistant** (Session Templates) | Define AI Assistant session templates with system prompts, agent type, tools, and MCP servers |
-| **MCP Servers** | Register external MCP tool servers (HTTP or stdio) |
+| **MCP Servers** | Add external MCP tool servers (stdio, HTTP or SSE) by hand, from a pasted JSON snippet or from the catalog; test them, see their tools and where they are used. See [MCP Servers](mcp-servers.md) |
 | **Secrets** | Store encrypted credentials; processes receive only the secrets their environment declares |
 | **Tools** | Define script-based tools with parameters and bash templates |
 | **Toolsets** | Group tools into named collections for reuse |
