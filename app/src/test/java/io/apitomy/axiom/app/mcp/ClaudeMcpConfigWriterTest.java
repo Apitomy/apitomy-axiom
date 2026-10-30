@@ -41,4 +41,12 @@ class ClaudeMcpConfigWriterTest {
     void emptyServerMapProducesNull() {
         assertNull(ClaudeMcpConfigWriter.toJson(mapper, Map.of()));
     }
+    @Test
+    void writesSseTypeAndHeaders() throws Exception {
+        Map<String, McpServerDefinition> servers = Map.of("r",
+                McpServerDefinition.remote("sse", "https://x.io/sse", Map.of("Authorization", "Bearer t"), null));
+        JsonNode r = mapper.readTree(ClaudeMcpConfigWriter.toJson(mapper, servers)).path("mcpServers").path("r");
+        assertEquals("sse", r.path("type").asText());
+        assertEquals("Bearer t", r.path("headers").path("Authorization").asText());
+    }
 }

@@ -113,24 +113,34 @@ public class McpServerResolver {
      * @return the definition, if valid
      */
     public Optional<McpServerDefinition> toDefinition(McpServerEntity entity) {
-        if (entity.serverUrl != null && !entity.serverUrl.isBlank()) {
-            return Optional.of(McpServerDefinition.http(entity.serverUrl.trim()));
-        }
-        if (entity.serverCommand == null || entity.serverCommand.isBlank()) {
-            LOG.warnf("MCP server '%s' has neither a URL nor a command; skipping", entity.name);
+        if (!entity.enabled) {
+            LOG.debugf("MCP server '%s' is disabled; skipping", entity.name);
             return Optional.empty();
         }
         try {
+            if (entity.serverUrl != null && !entity.serverUrl.isBlank()) {
+                String type = "sse".equals(entity.transport) ? "sse" : "http";
+                return Optional.of(McpServerDefinition.remote(type, entity.serverUrl.trim(),
+                        readMap(entity.headers), entity.timeoutMs));
+            }
+            if (entity.serverCommand == null || entity.serverCommand.isBlank()) {
+                LOG.warnf("MCP server '%s' has neither a URL nor a command; skipping", entity.name);
+                return Optional.empty();
+            }
             List<String> args = entity.serverArgs == null || entity.serverArgs.isBlank()
                     ? List.of()
                     : objectMapper.readValue(entity.serverArgs, new TypeReference<List<String>>() { });
-            Map<String, String> env = entity.serverEnv == null || entity.serverEnv.isBlank()
-                    ? Map.of()
-                    : objectMapper.readValue(entity.serverEnv, new TypeReference<LinkedHashMap<String, String>>() { });
-            return Optional.of(McpServerDefinition.stdio(entity.serverCommand.trim(), args, env));
+            return Optional.of(new McpServerDefinition(entity.serverCommand.trim(), args,
+                    readMap(entity.serverEnv), null, null, Map.of(), entity.timeoutMs));
         } catch (Exception e) {
-            LOG.warnf("MCP server '%s' has malformed args/env; skipping: %s", entity.name, e.getMessage());
+            LOG.warnf("MCP server '%s' has malformed configuration; skipping: %s", entity.name, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    private Map<String, String> readMap(String json) throws java.io.IOException {
+        return json == null || json.isBlank()
+                ? Map.of()
+                : objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, String>>() { });
     }
 }

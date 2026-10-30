@@ -27,4 +27,18 @@ describe("McpServerDetailPage", () => {
         await userEvent.click(screen.getByRole("button", { name: /Save Changes/ }));
         expect(await screen.findByText(/Invalid MCP server name/)).toBeInTheDocument();
     });
+
+    it("preserves headers, timeout, enabled and sse transport when saving", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({
+            id: 5, name: "r", transport: "sse", serverUrl: "https://x.io/sse",
+            headers: { Authorization: "Bearer t" }, timeout: 5000, enabled: false,
+        } as never);
+        vi.mocked(api.updateMcpServer).mockResolvedValueOnce({ id: 5, name: "r" } as never);
+        renderPage();
+        await userEvent.type(await screen.findByLabelText("Description"), "x");
+        await userEvent.click(screen.getByRole("button", { name: /Save Changes/ }));
+        expect(api.updateMcpServer).toHaveBeenLastCalledWith(5, expect.objectContaining({
+            transport: "sse", headers: { Authorization: "Bearer t" }, timeout: 5000, enabled: false,
+        }));
+    });
 });

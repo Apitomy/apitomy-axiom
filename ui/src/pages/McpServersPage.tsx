@@ -59,8 +59,8 @@ export function McpServersPage() {
     const handleCreate = () => {
         const target = newTarget.trim();
         const server = newTransport === "stdio"
-            ? { name: newName.trim(), serverCommand: target }
-            : { name: newName.trim(), serverUrl: target };
+            ? { name: newName.trim(), transport: "stdio" as const, serverCommand: target }
+            : { name: newName.trim(), transport: "http" as const, serverUrl: target };
         setCreateError(null);
         createMcpServer(server)
             .then((created) => {

@@ -162,4 +162,50 @@ class McpServersResourceTest {
                 .body("serverArgs", contains("b")).body("serverEnv.K", equalTo("w"))
                 .body("serverEnv.OLD", nullValue());
     }
+    @Test
+    void transportIsInferredAndDefaultsApplied() {
+        int stdio = create(stdio("inf-stdio"));
+        given().get(BASE + "/{id}", stdio).then().statusCode(200)
+                .body("transport", equalTo("stdio"))
+                .body("enabled", equalTo(true))
+                .body("createdOn", notNullValue())
+                .body("modifiedOn", notNullValue());
+        int http = create("{\"name\":\"inf-http\",\"serverUrl\":\"https://x.io/mcp\"}");
+        given().get(BASE + "/{id}", http).then().body("transport", equalTo("http"));
+    }
+
+    @Test
+    void sseServerWithHeadersAndTimeoutRoundTrips() {
+        int id = create("{\"name\":\"sse\",\"transport\":\"sse\",\"serverUrl\":\"https://x.io/sse\","
+                + "\"headers\":{\"Authorization\":\"Bearer t\"},\"timeout\":15000,\"enabled\":false}");
+        given().get(BASE + "/{id}", id).then().statusCode(200)
+                .body("transport", equalTo("sse"))
+                .body("headers.Authorization", equalTo("Bearer t"))
+                .body("timeout", equalTo(15000))
+                .body("enabled", equalTo(false));
+    }
+
+    @Test
+    void transportMismatchReturns400() {
+        given().contentType(ContentType.JSON)
+                .body("{\"name\":\"mm\",\"transport\":\"stdio\",\"serverUrl\":\"https://x.io/mcp\"}")
+                .post(BASE).then().statusCode(400);
+        given().contentType(ContentType.JSON)
+                .body("{\"name\":\"mm\",\"transport\":\"http\",\"serverCommand\":\"npx\"}")
+                .post(BASE).then().statusCode(400);
+    }
+
+    @Test
+    void headersOnStdioReturns400() {
+        given().contentType(ContentType.JSON)
+                .body("{\"name\":\"hs\",\"serverCommand\":\"npx\",\"headers\":{\"A\":\"b\"}}")
+                .post(BASE).then().statusCode(400).body("message", containsString("eaders"));
+    }
+
+    @Test
+    void nonPositiveTimeoutReturns400() {
+        given().contentType(ContentType.JSON)
+                .body("{\"name\":\"to\",\"serverCommand\":\"npx\",\"timeout\":0}")
+                .post(BASE).then().statusCode(400);
+    }
 }

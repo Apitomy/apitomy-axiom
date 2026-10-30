@@ -74,4 +74,23 @@ class McpServerResolverTest {
         assertEquals(Optional.empty(), McpServerResolver.serverNameOf("Read"));
         assertEquals(Optional.empty(), McpServerResolver.serverNameOf("mcp__gh"));
     }
+    @Test
+    void disabledServerIsSkipped() {
+        McpServerEntity e = entity("off", "npx", null, null, null);
+        e.enabled = false;
+        assertTrue(resolver.toDefinition(e).isEmpty());
+    }
+
+    @Test
+    void httpServerCarriesHeadersTimeoutAndSseType() {
+        McpServerEntity e = entity("r", null, null, null, "https://x.io/sse");
+        e.transport = "sse";
+        e.headers = "{\"Authorization\":\"Bearer t\"}";
+        e.timeoutMs = 5000;
+        McpServerDefinition def = resolver.toDefinition(e).orElseThrow();
+        assertTrue(def.isHttpTransport());
+        assertEquals("sse", def.type());
+        assertEquals(Map.of("Authorization", "Bearer t"), def.headers());
+        assertEquals(5000, def.timeoutMs());
+    }
 }

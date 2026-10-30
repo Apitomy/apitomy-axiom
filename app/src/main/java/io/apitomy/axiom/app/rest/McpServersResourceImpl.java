@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.McpResource;
+import io.apitomy.axiom.api.beans.Headers;
 import io.apitomy.axiom.api.beans.McpServer;
 import io.apitomy.axiom.api.beans.NewMcpServer;
 import io.apitomy.axiom.api.beans.ServerEnv;
@@ -19,6 +20,7 @@ import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
@@ -122,6 +124,18 @@ public class McpServersResourceImpl implements McpResource {
         server.setDescription(entity.description);
         server.setServerCommand(entity.serverCommand);
         server.setServerUrl(entity.serverUrl);
+        server.setTransport(McpServer.Transport.fromValue(entity.transport));
+        server.setTimeout(entity.timeoutMs);
+        server.setEnabled(entity.enabled);
+        server.setCreatedOn(entity.createdOn == null ? null : Date.from(entity.createdOn));
+        server.setModifiedOn(entity.modifiedOn == null ? null : Date.from(entity.modifiedOn));
+        if (entity.headers != null) {
+            try {
+                server.setHeaders(objectMapper.readValue(entity.headers, Headers.class));
+            } catch (Exception e) {
+                LOG.warnf("Invalid headers JSON for MCP server '%s': %s", entity.name, e.getMessage());
+            }
+        }
         if (entity.serverArgs != null) {
             try {
                 server.setServerArgs(objectMapper.readValue(entity.serverArgs, new TypeReference<List<String>>() { }));

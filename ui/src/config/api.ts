@@ -570,17 +570,28 @@ export interface ToolDefinition {
     labels?: string[];
 }
 
+export type McpTransport = "stdio" | "http" | "sse";
+
 export interface McpServer {
     id: number;
     name: string;
     description?: string;
+    transport: McpTransport;
     serverCommand?: string;
     serverArgs?: string[];
     serverEnv?: Record<string, string>;
     serverUrl?: string;
+    headers?: Record<string, string>;
+    timeout?: number;
+    enabled: boolean;
+    createdOn?: string;
+    modifiedOn?: string;
 }
 
-export type NewMcpServer = Omit<McpServer, "id">;
+export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "transport" | "enabled"> & {
+    transport?: McpTransport;
+    enabled?: boolean;
+};
 
 export type NewToolDefinition = Omit<ToolDefinition, "id">;
 

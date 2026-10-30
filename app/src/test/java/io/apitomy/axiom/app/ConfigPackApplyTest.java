@@ -60,6 +60,40 @@ class ConfigPackApplyTest {
     @Inject
     ObjectMapper mapper;
 
+    /** MCP server transport, headers, timeout and enabled flag survive export and import. */
+    @Test
+    void mcpServerFieldsRoundTripThroughPack() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        Long id = QuarkusTransaction.requiringNew().call(() -> {
+            io.apitomy.axiom.core.entities.McpServerEntity e = new io.apitomy.axiom.core.entities.McpServerEntity();
+            e.name = "rt-" + sfx;
+            e.serverUrl = "https://x.io/sse";
+            e.transport = "sse";
+            e.headers = "{\"Authorization\":\"Bearer t\"}";
+            e.timeoutMs = 4000;
+            e.enabled = false;
+            e.persist();
+            return e.id;
+        });
+        PackExportRequest req = new PackExportRequest();
+        req.setMcpServerIds(List.of(id));
+        JsonNode pack = importExportService.exportPack(req);
+        QuarkusTransaction.requiringNew().run(() ->
+                io.apitomy.axiom.core.entities.McpServerEntity.deleteById(id));
+
+        importExportService.importPack(pack);
+        QuarkusTransaction.requiringNew().run(() -> {
+            io.apitomy.axiom.core.entities.McpServerEntity e =
+                    io.apitomy.axiom.core.entities.McpServerEntity.find("name", "rt-" + sfx).firstResult();
+            assertNotNull(e);
+            assertEquals("sse", e.transport);
+            assertTrue(e.headers.contains("Bearer t"));
+            assertEquals(4000, e.timeoutMs);
+            assertFalse(e.enabled);
+            e.delete();
+        });
+    }
+
     /** A pack with an action type, a workflow using it, and a subscription naming the workflow applies. */
     @Test
     void packWithCrossReferencesApplies() throws Exception {

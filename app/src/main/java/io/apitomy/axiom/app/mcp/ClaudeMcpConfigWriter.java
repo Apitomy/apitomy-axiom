@@ -33,6 +33,10 @@ public final class ClaudeMcpConfigWriter {
             if (def.isHttpTransport()) {
                 node.put("type", def.type());
                 node.put("url", def.url());
+                if (!def.headers().isEmpty()) {
+                    ObjectNode headers = node.putObject("headers");
+                    def.headers().forEach(headers::put);
+                }
             } else {
                 node.put("command", def.command());
                 ArrayNode args = node.putArray("args");

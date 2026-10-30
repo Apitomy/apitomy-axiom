@@ -62,6 +62,24 @@ class OpenCodeConfigWriterTest {
     }
 
     @Test
+    void remoteServerIncludesHeadersAndTimeout() {
+        JsonNode config = OpenCodeConfigWriter.buildConfig(Map.of("remote",
+                McpServerDefinition.remote("sse", "https://x.io/sse", Map.of("Authorization", "Bearer t"), 7000)));
+
+        JsonNode remote = config.path("mcp").path("remote");
+        assertEquals("remote", remote.path("type").asText());
+        assertEquals("Bearer t", remote.path("headers").path("Authorization").asText());
+        assertEquals(7000, remote.path("timeout").asInt());
+    }
+
+    @Test
+    void localServerIncludesTimeout() {
+        JsonNode config = OpenCodeConfigWriter.buildConfig(Map.of("l",
+                new McpServerDefinition("npx", List.of(), Map.of(), null, null, Map.of(), 3000)));
+        assertEquals(3000, config.path("mcp").path("l").path("timeout").asInt());
+    }
+
+    @Test
     void writesConfigFileToSessionDirectory(@TempDir Path sessionDir) throws Exception {
         Map<String, McpServerDefinition> servers = new LinkedHashMap<>();
         servers.put("remote", McpServerDefinition.http("http://127.0.0.1:8000/mcp"));

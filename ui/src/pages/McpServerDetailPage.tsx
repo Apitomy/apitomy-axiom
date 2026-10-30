@@ -50,6 +50,7 @@ export function McpServerDetailPage() {
                     name: s.name, description: s.description,
                     serverCommand: s.serverCommand, serverUrl: s.serverUrl,
                     serverArgs: s.serverArgs, serverEnv: s.serverEnv,
+                    transport: s.transport, headers: s.headers, timeout: s.timeout, enabled: s.enabled,
                 });
                 setDirty(false);
             })
@@ -67,7 +68,11 @@ export function McpServerDetailPage() {
     const handleSave = () => {
         setSaving(true);
         setSaveError(null);
-        updateMcpServer(id, form)
+        // Keep the transport consistent with whichever connection field is populated.
+        const transport = form.serverUrl?.trim()
+            ? (form.transport === "sse" ? "sse" : "http")
+            : "stdio";
+        updateMcpServer(id, { ...form, transport })
             .then((updated) => { setServer(updated); setDirty(false); })
             .catch((e: Error) => setSaveError(e.message))
             .finally(() => setSaving(false));

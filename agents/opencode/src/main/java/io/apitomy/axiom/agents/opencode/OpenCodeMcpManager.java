@@ -64,6 +64,8 @@ public class OpenCodeMcpManager implements AgentMcpManager {
      * @param command     the command to start the server (local only)
      * @param environment environment variables for the server process (local only)
      * @param url         the remote server URL (remote only)
+     * @param headers     HTTP headers (remote only; may be null)
+     * @param timeout     timeout in milliseconds (may be null)
      */
     public record McpServerConfig(
             String name,
@@ -72,7 +74,9 @@ public class OpenCodeMcpManager implements AgentMcpManager {
             List<String> command,  // e.g. ["node", "/path/to/server.js", "/path/to/tools.json"]
             Map<String, String> environment,
             // Remote server fields
-            String url
+            String url,
+            Map<String, String> headers,
+            Integer timeout
     ) {
         /**
          * Creates a local MCP server configuration.
@@ -84,7 +88,7 @@ public class OpenCodeMcpManager implements AgentMcpManager {
          */
         public static McpServerConfig local(String name, List<String> command,
                                              Map<String, String> environment) {
-            return new McpServerConfig(name, "local", command, environment, null);
+            return new McpServerConfig(name, "local", command, environment, null, null, null);
         }
 
         /**
@@ -95,7 +99,7 @@ public class OpenCodeMcpManager implements AgentMcpManager {
          * @return the remote server config
          */
         public static McpServerConfig remote(String name, String url) {
-            return new McpServerConfig(name, "remote", null, null, url);
+            return new McpServerConfig(name, "remote", null, null, url, null, null);
         }
     }
 
@@ -166,6 +170,9 @@ public class OpenCodeMcpManager implements AgentMcpManager {
             if ("remote".equals(server.type()) && server.url() != null) {
                 config.put("type", "remote");
                 config.put("url", server.url());
+                if (server.headers() != null && !server.headers().isEmpty()) {
+                    config.put("headers", server.headers());
+                }
             } else if ("local".equals(server.type()) && server.command() != null) {
                 config.put("type", "local");
                 config.put("command", server.command());
@@ -177,6 +184,9 @@ public class OpenCodeMcpManager implements AgentMcpManager {
                 return;
             }
 
+            if (server.timeout() != null) {
+                config.put("timeout", server.timeout());
+            }
             client.addMcpServer(server.name(), config);
             LOG.infof("Registered MCP server '%s' (%s) with OpenCode", server.name(), server.type());
 
