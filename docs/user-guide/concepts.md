@@ -455,6 +455,15 @@ picker fills this in):
 - **Session templates** have their own **Environment** for the assistant session.
 - **Workbench tool test runs** use the **Environment** given in the test dialog.
 
+An AI agent's environment reaches more than the agent. The tools the agent CLI brings with it, such as its
+shell, hooks and stdio MCP servers, run with that environment, so a tool command can read every variable
+declared on the action type, including the model key (for example `ANTHROPIC_API_KEY=${secret:...}`). This
+matters when the agent reads content Axiom does not control, such as repositories under scan, issue and PR
+text, or web pages. A prompt injection in that content can ask the agent to print or send its environment,
+and the tools a scanning or triage agent needs, such as `curl`, `cat` or `python3`, are enough to do it.
+For agents that read untrusted content, use a scoped or low-value key for the model credential, keep the
+**Environment** to what the engine itself needs, and restrict the agent's outbound network where you can.
+
 A reference to a secret that does not exist stops the process from starting: the task, test run or session
 fails with `Secret 'NAME' does not exist`. Validation reports such references as errors, and warns when a
 script, Node.js code or a tool uses a secret (`$GH_TOKEN`, `process.env.GH_TOKEN`) that is not declared.
