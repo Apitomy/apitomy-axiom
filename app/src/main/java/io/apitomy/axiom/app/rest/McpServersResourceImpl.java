@@ -1,42 +1,55 @@
 package io.apitomy.axiom.app.rest;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.McpResource;
 import io.apitomy.axiom.api.beans.McpServer;
 import io.apitomy.axiom.api.beans.NewMcpServer;
+import io.apitomy.axiom.app.mcp.McpServerConflictException;
+import io.apitomy.axiom.app.mcp.McpServerNotFoundException;
+import io.apitomy.axiom.app.mcp.McpServerService;
+import io.apitomy.axiom.app.mcp.McpServerValidationException;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.transaction.Transactional;
-import jakarta.ws.rs.WebApplicationException;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import org.jboss.logging.Logger;
+import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
 
 import java.util.List;
+import java.util.Map;
 
 /**
- * Implementation of the MCP Servers REST API.
+ * Implementation of the MCP Servers REST API. Delegates to {@link McpServerService}.
  */
 @ApplicationScoped
 @RunOnVirtualThread
 public class McpServersResourceImpl implements McpResource {
+
+    private static final Logger LOG = Logger.getLogger(McpServersResourceImpl.class);
+
+    @Inject
+    McpServerService service;
+
+    @Inject
+    ObjectMapper objectMapper;
 
     /**
      * {@inheritDoc}
      */
     @Override
     public List<McpServer> listMcpServers() {
-        return McpServerEntity.<McpServerEntity>listAll()
-                .stream().map(this::toBean).toList();
+        return service.list().stream().map(this::toBean).toList();
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    @Transactional
     public McpServer createMcpServer(NewMcpServer data) {
-        McpServerEntity entity = new McpServerEntity();
-        applyFields(entity, data);
-        entity.persist();
-        return toBean(entity);
+        return toBean(service.create(data));
     }
 
     /**
@@ -44,60 +57,61 @@ public class McpServersResourceImpl implements McpResource {
      */
     @Override
     public McpServer getMcpServer(long mcpServerId) {
-        return toBean(findOrThrow(mcpServerId));
+        return toBean(service.get(mcpServerId));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    @Transactional
     public McpServer updateMcpServer(long mcpServerId, NewMcpServer data) {
-        McpServerEntity entity = findOrThrow(mcpServerId);
-        applyFields(entity, data);
-        return toBean(entity);
+        return toBean(service.update(mcpServerId, data));
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    @Transactional
     public void deleteMcpServer(long mcpServerId) {
-        McpServerEntity entity = findOrThrow(mcpServerId);
-        entity.delete();
+        service.delete(mcpServerId);
     }
 
-    private McpServerEntity findOrThrow(long id) {
-        McpServerEntity entity = McpServerEntity.findById(id);
-        if (entity == null) {
-            throw new WebApplicationException("MCP server not found: " + id, 404);
-        }
-        return entity;
+    /**
+     * Maps validation failures to 400.
+     *
+     * @param e the exception
+     * @return a 400 response
+     */
+    @ServerExceptionMapper
+    public Response mapValidation(McpServerValidationException e) {
+        return error(400, e.getMessage());
     }
 
-    private void applyFields(McpServerEntity entity, NewMcpServer data) {
-        entity.name = data.getName();
-        entity.description = data.getDescription();
-        entity.serverCommand = data.getServerCommand();
-        entity.serverUrl = data.getServerUrl();
-        // Store args and env as JSON strings
-        if (data.getServerArgs() != null) {
-            try {
-                entity.serverArgs = new com.fasterxml.jackson.databind.ObjectMapper()
-                        .writeValueAsString(data.getServerArgs());
-            } catch (Exception e) {
-                entity.serverArgs = null;
-            }
-        }
-        if (data.getServerEnv() != null) {
-            try {
-                entity.serverEnv = new com.fasterxml.jackson.databind.ObjectMapper()
-                        .writeValueAsString(data.getServerEnv());
-            } catch (Exception e) {
-                entity.serverEnv = null;
-            }
-        }
+    /**
+     * Maps conflicts to 409.
+     *
+     * @param e the exception
+     * @return a 409 response
+     */
+    @ServerExceptionMapper
+    public Response mapConflict(McpServerConflictException e) {
+        return error(409, e.getMessage());
+    }
+
+    /**
+     * Maps missing servers to 404.
+     *
+     * @param e the exception
+     * @return a 404 response
+     */
+    @ServerExceptionMapper
+    public Response mapNotFound(McpServerNotFoundException e) {
+        return error(404, e.getMessage());
+    }
+
+    private static Response error(int status, String message) {
+        return Response.status(status).type(MediaType.APPLICATION_JSON)
+                .entity(Map.of("message", message, "errorCode", status)).build();
     }
 
     private McpServer toBean(McpServerEntity entity) {
@@ -109,10 +123,10 @@ public class McpServersResourceImpl implements McpResource {
         server.setServerUrl(entity.serverUrl);
         if (entity.serverArgs != null) {
             try {
-                server.setServerArgs(new com.fasterxml.jackson.databind.ObjectMapper()
-                        .readValue(entity.serverArgs,
-                                new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {}));
-            } catch (Exception e) { /* ignore */ }
+                server.setServerArgs(objectMapper.readValue(entity.serverArgs, new TypeReference<List<String>>() { }));
+            } catch (Exception e) {
+                LOG.warnf("Invalid serverArgs JSON for MCP server '%s': %s", entity.name, e.getMessage());
+            }
         }
         return server;
     }
