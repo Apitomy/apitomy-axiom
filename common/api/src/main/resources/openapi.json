@@ -1730,7 +1730,8 @@
           "409": {
             "$ref": "#/components/responses/Conflict"
           }
-        }
+        },
+        "description": "Replaces the MCP server definition. Omitted or empty `serverArgs`/`serverEnv` clear the stored values."
       },
       "delete": {
         "tags": [
