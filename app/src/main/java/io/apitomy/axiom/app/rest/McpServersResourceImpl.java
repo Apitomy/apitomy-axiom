@@ -46,6 +46,9 @@ public class McpServersResourceImpl implements McpResource {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    McpServerReferences references;
+
     /**
      * {@inheritDoc}
      */
@@ -206,6 +209,7 @@ public class McpServersResourceImpl implements McpResource {
         server.setTimeout(entity.timeoutMs);
         server.setEnabled(entity.enabled);
         server.setWarnings(service.warnings(entity));
+        server.setUsageCount(references.usagesOf(entity.name).size());
         server.setTools(toToolBeans(service.discoveredTools(entity)));
         server.setToolsDiscoveredOn(entity.toolsDiscoveredOn == null ? null : Date.from(entity.toolsDiscoveredOn));
         server.setCreatedOn(entity.createdOn == null ? null : Date.from(entity.createdOn));

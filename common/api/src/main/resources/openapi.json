@@ -8966,6 +8966,12 @@
             "type": "string",
             "format": "date-time",
             "readOnly": true
+          },
+          "usageCount": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true,
+            "description": "Number of references from action types, session templates and toolsets (see `/usage`)."
           }
         }
       },

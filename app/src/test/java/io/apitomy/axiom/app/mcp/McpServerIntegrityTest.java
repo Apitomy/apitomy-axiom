@@ -110,6 +110,15 @@ class McpServerIntegrityTest {
     }
 
     @Test
+    void serverResponsesIncludeTheUsageCount() {
+        int id = createServer("mi-gh");
+        createReferences();
+        given().get(BASE + "/{id}", id).then().statusCode(200).body("usageCount", org.hamcrest.Matchers.equalTo(5));
+        given().get(BASE).then().statusCode(200)
+                .body("find { it.name == 'mi-gh' }.usageCount", org.hamcrest.Matchers.equalTo(5));
+    }
+
+    @Test
     void deletingAServerInUseIsBlocked() {
         int id = createServer("mi-gh");
         createReferences();
