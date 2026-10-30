@@ -26,9 +26,26 @@ class ActionTypeMcpServersTest {
     @Inject
     TaskExecutionService taskExecutionService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void createServers() {
+        QuarkusTransaction.requiringNew().run(() -> {
+            for (String name : List.of("github", "jira")) {
+                if (io.apitomy.axiom.core.entities.McpServerEntity.count("name", name) == 0) {
+                    io.apitomy.axiom.core.entities.McpServerEntity e = new io.apitomy.axiom.core.entities.McpServerEntity();
+                    e.name = name;
+                    e.serverCommand = "npx";
+                    e.persist();
+                }
+            }
+        });
+    }
+
     @AfterEach
     void cleanUp() {
-        QuarkusTransaction.requiringNew().run(() -> ActionTypeEntity.delete("name like ?1", "atm-%"));
+        QuarkusTransaction.requiringNew().run(() -> {
+            ActionTypeEntity.delete("name like ?1", "atm-%");
+            io.apitomy.axiom.core.entities.McpServerEntity.delete("name in ?1", List.of("github", "jira"));
+        });
     }
 
     @Test

@@ -262,6 +262,15 @@ public class AssistantSessionManager {
 
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
+            // Servers the template selects explicitly must exist (servers implied by allowed tools may be
+            // provided by the engine's own configuration, so those are not checked).
+            List<String> missingServers = mcpServerResolver.findMissing(template.mcpServers().stream()
+                    .filter(serverName -> !serverName.startsWith("@")).toList());
+            if (!missingServers.isEmpty()) {
+                throw new IllegalArgumentException("Session template '" + template.name()
+                        + "' selects MCP server(s) that do not exist: " + String.join(", ", missingServers));
+            }
+
             Map<String, McpServerDefinition> mcpConfigs;
             try {
                 mcpConfigs = resolveMcpServers(sessionId, mcpToken, template, subject, compositionId,

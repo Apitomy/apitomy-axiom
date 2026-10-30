@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
     Alert,
     Button,
@@ -24,11 +24,19 @@ import PlusCircleIcon from "@patternfly/react-icons/dist/esm/icons/plus-circle-i
 import TrashIcon from "@patternfly/react-icons/dist/esm/icons/trash-icon";
 import {
     type McpServer,
+    type McpServerInUseError,
+    mcpServerUsageRoute,
     fetchMcpServers,
     createMcpServer,
     deleteMcpServer,
 } from "../config/api";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+
+const USAGE_TYPE_LABELS: Record<string, string> = {
+    actionType: "Action type",
+    sessionTemplate: "Session template",
+    toolset: "Toolset",
+};
 
 export function McpServersPage() {
     const navigate = useNavigate();
@@ -40,6 +48,7 @@ export function McpServersPage() {
     const [newTransport, setNewTransport] = useState<"stdio" | "http">("stdio");
     const [newTarget, setNewTarget] = useState("");
     const [createError, setCreateError] = useState<string | null>(null);
+    const [deleteError, setDeleteError] = useState<McpServerInUseError | null>(null);
 
     const openCreate = () => {
         setNewName("");
@@ -77,7 +86,8 @@ export function McpServersPage() {
 
     const confirmDelete = () => {
         if (deleteTarget !== null) {
-            deleteMcpServer(deleteTarget).then(load).catch(console.error);
+            setDeleteError(null);
+            deleteMcpServer(deleteTarget).then(load).catch((e: McpServerInUseError) => setDeleteError(e));
             setDeleteTarget(null);
         }
     };
@@ -96,6 +106,22 @@ export function McpServersPage() {
                     </Button>
                 </FlexItem>
             </Flex>
+
+            {deleteError && (
+                <Alert variant="danger" isInline title={deleteError.message} style={{ marginTop: "16px" }}
+                    actionClose={<Button variant="plain" aria-label="Dismiss" onClick={() => setDeleteError(null)}>×</Button>}>
+                    {deleteError.usages && deleteError.usages.length > 0 && (
+                        <ul>
+                            {deleteError.usages.map((u) => (
+                                <li key={`${u.type}-${u.name}-${u.field}`}>
+                                    {USAGE_TYPE_LABELS[u.type]} <Link to={mcpServerUsageRoute(u)}>{u.name}</Link>
+                                    {" "}({u.field})
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Alert>
+            )}
 
             <div style={{ marginTop: "16px" }}>
                 {loading ? (
@@ -127,6 +153,7 @@ export function McpServersPage() {
                                     </Td>
                                     <Td>
                                         <Button variant="plain" size="sm" style={{ padding: 0 }}
+                                            aria-label={`Delete ${s.name}`}
                                             onClick={(e) => handleDelete(e, s.id)}>
                                             <TrashIcon />
                                         </Button>

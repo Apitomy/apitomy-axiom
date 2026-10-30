@@ -66,6 +66,7 @@ public final class ActionTypeValidator {
      * @param defaultEngine the engine used when an action type names none, or null if unknown
      * @param engineModels  models available per engine type; a missing or empty list skips the
      *                      availability check for that engine
+     * @param mcpServerNames existing user-defined MCP server names, or null to skip MCP server checks
      */
     public record KnownNames(
             Set<String> secretNames,
@@ -73,7 +74,23 @@ public final class ActionTypeValidator {
             Set<String> toolsetNames,
             Set<String> sdkToolNames,
             String defaultEngine,
-            Map<String, List<String>> engineModels) {
+            Map<String, List<String>> engineModels,
+            Set<String> mcpServerNames) {
+
+        /**
+         * Creates known names without MCP server names (skips MCP server checks).
+         *
+         * @param secretNames   existing secret names
+         * @param toolNames     existing custom tool names
+         * @param toolsetNames  existing toolset names
+         * @param sdkToolNames  recognized Axiom SDK tool names
+         * @param defaultEngine the default engine, or null
+         * @param engineModels  models available per engine type
+         */
+        public KnownNames(Set<String> secretNames, Set<String> toolNames, Set<String> toolsetNames,
+                          Set<String> sdkToolNames, String defaultEngine, Map<String, List<String>> engineModels) {
+            this(secretNames, toolNames, toolsetNames, sdkToolNames, defaultEngine, engineModels, null);
+        }
 
         /**
          * Creates known names without engine information (skips model availability checks).
@@ -85,9 +102,12 @@ public final class ActionTypeValidator {
          */
         public KnownNames(Set<String> secretNames, Set<String> toolNames, Set<String> toolsetNames,
                           Set<String> sdkToolNames) {
-            this(secretNames, toolNames, toolsetNames, sdkToolNames, null, null);
+            this(secretNames, toolNames, toolsetNames, sdkToolNames, null, null, null);
         }
     }
+
+    /** Registered names of built-in Axiom MCP servers (not user-defined). */
+    private static final Set<String> BUILT_IN_MCP_SERVERS = Set.of("axiom-tools", "axiom-sdk", "axiom", "workbench");
 
     private ActionTypeValidator() {
     }
@@ -119,6 +139,7 @@ public final class ActionTypeValidator {
         validateScriptTemplate(def, messages);
         validateCodeTemplate(def, messages);
         validateAllowedTools(def, known, messages);
+        validateMcpServers(def, known, messages);
         validateModel(def, known, messages);
         validateEnvironment(def, known, messages);
         validateUndeclaredSecrets(def, known, messages);
@@ -256,6 +277,22 @@ public final class ActionTypeValidator {
                 .orElse(lines.isEmpty() ? "" : lines.get(0));
     }
 
+    /**
+     * Checks that every explicitly selected MCP server exists.
+     */
+    private static void validateMcpServers(NewActionType def, KnownNames known, List<ValidationMessage> messages) {
+        List<String> servers = def.getMcpServers();
+        if (servers == null || known == null || known.mcpServerNames() == null) {
+            return;
+        }
+        for (int i = 0; i < servers.size(); i++) {
+            if (!known.mcpServerNames().contains(servers.get(i))) {
+                messages.add(error("mcpServers[" + i + "]",
+                        "Selects MCP server '" + servers.get(i) + "' but no MCP server with that name exists."));
+            }
+        }
+    }
+
     private static void validateAllowedTools(NewActionType def, KnownNames known,
                                               List<ValidationMessage> messages) {
         if (!"agent".equals(executionMode(def))) {
@@ -298,7 +335,18 @@ public final class ActionTypeValidator {
                                     + "' which is not a recognized Axiom SDK tool."));
                 }
             } else if (tool.startsWith("mcp__")) {
-                // External MCP server tool — valid pattern
+                // External MCP server tool: mcp__<server>__<tool>; the server must exist.
+                int sep = tool.indexOf("__", "mcp__".length());
+                String server = sep > "mcp__".length() ? tool.substring("mcp__".length(), sep) : null;
+                if (server == null) {
+                    messages.add(error("allowedTools[" + i + "]",
+                            "MCP tool reference '" + tool + "' must have the form mcp__<server>__<tool>."));
+                } else if (known != null && known.mcpServerNames() != null
+                        && !BUILT_IN_MCP_SERVERS.contains(server)
+                        && !known.mcpServerNames().contains(server)) {
+                    messages.add(error("allowedTools[" + i + "]",
+                            "References MCP server '" + server + "' but no MCP server with that name exists."));
+                }
             } else if (!tool.matches("^[A-Za-z].*")) {
                 messages.add(warning("allowedTools[" + i + "]",
                         "Tool reference '" + tool

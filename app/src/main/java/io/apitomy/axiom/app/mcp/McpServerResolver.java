@@ -60,6 +60,16 @@ public class McpServerResolver {
     }
 
     /**
+     * Returns the names that do not match any user-defined MCP server.
+     *
+     * @param names server names
+     * @return the missing names, in order
+     */
+    public List<String> findMissing(Collection<String> names) {
+        return names.stream().filter(n -> McpServerEntity.count("name", n) == 0).toList();
+    }
+
+    /**
      * Resolves the user-defined servers referenced by an allowed-tools list ({@code mcp__<name>__...}).
      * Servers are never included implicitly: a null or empty list selects none.
      *
