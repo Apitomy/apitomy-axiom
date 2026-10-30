@@ -588,9 +588,31 @@ export interface McpServer {
     createdOn?: string;
     modifiedOn?: string;
     warnings?: string[];
+    /** Tools found by the last successful connection test. */
+    tools?: McpServerTool[];
+    toolsDiscoveredOn?: string;
 }
 
-export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "transport" | "enabled" | "warnings"> & {
+/** A tool reported by an MCP server. */
+export interface McpServerTool {
+    name: string;
+    description?: string;
+}
+
+/** Result of an MCP server connection test. */
+export interface McpServerTestResult {
+    success: boolean;
+    serverName?: string;
+    serverVersion?: string;
+    protocolVersion?: string;
+    tools: McpServerTool[];
+    error?: string;
+    log?: string;
+    durationMs: number;
+}
+
+export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "transport" | "enabled" | "warnings"
+    | "tools" | "toolsDiscoveredOn"> & {
     transport?: McpTransport;
     enabled?: boolean;
 };
@@ -742,6 +764,22 @@ export function mcpServerUsageRoute(usage: McpServerUsage): string {
         case "toolset": return `/toolsets/${usage.id}`;
         default: return `/session-templates/${usage.templateId}`;
     }
+}
+
+export async function testMcpServer(id: number): Promise<McpServerTestResult> {
+    const response = await fetch(`${API}/mcp-servers/${id}/test`, { method: "POST" });
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "test"));
+    return response.json();
+}
+
+export async function testNewMcpServer(server: NewMcpServer): Promise<McpServerTestResult> {
+    const response = await fetch(`${API}/mcp-servers/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(server),
+    });
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "test"));
+    return response.json();
 }
 
 export async function fetchMcpServerUsage(id: number): Promise<McpServerUsage[]> {

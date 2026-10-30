@@ -71,6 +71,18 @@ public class McpServerEntity extends PanacheEntity {
     @Column(nullable = false)
     public boolean enabled = true;
 
+    /**
+     * Tools reported by the last successful connection test (JSON array of {@code {name, description}}).
+     */
+    @Column(name = "discovered_tools", columnDefinition = "TEXT")
+    public String discoveredTools;
+
+    /**
+     * When {@link #discoveredTools} was recorded.
+     */
+    @Column(name = "tools_discovered_on")
+    public Instant toolsDiscoveredOn;
+
     @Column(name = "created_on", nullable = false)
     public Instant createdOn;
 

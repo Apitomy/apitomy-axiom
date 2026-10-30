@@ -9,6 +9,7 @@ import * as api from "../config/api";
 vi.mock("../config/api", () => ({
     fetchMcpServer: vi.fn(),
     updateMcpServer: vi.fn(),
+    testMcpServer: vi.fn(),
 }));
 
 function renderPage() {
@@ -49,5 +50,33 @@ describe("McpServerDetailPage", () => {
         } as never);
         renderPage();
         expect(await screen.findByText(/Secret 'GH_TOKEN' does not exist/)).toBeInTheDocument();
+    });
+
+    it("tests the connection and lists the tools", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({
+            id: 5, name: "gh", transport: "stdio", serverCommand: "npx", enabled: true,
+        } as never);
+        vi.mocked(api.testMcpServer).mockResolvedValueOnce({
+            success: true, serverName: "github-mcp", serverVersion: "1.0", durationMs: 1200,
+            tools: [{ name: "list_issues", description: "List issues" }, { name: "get_issue" }],
+        });
+        renderPage();
+        await userEvent.click(await screen.findByRole("button", { name: /Test connection/ }));
+        expect(await screen.findByText(/Connected to github-mcp 1.0/)).toBeInTheDocument();
+        expect(screen.getByText("mcp__gh__list_issues")).toBeInTheDocument();
+        expect(screen.getByText("List issues")).toBeInTheDocument();
+    });
+
+    it("shows why a connection test failed, with the server log", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({
+            id: 5, name: "gh", transport: "stdio", serverCommand: "npx", enabled: true,
+        } as never);
+        vi.mocked(api.testMcpServer).mockResolvedValueOnce({
+            success: false, error: "Server exited with code 1 (command: npx)", log: "npm ERR! 404", tools: [], durationMs: 10,
+        });
+        renderPage();
+        await userEvent.click(await screen.findByRole("button", { name: /Test connection/ }));
+        expect(await screen.findByText(/Server exited with code 1/)).toBeInTheDocument();
+        expect(screen.getByText(/npm ERR! 404/)).toBeInTheDocument();
     });
 });

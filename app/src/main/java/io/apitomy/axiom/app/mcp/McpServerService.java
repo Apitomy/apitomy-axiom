@@ -5,12 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.NewMcpServer;
 import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
+import io.apitomy.axiom.core.services.MissingSecretException;
+import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Optional;
@@ -50,6 +54,18 @@ public class McpServerService {
 
     @Inject
     McpServerReferences references;
+
+    @Inject
+    McpServerResolver resolver;
+
+    @Inject
+    McpConnectionTester tester;
+
+    /** Time limit for a connection test when the server has no timeout (allows for npx/uvx downloads). */
+    private static final Duration DEFAULT_TEST_TIMEOUT = Duration.ofSeconds(60);
+
+    /** Upper bound for a connection test. */
+    private static final Duration MAX_TEST_TIMEOUT = Duration.ofSeconds(120);
 
     /**
      * Lists all MCP servers sorted by name.
@@ -207,6 +223,21 @@ public class McpServerService {
      * @param existingId the id of the server being updated, or {@code null} on create
      */
     private void validate(NewMcpServer data, Long existingId) {
+        validateDefinition(data);
+        findByName(data.getName())
+                .filter(other -> existingId == null || !other.id.equals(existingId))
+                .ifPresent(other -> {
+                    throw new McpServerConflictException(
+                            "An MCP server named '" + data.getName() + "' already exists");
+                });
+    }
+
+    /**
+     * Validates a definition on its own (no name-conflict check).
+     *
+     * @param data the definition
+     */
+    private void validateDefinition(NewMcpServer data) {
         validateName(data.getName());
         boolean hasCommand = notBlank(data.getServerCommand());
         boolean hasUrl = notBlank(data.getServerUrl());
@@ -231,12 +262,89 @@ public class McpServerService {
         if (data.getTimeout() != null && data.getTimeout() <= 0) {
             throw new McpServerValidationException("Timeout must be a positive number of milliseconds");
         }
-        findByName(data.getName())
-                .filter(other -> existingId == null || !other.id.equals(existingId))
-                .ifPresent(other -> {
-                    throw new McpServerConflictException(
-                            "An MCP server named '" + data.getName() + "' already exists");
-                });
+    }
+
+    /**
+     * Tests a saved server and, on success, stores the tools it reports.
+     *
+     * @param id the server id
+     * @return the test result
+     */
+    public McpConnectionTester.Result test(long id) {
+        Prepared prepared = QuarkusTransaction.requiringNew().call(() -> prepare(get(id)));
+        McpConnectionTester.Result result = run(prepared);
+        if (result.success()) {
+            QuarkusTransaction.requiringNew().run(() -> {
+                McpServerEntity entity = McpServerEntity.findById(id);
+                if (entity != null) {
+                    entity.discoveredTools = toJson(result.tools());
+                    entity.toolsDiscoveredOn = Instant.now();
+                }
+            });
+        }
+        return result;
+    }
+
+    /**
+     * Tests an unsaved definition. Nothing is stored.
+     *
+     * @param data the definition
+     * @return the test result
+     */
+    public McpConnectionTester.Result test(NewMcpServer data) {
+        validateDefinition(data);
+        McpServerEntity transientEntity = new McpServerEntity();
+        applyFields(transientEntity, data);
+        Prepared prepared = QuarkusTransaction.requiringNew().call(() -> prepare(transientEntity));
+        return run(prepared);
+    }
+
+    /**
+     * Reads the tools stored by the last successful test.
+     *
+     * @param entity the server
+     * @return the tools (empty if never tested)
+     */
+    public List<McpConnectionTester.ToolInfo> discoveredTools(McpServerEntity entity) {
+        if (entity.discoveredTools == null || entity.discoveredTools.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(entity.discoveredTools,
+                    new com.fasterxml.jackson.core.type.TypeReference<List<McpConnectionTester.ToolInfo>>() { });
+        } catch (JsonProcessingException e) {
+            return List.of();
+        }
+    }
+
+    /** A resolved definition ready to test, or the reason it could not be resolved. */
+    private record Prepared(McpServerDefinition definition, String error) {
+    }
+
+    private Prepared prepare(McpServerEntity entity) {
+        boolean wasEnabled = entity.enabled;
+        try {
+            // Disabled servers can still be tested.
+            entity.enabled = true;
+            return resolver.toDefinition(entity)
+                    .map(def -> new Prepared(def, null))
+                    .orElseGet(() -> new Prepared(null, "The server configuration is invalid (see the server log)"));
+        } catch (MissingSecretException e) {
+            return new Prepared(null, e.getMessage());
+        } finally {
+            entity.enabled = wasEnabled;
+        }
+    }
+
+    private McpConnectionTester.Result run(Prepared prepared) {
+        if (prepared.definition() == null) {
+            return new McpConnectionTester.Result(false, null, null, null, List.of(), prepared.error(), "", 0);
+        }
+        Integer timeoutMs = prepared.definition().timeoutMs();
+        Duration timeout = timeoutMs != null
+                ? Duration.ofMillis(Math.min(timeoutMs, MAX_TEST_TIMEOUT.toMillis()))
+                : DEFAULT_TEST_TIMEOUT;
+        return tester.test(prepared.definition(), timeout);
     }
 
     /**

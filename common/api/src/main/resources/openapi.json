@@ -1673,6 +1673,41 @@
         }
       }
     },
+    "/mcp-servers/test": {
+      "post": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Test an unsaved MCP server definition",
+        "description": "Connects to the server described by the body (resolving `${secret:NAME}` references), performs the MCP initialize handshake and lists its tools. Nothing is saved.",
+        "operationId": "testNewMcpServer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMcpServer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Test result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerTestResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
     "/mcp-servers/{mcpServerId}": {
       "get": {
         "tags": [
@@ -1758,6 +1793,42 @@
           }
         },
         "description": "Deletes an MCP server. Fails with 409 if any action type, session template or toolset references it."
+      },
+      "parameters": [
+        {
+          "name": "mcpServerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/mcp-servers/{mcpServerId}/test": {
+      "post": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Test an MCP server",
+        "description": "Connects to the server, performs the MCP initialize handshake and lists its tools. On success the tools are stored on the server (`tools`) for allowed-tools suggestions. Disabled servers can be tested.",
+        "operationId": "testMcpServer",
+        "responses": {
+          "200": {
+            "description": "Test result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerTestResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
       },
       "parameters": [
         {
@@ -8882,6 +8953,19 @@
             },
             "readOnly": true,
             "description": "Non-blocking problems, e.g. `${secret:NAME}` references to secrets that do not exist (yet)."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerTool"
+            },
+            "readOnly": true,
+            "description": "Tools found by the last successful connection test."
+          },
+          "toolsDiscoveredOn": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
           }
         }
       },
@@ -13331,6 +13415,61 @@
             "items": {
               "$ref": "#/components/schemas/McpServerUsage"
             }
+          }
+        }
+      },
+      "McpServerTool": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "McpServerTestResult": {
+        "type": "object",
+        "required": [
+          "success",
+          "tools",
+          "durationMs"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the initialize handshake and tool listing succeeded."
+          },
+          "serverName": {
+            "type": "string"
+          },
+          "serverVersion": {
+            "type": "string"
+          },
+          "protocolVersion": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerTool"
+            }
+          },
+          "error": {
+            "type": "string",
+            "description": "Why the test failed."
+          },
+          "log": {
+            "type": "string",
+            "description": "Captured server output (stderr for stdio servers), possibly truncated."
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       }
