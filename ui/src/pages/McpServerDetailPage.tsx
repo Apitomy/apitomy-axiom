@@ -24,9 +24,12 @@ import SaveIcon from "@patternfly/react-icons/dist/esm/icons/save-icon";
 import {
     type McpServer,
     type NewMcpServer,
+    type McpServerTestResult,
     fetchMcpServer,
     updateMcpServer,
+    testMcpServer,
 } from "../config/api";
+import { McpTestResultPanel } from "../components/McpTestResultPanel";
 
 export function McpServerDetailPage() {
     const { mcpServerId } = useParams<{ mcpServerId: string }>();
@@ -38,6 +41,22 @@ export function McpServerDetailPage() {
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
     const [saveError, setSaveError] = useState<string | null>(null);
+    const [testing, setTesting] = useState(false);
+    const [testResult, setTestResult] = useState<McpServerTestResult | null>(null);
+
+    const handleTest = () => {
+        setTesting(true);
+        setTestResult(null);
+        testMcpServer(id)
+            .then((result) => {
+                setTestResult(result);
+                if (result.success) {
+                    setServer((prev) => prev ? { ...prev, tools: result.tools } : prev);
+                }
+            })
+            .catch((e: Error) => setTestResult({ success: false, error: e.message, tools: [], durationMs: 0 }))
+            .finally(() => setTesting(false));
+    };
     const [activeTab, setActiveTab] = useState(0);
 
     const loadData = useCallback(() => {
@@ -108,6 +127,11 @@ export function McpServerDetailPage() {
                     <Title headingLevel="h1" size="lg">{server.name}</Title>
                 </FlexItem>
                 <FlexItem>
+                    <Button variant="secondary" onClick={handleTest} isLoading={testing}
+                        isDisabled={testing || dirty} style={{ marginRight: "8px" }}
+                        title={dirty ? "Save your changes before testing" : undefined}>
+                        {testing ? "Testing..." : "Test connection"}
+                    </Button>
                     <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
                         isDisabled={!dirty || !form.name || saving} isLoading={saving}>
                         {saving ? "Saving..." : "Save Changes"}
@@ -118,6 +142,12 @@ export function McpServerDetailPage() {
             {server.warnings?.map((w) => (
                 <Alert key={w} variant="warning" isInline title={w} style={{ marginBottom: "16px" }} />
             ))}
+
+            {testResult && (
+                <div style={{ marginBottom: "16px" }}>
+                    <McpTestResultPanel result={testResult} serverName={server.name} />
+                </div>
+            )}
 
             {saveError && (
                 <Alert variant="danger" isInline title={saveError} style={{ marginBottom: "16px" }} />

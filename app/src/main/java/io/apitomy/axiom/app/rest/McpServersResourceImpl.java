@@ -6,9 +6,12 @@ import io.apitomy.axiom.api.McpResource;
 import io.apitomy.axiom.api.beans.Headers;
 import io.apitomy.axiom.api.beans.McpServer;
 import io.apitomy.axiom.api.beans.McpServerInUseError;
+import io.apitomy.axiom.api.beans.McpServerTestResult;
+import io.apitomy.axiom.api.beans.McpServerTool;
 import io.apitomy.axiom.api.beans.McpServerUsage;
 import io.apitomy.axiom.api.beans.NewMcpServer;
 import io.apitomy.axiom.api.beans.ServerEnv;
+import io.apitomy.axiom.app.mcp.McpConnectionTester;
 import io.apitomy.axiom.app.mcp.McpServerConflictException;
 import io.apitomy.axiom.app.mcp.McpServerInUseException;
 import io.apitomy.axiom.app.mcp.McpServerReferences;
@@ -92,6 +95,44 @@ public class McpServersResourceImpl implements McpResource {
     }
 
     /**
+     * {@inheritDoc}
+     */
+    @Override
+    public McpServerTestResult testMcpServer(long mcpServerId) {
+        return toResultBean(service.test(mcpServerId));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public McpServerTestResult testNewMcpServer(NewMcpServer data) {
+        return toResultBean(service.test(data));
+    }
+
+    private static McpServerTestResult toResultBean(McpConnectionTester.Result result) {
+        McpServerTestResult bean = new McpServerTestResult();
+        bean.setSuccess(result.success());
+        bean.setServerName(result.serverName());
+        bean.setServerVersion(result.serverVersion());
+        bean.setProtocolVersion(result.protocolVersion());
+        bean.setTools(toToolBeans(result.tools()));
+        bean.setError(result.error());
+        bean.setLog(result.log());
+        bean.setDurationMs(result.durationMs());
+        return bean;
+    }
+
+    private static List<McpServerTool> toToolBeans(List<McpConnectionTester.ToolInfo> tools) {
+        return tools.stream().map(t -> {
+            McpServerTool tool = new McpServerTool();
+            tool.setName(t.name());
+            tool.setDescription(t.description());
+            return tool;
+        }).toList();
+    }
+
+    /**
      * Maps deletes of referenced servers to 409 with the references.
      *
      * @param e the exception
@@ -165,6 +206,8 @@ public class McpServersResourceImpl implements McpResource {
         server.setTimeout(entity.timeoutMs);
         server.setEnabled(entity.enabled);
         server.setWarnings(service.warnings(entity));
+        server.setTools(toToolBeans(service.discoveredTools(entity)));
+        server.setToolsDiscoveredOn(entity.toolsDiscoveredOn == null ? null : Date.from(entity.toolsDiscoveredOn));
         server.setCreatedOn(entity.createdOn == null ? null : Date.from(entity.createdOn));
         server.setModifiedOn(entity.modifiedOn == null ? null : Date.from(entity.modifiedOn));
         if (entity.headers != null) {
