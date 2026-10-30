@@ -208,4 +208,23 @@ class McpServersResourceTest {
                 .body("{\"name\":\"to\",\"serverCommand\":\"npx\",\"timeout\":0}")
                 .post(BASE).then().statusCode(400);
     }
+
+    @Test
+    void curatedCatalogIsSearchable() {
+        given().get(BASE + "/catalog?search=jira").then().statusCode(200)
+                .body("id", contains("atlassian"))
+                .body("[0].source", equalTo("curated"))
+                .body("[0].runtime", equalTo("uv"))
+                .body("[0].env.find { it.name == 'JIRA_API_TOKEN' }.secret", equalTo(true));
+    }
+
+    @Test
+    void unknownCatalogSourceIsRejected() {
+        given().get(BASE + "/catalog?source=bogus").then().statusCode(400);
+    }
+
+    @Test
+    void runtimeStatusIsReported() {
+        given().get(BASE + "/catalog/runtimes").then().statusCode(200).body("node", notNullValue());
+    }
 }

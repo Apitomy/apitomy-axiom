@@ -11,6 +11,10 @@ vi.mock("../config/api", async (orig) => ({
     createMcpServer: vi.fn(),
     deleteMcpServer: vi.fn(),
     testNewMcpServer: vi.fn(),
+    searchMcpCatalog: vi.fn().mockResolvedValue([{ id: "github", source: "curated", name: "github", title: "GitHub",
+        transport: "http", url: "https://api.githubcopilot.com/mcp/", runtime: "remote" }]),
+    fetchMcpRuntimeStatus: vi.fn().mockResolvedValue({}),
+    fetchSecrets: vi.fn().mockResolvedValue([]),
 }));
 
 describe("McpServersPage create modal", () => {
@@ -114,5 +118,11 @@ describe("McpServersPage create modal", () => {
         await userEvent.type(screen.getByLabelText("Search MCP servers"), "jir");
         expect(screen.queryByText("github")).not.toBeInTheDocument();
         expect(screen.getByText("jira")).toBeInTheDocument();
+    });
+
+    it("opens the catalog", async () => {
+        renderWithRouter(<McpServersPage />, "/mcp-servers");
+        await userEvent.click(await screen.findByRole("button", { name: "Add from catalog" }));
+        expect(await screen.findByRole("button", { name: "Select GitHub" })).toBeInTheDocument();
     });
 });

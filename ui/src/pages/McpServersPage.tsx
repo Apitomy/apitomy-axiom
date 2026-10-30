@@ -48,6 +48,7 @@ import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { StringListEditor } from "../components/StringListEditor";
 import { McpTestResultPanel } from "../components/McpTestResultPanel";
 import { parseMcpServersJson } from "../utils/mcpServerJson";
+import { McpCatalogModal } from "../components/McpCatalogModal";
 
 const USAGE_TYPE_LABELS: Record<string, string> = {
     actionType: "Action type",
@@ -268,6 +269,7 @@ export function McpServersPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isCatalogOpen, setIsCatalogOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
     const [deleteError, setDeleteError] = useState<McpServerInUseError | null>(null);
 
@@ -312,6 +314,9 @@ export function McpServersPage() {
                     <Title headingLevel="h1" size="lg">MCP Servers</Title>
                 </FlexItem>
                 <FlexItem>
+                    <Button variant="secondary" onClick={() => setIsCatalogOpen(true)} style={{ marginRight: "8px" }}>
+                        Add from catalog
+                    </Button>
                     <Button variant="primary" icon={<PlusCircleIcon />} onClick={() => setIsCreateOpen(true)}>
                         Add MCP Server
                     </Button>
@@ -349,7 +354,10 @@ export function McpServersPage() {
                     <EmptyState><EmptyStateBody>Loading...</EmptyStateBody></EmptyState>
                 ) : servers.length === 0 ? (
                     <EmptyState>
-                        <EmptyStateBody>No MCP servers registered.</EmptyStateBody>
+                        <EmptyStateBody>
+                            No MCP servers registered. Use <strong>Add from catalog</strong> to set up a popular
+                            server such as GitHub or Jira.
+                        </EmptyStateBody>
                     </EmptyState>
                 ) : (
                     <Table aria-label="MCP Servers" variant="compact">
@@ -405,6 +413,9 @@ export function McpServersPage() {
                 onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
                 Delete this MCP server?
             </ConfirmDeleteModal>
+
+            <McpCatalogModal isOpen={isCatalogOpen} onClose={() => setIsCatalogOpen(false)}
+                onCreated={(server) => { setIsCatalogOpen(false); navigate(`/mcp-servers/${server.id}`); }} />
 
             <CreateMcpServerModal isOpen={isCreateOpen} onClose={() => setIsCreateOpen(false)}
                 onCreated={handleCreated} />

@@ -1880,6 +1880,83 @@
         }
       ]
     },
+    "/mcp-servers/catalog": {
+      "get": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Search the MCP server catalog",
+        "description": "Lists curated MCP servers shipped with Axiom, or searches the official MCP Registry. Entries describe how to run the server and which values the user must supply; adding one is done with `POST /mcp-servers`.",
+        "operationId": "searchMcpCatalog",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "curated",
+                "registry"
+              ],
+              "default": "curated"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpCatalogEntry"
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The MCP Registry could not be reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp-servers/catalog/runtimes": {
+      "get": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Check which MCP server runtimes are installed",
+        "operationId": "getMcpRuntimeStatus",
+        "responses": {
+          "200": {
+            "description": "Runtime availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpRuntimeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/secrets": {
       "get": {
         "tags": [
@@ -13499,6 +13576,145 @@
           "durationMs": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "McpCatalogInput": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "description": "A value the user must (or may) supply when adding a catalog server.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Environment variable, header or argument name."
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret": {
+            "type": "boolean",
+            "description": "Whether the value is a credential (suggest storing it as an Axiom secret)."
+          },
+          "defaultValue": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string",
+            "description": "How the value is embedded, with `{value}` as the placeholder, e.g. `Bearer {value}`. Absent means the value is used as-is."
+          }
+        }
+      },
+      "McpCatalogEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "name",
+          "title",
+          "transport"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Catalog id (curated id or registry server name)."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "curated",
+              "registry"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Suggested Axiom server name."
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "homepage": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "stdio",
+              "http",
+              "sse"
+            ]
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Arguments; `{arg:NAME}` placeholders are replaced by the matching `arguments` input."
+          },
+          "url": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string",
+            "enum": [
+              "node",
+              "uv",
+              "docker",
+              "remote"
+            ],
+            "description": "What must be installed on the Axiom host to run the server."
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCatalogInput"
+            }
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCatalogInput"
+            }
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCatalogInput"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "description": "Setup hints, e.g. how to create the token."
+          }
+        }
+      },
+      "McpRuntimeStatus": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "boolean",
+            "description": "`npx` is available."
+          },
+          "uv": {
+            "type": "boolean",
+            "description": "`uvx` is available."
+          },
+          "docker": {
+            "type": "boolean",
+            "description": "`docker` is available."
           }
         }
       }
