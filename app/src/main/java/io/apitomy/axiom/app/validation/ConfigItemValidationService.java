@@ -123,7 +123,7 @@ public class ConfigItemValidationService {
         }
         ActionTypeValidator.KnownNames known = new ActionTypeValidator.KnownNames(context.secretNames(),
                 context.toolNames(), context.toolsetNames(), SdkFunctionRegistry.allToolNames(),
-                defaultEngine(), engineModels(actionType));
+                defaultEngine(), engineModels(actionType), context.mcpServerNames());
         ActionTypeValidator.validate(actionType, known).messages().forEach(m -> problems.add(new ConfigProblem(
                 m.severity().name().toLowerCase(Locale.ROOT), m.field(), "ACTION_TYPE_INVALID", m.message())));
     }
@@ -204,6 +204,16 @@ public class ConfigItemValidationService {
         if (allowedTools.isMissingNode() || (allowedTools.isArray() && allowedTools.isEmpty())) {
             problems.add(ConfigProblem.warning("allowedTools", "NO_ALLOWED_TOOLS",
                     "'allowedTools' is empty — the session will have no tool access."));
+        }
+        JsonNode mcpServers = item.path("mcpServers");
+        if (context.mcpServerNames() != null && mcpServers.isArray()) {
+            for (int i = 0; i < mcpServers.size(); i++) {
+                String server = mcpServers.get(i).asText("");
+                if (!server.startsWith("@") && !context.mcpServerNames().contains(server)) {
+                    problems.add(ConfigProblem.error("mcpServers[" + i + "]", "UNKNOWN_MCP_SERVER",
+                            "Selects MCP server '" + server + "' but no MCP server with that name exists."));
+                }
+            }
         }
         if (context.secretNames() != null) {
             item.path("environment").fields().forEachRemaining(entry -> {

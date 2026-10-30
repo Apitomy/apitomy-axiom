@@ -280,6 +280,7 @@ public class ImportExportService {
 
         int[] tools = upsertTools(pack.path("tools"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
+        int[] mcpServers = upsertMcpServers(pack.path("mcpServers"));
         int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
         int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
@@ -288,6 +289,7 @@ public class ImportExportService {
         int[] dashboards = upsertDashboards(pack.path("dashboards"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
+        LOG.infof("Upserted MCP servers: %d created, %d updated", mcpServers[0], mcpServers[1]);
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
                         + "%d action types created, %d updated; "
                         + "%d toolsets created, %d updated; "
@@ -528,22 +530,43 @@ public class ImportExportService {
         int count = 0;
         for (JsonNode item : items) {
             McpServerEntity entity = new McpServerEntity();
-            entity.name = item.path("name").asText();
-            entity.description = textOrNull(item, "description");
-            entity.serverCommand = textOrNull(item, "serverCommand");
-            entity.serverArgs = jsonOrNull(item, "serverArgs");
-            entity.serverEnv = jsonOrNull(item, "serverEnv");
-            entity.serverUrl = textOrNull(item, "serverUrl");
-            String transport = textOrNull(item, "transport");
-            entity.transport = transport != null ? transport
-                    : (entity.serverUrl != null && !entity.serverUrl.isBlank() ? "http" : "stdio");
-            entity.headers = jsonOrNull(item, "headers");
-            entity.timeoutMs = item.hasNonNull("timeout") ? item.get("timeout").asInt() : null;
-            entity.enabled = !item.has("enabled") || item.get("enabled").asBoolean(true);
+            applyMcpServerFields(entity, item);
             entity.persist();
             count++;
         }
         return count;
+    }
+
+    private int[] upsertMcpServers(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            McpServerEntity entity = McpServerEntity.find("name", item.path("name").asText()).firstResult();
+            boolean isNew = entity == null;
+            if (isNew) {
+                entity = new McpServerEntity();
+            }
+            applyMcpServerFields(entity, item);
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private void applyMcpServerFields(McpServerEntity entity, JsonNode item) {
+        entity.name = item.path("name").asText();
+        entity.description = textOrNull(item, "description");
+        entity.serverCommand = textOrNull(item, "serverCommand");
+        entity.serverArgs = jsonOrNull(item, "serverArgs");
+        entity.serverEnv = jsonOrNull(item, "serverEnv");
+        entity.serverUrl = textOrNull(item, "serverUrl");
+        String transport = textOrNull(item, "transport");
+        entity.transport = transport != null ? transport
+                : (entity.serverUrl != null && !entity.serverUrl.isBlank() ? "http" : "stdio");
+        entity.headers = jsonOrNull(item, "headers");
+        entity.timeoutMs = item.hasNonNull("timeout") ? item.get("timeout").asInt() : null;
+        entity.enabled = !item.has("enabled") || item.get("enabled").asBoolean(true);
     }
 
     private int importActionTypes(JsonNode items) {

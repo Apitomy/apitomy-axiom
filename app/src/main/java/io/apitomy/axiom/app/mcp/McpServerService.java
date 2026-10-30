@@ -48,6 +48,9 @@ public class McpServerService {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    McpServerReferences references;
+
     /**
      * Lists all MCP servers sorted by name.
      *
@@ -108,18 +111,38 @@ public class McpServerService {
     public McpServerEntity update(long id, NewMcpServer data) {
         McpServerEntity entity = get(id);
         validate(data, id);
+        String oldName = entity.name;
         applyFields(entity, data);
+        if (!oldName.equals(entity.name)) {
+            references.rename(oldName, entity.name);
+        }
         return entity;
     }
 
     /**
-     * Deletes an MCP server.
+     * Lists the items that reference a server.
      *
      * @param id the server id
+     * @return the references
+     */
+    public List<McpServerReferences.Usage> usages(long id) {
+        return references.usagesOf(get(id).name);
+    }
+
+    /**
+     * Deletes an MCP server that nothing references.
+     *
+     * @param id the server id
+     * @throws McpServerInUseException if the server is referenced
      */
     @Transactional
     public void delete(long id) {
-        get(id).delete();
+        McpServerEntity entity = get(id);
+        List<McpServerReferences.Usage> usages = references.usagesOf(entity.name);
+        if (!usages.isEmpty()) {
+            throw new McpServerInUseException(entity.name, usages);
+        }
+        entity.delete();
     }
 
     /**

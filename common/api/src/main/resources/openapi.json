@@ -1731,7 +1731,7 @@
             "$ref": "#/components/responses/Conflict"
           }
         },
-        "description": "Replaces the MCP server definition. Omitted or empty `serverArgs`/`serverEnv` clear the stored values."
+        "description": "Replaces the MCP server definition. Omitted or empty `serverArgs`/`serverEnv` clear the stored values. Renaming a server updates every reference to it (action types, session templates, toolsets)."
       },
       "delete": {
         "tags": [
@@ -1742,6 +1742,55 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The server is in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerInUseError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Deletes an MCP server. Fails with 409 if any action type, session template or toolset references it."
+      },
+      "parameters": [
+        {
+          "name": "mcpServerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/mcp-servers/{mcpServerId}/usage": {
+      "get": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "List the items that reference an MCP server",
+        "operationId": "getMcpServerUsage",
+        "responses": {
+          "200": {
+            "description": "References",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpServerUsage"
+                  }
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -13223,6 +13272,65 @@
             "type": "number",
             "format": "double",
             "description": "Only set when filterLabels is given: cost of records in the window that have no subject and were therefore excluded"
+          }
+        }
+      },
+      "McpServerUsage": {
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "field"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "actionType",
+              "sessionTemplate",
+              "toolset"
+            ],
+            "description": "Kind of item that references the server."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Id of the referencing item."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the referencing item."
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "mcpServers",
+              "allowedTools",
+              "tools"
+            ],
+            "description": "Field holding the reference: an explicit server selection, or `mcp__<name>__...` tool names."
+          },
+          "templateId": {
+            "type": "string",
+            "description": "For session templates: the template id (used in UI routes)."
+          }
+        },
+        "description": "An item that references an MCP server."
+      },
+      "McpServerInUseError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "integer"
+          },
+          "usages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerUsage"
+            }
           }
         }
       }

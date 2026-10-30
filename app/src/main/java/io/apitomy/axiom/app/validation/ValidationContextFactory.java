@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
+import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
@@ -65,7 +66,8 @@ public class ValidationContextFactory {
                     collect(EventSourceEntity.<EventSourceEntity>listAll(), e -> e.id),
                     collect(SecretEntity.<SecretEntity>listAll(), s -> s.name),
                     actionTypeInputs(actionTypes),
-                    actionTypeOutputs(actionTypes));
+                    actionTypeOutputs(actionTypes),
+                    collect(McpServerEntity.<McpServerEntity>listAll(), m -> m.name));
         } finally {
             if (activated) {
                 requestContext.deactivate();
@@ -91,7 +93,8 @@ public class ValidationContextFactory {
                 db.secretNames(),
                 overlay(db.actionTypeInputs(), pendingInputs(pack != null ? pack.path("actionTypes") : null)),
                 overlayOutputs(db.actionTypeOutputs(),
-                        pendingOutputs(pack != null ? pack.path("actionTypes") : null)));
+                        pendingOutputs(pack != null ? pack.path("actionTypes") : null)),
+                union(db.mcpServerNames(), packNames(pack, "mcpServers", "name")));
     }
 
     /**
@@ -113,7 +116,8 @@ public class ValidationContextFactory {
                 db.eventSourceIds(),
                 db.secretNames(),
                 overlay(db.actionTypeInputs(), pendingInputs(actionTypes)),
-                overlayOutputs(db.actionTypeOutputs(), pendingOutputs(actionTypes)));
+                overlayOutputs(db.actionTypeOutputs(), pendingOutputs(actionTypes)),
+                db.mcpServerNames());
     }
 
     private static Set<String> itemNames(Map<ConfigItemType, List<JsonNode>> items, ConfigItemType type) {
@@ -147,7 +151,8 @@ public class ValidationContextFactory {
                 overlay(db.actionTypeInputs(), pendingInputs(actionTypes.stream()
                         .map(DirectoryFile::content).filter(c -> c != null).toList())),
                 overlayOutputs(db.actionTypeOutputs(), pendingOutputs(actionTypes.stream()
-                        .map(DirectoryFile::content).filter(c -> c != null).toList())));
+                        .map(DirectoryFile::content).filter(c -> c != null).toList())),
+                db.mcpServerNames());
     }
 
     /**

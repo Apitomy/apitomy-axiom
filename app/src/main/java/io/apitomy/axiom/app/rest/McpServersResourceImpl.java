@@ -5,9 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.McpResource;
 import io.apitomy.axiom.api.beans.Headers;
 import io.apitomy.axiom.api.beans.McpServer;
+import io.apitomy.axiom.api.beans.McpServerInUseError;
+import io.apitomy.axiom.api.beans.McpServerUsage;
 import io.apitomy.axiom.api.beans.NewMcpServer;
 import io.apitomy.axiom.api.beans.ServerEnv;
 import io.apitomy.axiom.app.mcp.McpServerConflictException;
+import io.apitomy.axiom.app.mcp.McpServerInUseException;
+import io.apitomy.axiom.app.mcp.McpServerReferences;
 import io.apitomy.axiom.app.mcp.McpServerNotFoundException;
 import io.apitomy.axiom.app.mcp.McpServerService;
 import io.apitomy.axiom.app.mcp.McpServerValidationException;
@@ -77,6 +81,39 @@ public class McpServersResourceImpl implements McpResource {
     @Override
     public void deleteMcpServer(long mcpServerId) {
         service.delete(mcpServerId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List<McpServerUsage> getMcpServerUsage(long mcpServerId) {
+        return service.usages(mcpServerId).stream().map(McpServersResourceImpl::toUsageBean).toList();
+    }
+
+    /**
+     * Maps deletes of referenced servers to 409 with the references.
+     *
+     * @param e the exception
+     * @return a 409 response
+     */
+    @ServerExceptionMapper
+    public Response mapInUse(McpServerInUseException e) {
+        McpServerInUseError body = new McpServerInUseError();
+        body.setMessage(e.getMessage());
+        body.setErrorCode(409);
+        body.setUsages(e.usages().stream().map(McpServersResourceImpl::toUsageBean).toList());
+        return Response.status(409).type(MediaType.APPLICATION_JSON).entity(body).build();
+    }
+
+    private static McpServerUsage toUsageBean(McpServerReferences.Usage usage) {
+        McpServerUsage bean = new McpServerUsage();
+        bean.setType(McpServerUsage.Type.fromValue(usage.type().value()));
+        bean.setId(usage.id());
+        bean.setName(usage.name());
+        bean.setField(McpServerUsage.Field.fromValue(usage.field()));
+        bean.setTemplateId(usage.templateId());
+        return bean;
     }
 
     /**

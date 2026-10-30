@@ -114,11 +114,15 @@ class ConfigPackApplyTest {
 
         ObjectNode pack = mapper.createObjectNode();
         pack.putArray("actionTypes").add(item);
+        pack.putArray("mcpServers")
+                .add(mapper.createObjectNode().put("name", "github").put("serverCommand", "npx"))
+                .add(mapper.createObjectNode().put("name", "jira").put("serverCommand", "npx"));
         importExportService.importOrUpdatePack(pack);
         QuarkusTransaction.requiringNew().run(() -> {
             ActionTypeEntity at = ActionTypeEntity.find("name", "atm-" + sfx).firstResult();
             assertEquals(List.of("github", "jira"), at.mcpServers);
             at.delete();
+            io.apitomy.axiom.core.entities.McpServerEntity.delete("name in ?1", List.of("github", "jira"));
         });
     }
 

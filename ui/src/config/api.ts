@@ -723,9 +723,41 @@ export async function updateMcpServer(id: number, server: NewMcpServer): Promise
     return response.json();
 }
 
+/** An item that references an MCP server. */
+export interface McpServerUsage {
+    type: "actionType" | "sessionTemplate" | "toolset";
+    id?: number;
+    name: string;
+    field: "mcpServers" | "allowedTools" | "tools";
+    templateId?: string;
+}
+
+/** Error thrown when an MCP server cannot be deleted because it is in use. */
+export type McpServerInUseError = Error & { usages?: McpServerUsage[] };
+
+/** Returns the UI route of an item that references an MCP server. */
+export function mcpServerUsageRoute(usage: McpServerUsage): string {
+    switch (usage.type) {
+        case "actionType": return `/action-types/${usage.id}`;
+        case "toolset": return `/toolsets/${usage.id}`;
+        default: return `/session-templates/${usage.templateId}`;
+    }
+}
+
+export async function fetchMcpServerUsage(id: number): Promise<McpServerUsage[]> {
+    const response = await fetch(`${API}/mcp-servers/${id}/usage`);
+    if (!response.ok) throw new Error(`Failed to fetch MCP server usage: ${response.status}`);
+    return response.json();
+}
+
 export async function deleteMcpServer(id: number): Promise<void> {
     const response = await fetch(`${API}/mcp-servers/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete MCP server: ${response.status}`);
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const error: McpServerInUseError = new Error(body.message || `Failed to delete MCP server: ${response.status}`);
+        error.usages = body.usages;
+        throw error;
+    }
 }
 
 export async function fetchActionTypeTools(actionTypeId: number): Promise<ToolDefinition[]> {
