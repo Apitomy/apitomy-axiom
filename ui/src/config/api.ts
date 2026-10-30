@@ -590,6 +590,8 @@ export interface McpServer {
     warnings?: string[];
     /** Tools found by the last successful connection test. */
     tools?: McpServerTool[];
+    /** Number of references from action types, session templates and toolsets. */
+    usageCount?: number;
     toolsDiscoveredOn?: string;
 }
 
@@ -612,7 +614,7 @@ export interface McpServerTestResult {
 }
 
 export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "transport" | "enabled" | "warnings"
-    | "tools" | "toolsDiscoveredOn"> & {
+    | "tools" | "toolsDiscoveredOn" | "usageCount"> & {
     transport?: McpTransport;
     enabled?: boolean;
 };

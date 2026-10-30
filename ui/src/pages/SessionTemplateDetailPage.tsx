@@ -1,3 +1,4 @@
+import { McpServerPicker, BUILT_IN_MCP_SERVERS } from "../components/McpServerPicker";
 import { useState, useEffect, useCallback } from "react";
 import { useEffectiveTheme } from "../hooks/useTheme";
 import { useParams, Link } from "react-router-dom";
@@ -38,12 +39,10 @@ import {
     updateAssistantTemplate,
     updateAssistantTemplateOverrides,
     deleteAssistantTemplateOverrides,
-    fetchMcpServers,
     fetchModels,
     fetchSystemConfig,
     type SessionTemplate,
     type NewSessionTemplate,
-    type McpServer,
     type EngineInfo,
 } from "../config/api";
 
@@ -74,7 +73,6 @@ export function SessionTemplateDetailPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
-    const [mcpServers, setMcpServers] = useState<McpServer[]>([]);
     const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [interactiveEngines, setInteractiveEngines] = useState<EngineInfo[]>([]);
     const [globalDefaultEngine, setGlobalDefaultEngine] = useState<string>("");
@@ -87,10 +85,9 @@ export function SessionTemplateDetailPage() {
         setLoading(true);
         Promise.all([
             fetchAssistantTemplate(templateId),
-            fetchMcpServers(),
             fetchSystemConfig(),
         ])
-            .then(async ([t, servers, systemConfig]) => {
+            .then(async ([t, systemConfig]) => {
                 setTemplate(t);
                 setForm({
                     name: t.name,
@@ -107,7 +104,6 @@ export function SessionTemplateDetailPage() {
                     allowedTools: t.allowedTools,
                 });
                 setEnvVars(t.environment || {});
-                setMcpServers(servers);
                 const engines = (systemConfig.engines || [])
                     .filter((engine) => engine.supportsInteractiveSessions);
                 setInteractiveEngines(engines);
@@ -154,14 +150,6 @@ export function SessionTemplateDetailPage() {
         deleteAssistantTemplateOverrides(templateId)
             .then(() => loadData())
             .catch(console.error);
-    };
-
-    const toggleMcpServer = (serverName: string) => {
-        const current = form.mcpServers || [];
-        const updated = current.includes(serverName)
-            ? current.filter((n) => n !== serverName)
-            : [...current, serverName];
-        updateForm({ mcpServers: updated });
     };
 
     const handleEngineChange = async (value: string) => {
@@ -449,58 +437,15 @@ export function SessionTemplateDetailPage() {
                             <FormHelperText>
                                 <HelperText>
                                     <HelperTextItem>
-                                        Select MCP servers to include in the session. These
-                                        are resolved from your configured MCP servers.
+                                        Select the MCP servers to start for the session: built-in Axiom
+                                        servers or your configured ones. Servers whose tools are listed in
+                                        Allowed Tools are added automatically.
                                     </HelperTextItem>
                                 </HelperText>
                             </FormHelperText>
-                            <div style={{
-                                border: "1px solid var(--pf-t--global--border--color--default, #d2d2d2)",
-                                borderRadius: "3px",
-                                padding: "8px",
-                                maxHeight: "200px",
-                                overflowY: "auto",
-                            }}>
-                                {mcpServers.length === 0 ? (
-                                    <div className="axiom-text-subtle" style={{
-                                        fontStyle: "italic",
-                                    }}>
-                                        No MCP servers configured
-                                    </div>
-                                ) : (
-                                    mcpServers.map((server) => (
-                                        <div key={server.name}
-                                            style={{ marginBottom: "4px" }}>
-                                            <label style={{
-                                                display: "flex",
-                                                alignItems: "center",
-                                                cursor: isReadOnly
-                                                    ? "not-allowed" : "pointer",
-                                            }}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={(form.mcpServers || [])
-                                                        .includes(server.name)}
-                                                    onChange={() =>
-                                                        toggleMcpServer(server.name)
-                                                    }
-                                                    disabled={isReadOnly}
-                                                    style={{ marginRight: "8px" }}
-                                                />
-                                                <span>{server.name}</span>
-                                                {server.description && (
-                                                    <span className="axiom-text-subtle" style={{
-                                                        marginLeft: "8px",
-                                                        fontSize: "0.9em",
-                                                    }}>
-                                                        — {server.description}
-                                                    </span>
-                                                )}
-                                            </label>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                            <McpServerPicker builtIns={BUILT_IN_MCP_SERVERS} readOnly={isReadOnly}
+                                selected={form.mcpServers || []}
+                                onChange={(mcpServers) => updateForm({ mcpServers })} />
                         </FormGroup>
                     </Form>
                 </Tab>

@@ -6,10 +6,13 @@ import { render } from "@testing-library/react";
 import { McpServerDetailPage } from "./McpServerDetailPage";
 import * as api from "../config/api";
 
-vi.mock("../config/api", () => ({
+vi.mock("../config/api", async (orig) => ({
+    ...(await orig<typeof import("../config/api")>()),
     fetchMcpServer: vi.fn(),
     updateMcpServer: vi.fn(),
     testMcpServer: vi.fn(),
+    fetchMcpServerUsage: vi.fn().mockResolvedValue([]),
+    fetchSecrets: vi.fn().mockResolvedValue([]),
 }));
 
 function renderPage() {
@@ -63,8 +66,9 @@ describe("McpServerDetailPage", () => {
         renderPage();
         await userEvent.click(await screen.findByRole("button", { name: /Test connection/ }));
         expect(await screen.findByText(/Connected to github-mcp 1.0/)).toBeInTheDocument();
-        expect(screen.getByText("mcp__gh__list_issues")).toBeInTheDocument();
-        expect(screen.getByText("List issues")).toBeInTheDocument();
+        expect(screen.getAllByText("mcp__gh__list_issues").length).toBeGreaterThan(0);
+        expect(screen.getAllByText("List issues").length).toBeGreaterThan(0);
+        expect(screen.getByRole("tab", { name: "Tools (2)" })).toBeInTheDocument();
     });
 
     it("shows why a connection test failed, with the server log", async () => {
@@ -78,5 +82,46 @@ describe("McpServerDetailPage", () => {
         await userEvent.click(await screen.findByRole("button", { name: /Test connection/ }));
         expect(await screen.findByText(/Server exited with code 1/)).toBeInTheDocument();
         expect(screen.getByText(/npm ERR! 404/)).toBeInTheDocument();
+    });
+
+    it("switching to HTTP saves only the HTTP fields", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({
+            id: 5, name: "gh", transport: "stdio", serverCommand: "npx", serverArgs: ["-y"],
+            serverEnv: { A: "b" }, enabled: true,
+        } as never);
+        vi.mocked(api.updateMcpServer).mockResolvedValueOnce({ id: 5, name: "gh", transport: "http", enabled: true } as never);
+        renderPage();
+        await userEvent.click(await screen.findByRole("tab", { name: "Connection" }));
+        await userEvent.click(screen.getByLabelText("HTTP (streamable)"));
+        await userEvent.type(screen.getByLabelText(/^URL/), "https://x.io/mcp");
+        await userEvent.click(screen.getByRole("button", { name: /Save Changes/ }));
+        expect(api.updateMcpServer).toHaveBeenLastCalledWith(5, {
+            name: "gh", description: undefined, transport: "http", timeout: undefined, enabled: true,
+            serverUrl: "https://x.io/mcp", headers: {},
+        });
+    });
+
+    it("disables the server", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({
+            id: 5, name: "gh", transport: "stdio", serverCommand: "npx", enabled: true,
+        } as never);
+        vi.mocked(api.updateMcpServer).mockResolvedValueOnce({ id: 5, name: "gh", transport: "stdio", enabled: false } as never);
+        renderPage();
+        await userEvent.click(await screen.findByLabelText("Enabled"));
+        await userEvent.click(screen.getByRole("button", { name: /Save Changes/ }));
+        expect(api.updateMcpServer).toHaveBeenLastCalledWith(5, expect.objectContaining({ enabled: false }));
+        expect(await screen.findByText(/This server is disabled/)).toBeInTheDocument();
+    });
+
+    it("lists the items that use the server", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({
+            id: 5, name: "gh", transport: "stdio", serverCommand: "npx", enabled: true,
+        } as never);
+        vi.mocked(api.fetchMcpServerUsage).mockResolvedValueOnce([
+            { type: "sessionTemplate", id: 2, templateId: "t-1", name: "Triage chat", field: "mcpServers" },
+        ]);
+        renderPage();
+        await userEvent.click(await screen.findByRole("tab", { name: "Used by (1)" }));
+        expect(screen.getByRole("link", { name: "Triage chat" })).toHaveAttribute("href", "/session-templates/t-1");
     });
 });
