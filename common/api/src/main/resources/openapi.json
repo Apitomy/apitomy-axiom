@@ -2211,8 +2211,31 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "description": "Items already exist (onConflict=fail)"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "onConflict",
+            "in": "query",
+            "required": false,
+            "description": "What to do with pack items whose name already exists: `fail` (default; 409 listing the conflicts), `skip` (keep the existing items) or `overwrite` (replace them).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "fail",
+                "skip",
+                "overwrite"
+              ],
+              "default": "fail"
+            }
+          }
+        ]
       }
     },
     "/assistant/sessions": {

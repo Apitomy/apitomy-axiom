@@ -236,8 +236,9 @@ public class McpServerService {
      * Validates a definition on its own (no name-conflict check).
      *
      * @param data the definition
+     * @throws McpServerValidationException if the definition is invalid
      */
-    private void validateDefinition(NewMcpServer data) {
+    public static void validateDefinition(NewMcpServer data) {
         validateName(data.getName());
         boolean hasCommand = notBlank(data.getServerCommand());
         boolean hasUrl = notBlank(data.getServerUrl());
@@ -353,7 +354,7 @@ public class McpServerService {
      * @param data the definition
      * @return {@code stdio}, {@code http} or {@code sse}
      */
-    private static String effectiveTransport(NewMcpServer data) {
+    static String effectiveTransport(NewMcpServer data) {
         if (data.getTransport() != null) {
             return data.getTransport().value();
         }
