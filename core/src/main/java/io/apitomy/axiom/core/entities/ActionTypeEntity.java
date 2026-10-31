@@ -98,6 +98,15 @@ public class ActionTypeEntity extends PanacheEntity {
     @Column(name = "label")
     public List<String> labels = new ArrayList<>();
 
+    /**
+     * Names of MCP servers available to tasks of this type. Each selected server is loaded and all of
+     * its tools are allowed ({@code mcp__<name>__*}).
+     */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "action_type_mcp_server", joinColumns = @JoinColumn(name = "action_type_id"))
+    @Column(name = "mcp_server_name")
+    public List<String> mcpServers = new ArrayList<>();
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "action_type_input", joinColumns = @JoinColumn(name = "action_type_id"))
     @OrderColumn(name = "ordinal")

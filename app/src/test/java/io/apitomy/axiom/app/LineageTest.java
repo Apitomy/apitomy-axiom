@@ -394,11 +394,28 @@ class LineageTest {
 
     @Test
     void queryCountDoesNotGrowWithFanOut() {
-        long small = countQueries(2);
-        long large = countQueries(12);
+        long small = minQueries(2);
+        long large = minQueries(12);
         assertTrue(small > 0, "Statistics must count the lineage queries");
         assertTrue(small < 40, "Unexpectedly many lineage queries: " + small);
         assertEquals(small, large, "Lineage queries must be batched per level, not per node");
+    }
+
+    /**
+     * Hibernate statistics are global, so background jobs (task and event pollers working on data left by other
+     * test classes) can add statements to a measurement, never remove them. Measure up to three times and keep
+     * the lowest count, stopping once two measurements agree.
+     */
+    private long minQueries(int taskCount) {
+        long min = countQueries(taskCount);
+        for (int attempt = 1; attempt < 3; attempt++) {
+            long next = countQueries(taskCount);
+            if (next == min) {
+                break;
+            }
+            min = Math.min(min, next);
+        }
+        return min;
     }
 
     private long countQueries(int taskCount) {

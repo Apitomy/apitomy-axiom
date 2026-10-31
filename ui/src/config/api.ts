@@ -65,6 +65,8 @@ export interface StartupCheck {
     name: string;
     status: "ok" | "warning" | "error";
     message: string;
+    /** Prerequisites only: true if Axiom needs it, false if only some features do. Absent for engine checks. */
+    required?: boolean;
 }
 
 export interface EngineInfo {
@@ -267,8 +269,11 @@ export interface PackImportValidationError {
     problems: Record<string, PackImportProblem[]>;
 }
 
-export async function importPack(packJson: string): Promise<ImportResult> {
-    const response = await fetch(`${API}/system/packs/import`, {
+/** How a pack import treats items that already exist. */
+export type PackConflictMode = "fail" | "skip" | "overwrite";
+
+export async function importPack(packJson: string, onConflict: PackConflictMode = "fail"): Promise<ImportResult> {
+    const response = await fetch(`${API}/system/packs/import?onConflict=${onConflict}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: packJson,
@@ -422,6 +427,7 @@ export interface ActionType {
     timeoutSeconds?: number;
     environment?: Record<string, string>;
     labels?: string[];
+    mcpServers?: string[];
     inputs?: ActionTypeField[];
     outputs?: ActionTypeField[];
 }
@@ -570,17 +576,53 @@ export interface ToolDefinition {
     labels?: string[];
 }
 
+export type McpTransport = "stdio" | "http" | "sse";
+
 export interface McpServer {
     id: number;
     name: string;
     description?: string;
+    transport: McpTransport;
     serverCommand?: string;
     serverArgs?: string[];
     serverEnv?: Record<string, string>;
     serverUrl?: string;
+    headers?: Record<string, string>;
+    timeout?: number;
+    enabled: boolean;
+    createdOn?: string;
+    modifiedOn?: string;
+    warnings?: string[];
+    /** Tools found by the last successful connection test. */
+    tools?: McpServerTool[];
+    /** Number of references from action types, session templates and toolsets. */
+    usageCount?: number;
+    toolsDiscoveredOn?: string;
 }
 
-export type NewMcpServer = Omit<McpServer, "id">;
+/** A tool reported by an MCP server. */
+export interface McpServerTool {
+    name: string;
+    description?: string;
+}
+
+/** Result of an MCP server connection test. */
+export interface McpServerTestResult {
+    success: boolean;
+    serverName?: string;
+    serverVersion?: string;
+    protocolVersion?: string;
+    tools: McpServerTool[];
+    error?: string;
+    log?: string;
+    durationMs: number;
+}
+
+export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "transport" | "enabled" | "warnings"
+    | "tools" | "toolsDiscoveredOn" | "usageCount"> & {
+    transport?: McpTransport;
+    enabled?: boolean;
+};
 
 export type NewToolDefinition = Omit<ToolDefinition, "id">;
 
@@ -673,6 +715,11 @@ export async function validateTool(tool: NewToolDefinition): Promise<ToolValidat
     return response.json();
 }
 
+async function mcpErrorMessage(response: Response, action: string): Promise<string> {
+    const body = await response.json().catch(() => ({}));
+    return body.message || `Failed to ${action} MCP server: ${response.status}`;
+}
+
 export async function fetchMcpServers(): Promise<McpServer[]> {
     const response = await fetch(`${API}/mcp-servers`);
     if (!response.ok) throw new Error(`Failed to fetch MCP servers: ${response.status}`);
@@ -691,7 +738,7 @@ export async function createMcpServer(server: NewMcpServer): Promise<McpServer> 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(server),
     });
-    if (!response.ok) throw new Error(`Failed to create MCP server: ${response.status}`);
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "create"));
     return response.json();
 }
 
@@ -701,13 +748,113 @@ export async function updateMcpServer(id: number, server: NewMcpServer): Promise
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(server),
     });
-    if (!response.ok) throw new Error(`Failed to update MCP server: ${response.status}`);
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "update"));
+    return response.json();
+}
+
+/** An item that references an MCP server. */
+export interface McpServerUsage {
+    type: "actionType" | "sessionTemplate" | "toolset";
+    id?: number;
+    name: string;
+    field: "mcpServers" | "allowedTools" | "tools";
+    templateId?: string;
+}
+
+/** Error thrown when an MCP server cannot be deleted because it is in use. */
+export type McpServerInUseError = Error & { usages?: McpServerUsage[] };
+
+/** Returns the UI route of an item that references an MCP server. */
+export function mcpServerUsageRoute(usage: McpServerUsage): string {
+    switch (usage.type) {
+        case "actionType": return `/action-types/${usage.id}`;
+        case "toolset": return `/toolsets/${usage.id}`;
+        default: return `/session-templates/${usage.templateId}`;
+    }
+}
+
+/** A value the user supplies when adding a catalog MCP server. */
+export interface McpCatalogInput {
+    name: string;
+    description?: string;
+    required?: boolean;
+    secret?: boolean;
+    defaultValue?: string;
+    /** How the value is embedded, with {value} as the placeholder (e.g. "Bearer {value}"). */
+    template?: string;
+}
+
+/** An MCP server from the curated catalog or the MCP Registry. */
+export interface McpCatalogEntry {
+    id: string;
+    source: "curated" | "registry";
+    name: string;
+    title: string;
+    description?: string;
+    homepage?: string;
+    version?: string;
+    transport: McpTransport;
+    command?: string;
+    args?: string[];
+    url?: string;
+    runtime?: "node" | "uv" | "docker" | "remote";
+    env?: McpCatalogInput[];
+    headers?: McpCatalogInput[];
+    arguments?: McpCatalogInput[];
+    notes?: string;
+}
+
+/** Which MCP server runtimes are installed on the Axiom host. */
+export interface McpRuntimeStatus {
+    node?: boolean;
+    uv?: boolean;
+    docker?: boolean;
+}
+
+export async function searchMcpCatalog(source: "curated" | "registry", search?: string): Promise<McpCatalogEntry[]> {
+    const params = new URLSearchParams({ source });
+    if (search?.trim()) params.set("search", search.trim());
+    const response = await fetch(`${API}/mcp-servers/catalog?${params}`);
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "search the catalog for"));
+    return response.json();
+}
+
+export async function fetchMcpRuntimeStatus(): Promise<McpRuntimeStatus> {
+    const response = await fetch(`${API}/mcp-servers/catalog/runtimes`);
+    if (!response.ok) throw new Error(`Failed to check MCP runtimes: ${response.status}`);
+    return response.json();
+}
+
+export async function testMcpServer(id: number): Promise<McpServerTestResult> {
+    const response = await fetch(`${API}/mcp-servers/${id}/test`, { method: "POST" });
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "test"));
+    return response.json();
+}
+
+export async function testNewMcpServer(server: NewMcpServer): Promise<McpServerTestResult> {
+    const response = await fetch(`${API}/mcp-servers/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(server),
+    });
+    if (!response.ok) throw new Error(await mcpErrorMessage(response, "test"));
+    return response.json();
+}
+
+export async function fetchMcpServerUsage(id: number): Promise<McpServerUsage[]> {
+    const response = await fetch(`${API}/mcp-servers/${id}/usage`);
+    if (!response.ok) throw new Error(`Failed to fetch MCP server usage: ${response.status}`);
     return response.json();
 }
 
 export async function deleteMcpServer(id: number): Promise<void> {
     const response = await fetch(`${API}/mcp-servers/${id}`, { method: "DELETE" });
-    if (!response.ok) throw new Error(`Failed to delete MCP server: ${response.status}`);
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const error: McpServerInUseError = new Error(body.message || `Failed to delete MCP server: ${response.status}`);
+        error.usages = body.usages;
+        throw error;
+    }
 }
 
 export async function fetchActionTypeTools(actionTypeId: number): Promise<ToolDefinition[]> {

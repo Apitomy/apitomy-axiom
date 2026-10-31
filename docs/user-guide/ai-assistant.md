@@ -102,7 +102,7 @@ Each template specifies:
 | **Working Directory** | Absolute path for the session. If empty, Axiom creates a temporary directory under `~/.axiom/assistant/sessions/`. For subject-scoped sessions, defaults to the subject workspace. |
 | **Initial Message** | Optional message automatically sent to the AI when a session starts. Supports `{{subjectName}}` placeholder. |
 | **Model** | Optional AI model override (e.g., a specific Claude model). |
-| **MCP Servers** | Named MCP server configurations to include in the session. |
+| **MCP Servers** | Built-in Axiom servers (`@axiom-*`) and configured MCP servers to start for the session. Servers whose tools are listed in **Allowed Tools** are added automatically; a selected server that does not exist stops the session from starting. See [MCP Servers](mcp-servers.md). |
 | **Allowed Tools** | Tool patterns for `--allowedTools` (e.g., `Read(*)`, `Bash(ls *)`). Use `@ToolsetName` to include all tools from a toolset. |
 | **Init Script** | Optional startup script executed when the session is created (see [Init Scripts](#init-scripts) below). |
 | **Environment** | Optional key-value environment variables for the interactive engine process, the only variables it gets beyond Axiom's own. Values support `${secret:NAME}` syntax; secrets are not injected automatically, and a missing secret stops the session from starting. |

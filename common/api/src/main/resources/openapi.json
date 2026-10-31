@@ -17,7 +17,7 @@
   ],
   "paths": {
     "x-codegen-contextRoot": "/api/v1",
-      "/system/health": {
+    "/system/health": {
       "get": {
         "tags": [
           "System"
@@ -1635,7 +1635,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Returns all MCP servers sorted by name."
       },
       "post": {
         "tags": [
@@ -1662,6 +1663,47 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/mcp-servers/test": {
+      "post": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Test an unsaved MCP server definition",
+        "description": "Connects to the server described by the body (resolving `${secret:NAME}` references), performs the MCP initialize handshake and lists its tools. Nothing is saved.",
+        "operationId": "testNewMcpServer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMcpServer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Test result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerTestResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           }
         }
       }
@@ -1716,8 +1758,15 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
           }
-        }
+        },
+        "description": "Replaces the MCP server definition. Omitted or empty `serverArgs`/`serverEnv` clear the stored values. Renaming a server updates every reference to it (action types, session templates, toolsets)."
       },
       "delete": {
         "tags": [
@@ -1728,6 +1777,53 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The server is in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerInUseError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Deletes an MCP server. Fails with 409 if any action type, session template or toolset references it."
+      },
+      "parameters": [
+        {
+          "name": "mcpServerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/mcp-servers/{mcpServerId}/test": {
+      "post": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Test an MCP server",
+        "description": "Connects to the server, performs the MCP initialize handshake and lists its tools. On success the tools are stored on the server (`tools`) for allowed-tools suggestions. Disabled servers can be tested.",
+        "operationId": "testMcpServer",
+        "responses": {
+          "200": {
+            "description": "Test result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpServerTestResult"
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -1745,6 +1841,121 @@
           }
         }
       ]
+    },
+    "/mcp-servers/{mcpServerId}/usage": {
+      "get": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "List the items that reference an MCP server",
+        "operationId": "getMcpServerUsage",
+        "responses": {
+          "200": {
+            "description": "References",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpServerUsage"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "mcpServerId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
+    },
+    "/mcp-servers/catalog": {
+      "get": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Search the MCP server catalog",
+        "description": "Lists curated MCP servers shipped with Axiom, or searches the official MCP Registry. Entries describe how to run the server and which values the user must supply; adding one is done with `POST /mcp-servers`.",
+        "operationId": "searchMcpCatalog",
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "curated",
+                "registry"
+              ],
+              "default": "curated"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/McpCatalogEntry"
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The MCP Registry could not be reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mcp-servers/catalog/runtimes": {
+      "get": {
+        "tags": [
+          "McpServers"
+        ],
+        "summary": "Check which MCP server runtimes are installed",
+        "operationId": "getMcpRuntimeStatus",
+        "responses": {
+          "200": {
+            "description": "Runtime availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpRuntimeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "/secrets": {
       "get": {
@@ -2077,8 +2288,31 @@
                 }
               }
             }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "409": {
+            "description": "Items already exist (onConflict=fail)"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "onConflict",
+            "in": "query",
+            "required": false,
+            "description": "What to do with pack items whose name already exists: `fail` (default; 409 listing the conflicts), `skip` (keep the existing items) or `overwrite` (replace them).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "fail",
+                "skip",
+                "overwrite"
+              ],
+              "default": "fail"
+            }
+          }
+        ]
       }
     },
     "/assistant/sessions": {
@@ -3270,7 +3504,9 @@
     },
     "/assistant/templates/{templateId}/overrides": {
       "get": {
-        "tags": ["Assistant"],
+        "tags": [
+          "Assistant"
+        ],
         "summary": "Get user overrides for a built-in session template",
         "operationId": "getSessionTemplateOverrides",
         "responses": {
@@ -3278,22 +3514,32 @@
             "description": "Current overrides (fields are absent when not overridden)",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SessionTemplateOverrides" }
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTemplateOverrides"
+                }
               }
             }
           },
-          "400": { "description": "Template is not a built-in template" },
-          "404": { "description": "Template not found" }
+          "400": {
+            "description": "Template is not a built-in template"
+          },
+          "404": {
+            "description": "Template not found"
+          }
         }
       },
       "put": {
-        "tags": ["Assistant"],
+        "tags": [
+          "Assistant"
+        ],
         "summary": "Replace user overrides for a built-in session template",
         "operationId": "updateSessionTemplateOverrides",
         "requestBody": {
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/SessionTemplateOverrides" }
+              "schema": {
+                "$ref": "#/components/schemas/SessionTemplateOverrides"
+              }
             }
           },
           "required": true
@@ -3303,22 +3549,36 @@
             "description": "Template with overrides applied",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/SessionTemplate" }
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTemplate"
+                }
               }
             }
           },
-          "400": { "description": "Template is not a built-in template, or the request is invalid (missing body, unknown engine)" },
-          "404": { "description": "Template not found" }
+          "400": {
+            "description": "Template is not a built-in template, or the request is invalid (missing body, unknown engine)"
+          },
+          "404": {
+            "description": "Template not found"
+          }
         }
       },
       "delete": {
-        "tags": ["Assistant"],
+        "tags": [
+          "Assistant"
+        ],
         "summary": "Remove user overrides, restoring built-in defaults",
         "operationId": "deleteSessionTemplateOverrides",
         "responses": {
-          "204": { "description": "Overrides removed" },
-          "400": { "description": "Template is not a built-in template" },
-          "404": { "description": "Template not found" }
+          "204": {
+            "description": "Overrides removed"
+          },
+          "400": {
+            "description": "Template is not a built-in template"
+          },
+          "404": {
+            "description": "Template not found"
+          }
         }
       },
       "parameters": [
@@ -3327,7 +3587,9 @@
           "in": "path",
           "description": "The built-in template identifier",
           "required": true,
-          "schema": { "type": "string" }
+          "schema": {
+            "type": "string"
+          }
         }
       ]
     },
@@ -7188,28 +7450,28 @@
   },
   "components": {
     "schemas": {
-        "EventSchemaSummary": {
-          "type": "object",
-          "required": [
-            "type",
-            "description"
-          ],
-          "properties": {
-            "type": {
-              "type": "string",
-              "description": "Event type, e.g. issue.closed"
-            },
-            "description": {
-              "type": "string",
-              "description": "What the event means"
-            }
+      "EventSchemaSummary": {
+        "type": "object",
+        "required": [
+          "type",
+          "description"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Event type, e.g. issue.closed"
+          },
+          "description": {
+            "type": "string",
+            "description": "What the event means"
           }
-        },
-        "EventSchemaDocument": {
-          "type": "object",
-          "additionalProperties": {},
-          "description": "A JSON Schema document"
-        },
+        }
+      },
+      "EventSchemaDocument": {
+        "type": "object",
+        "additionalProperties": {},
+        "description": "A JSON Schema document"
+      },
       "CompositionMessage": {
         "title": "CompositionMessage",
         "description": "A user message to the composition's agent.",
@@ -8127,6 +8389,13 @@
             "items": {
               "$ref": "#/components/schemas/ActionTypeField"
             }
+          },
+          "mcpServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of MCP servers available to tasks of this type. Each selected server is loaded and all of its tools are allowed (`mcp__<name>__*`), in addition to `allowedTools`."
           }
         }
       },
@@ -8220,6 +8489,13 @@
             "items": {
               "$ref": "#/components/schemas/ActionTypeField"
             }
+          },
+          "mcpServers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Names of MCP servers available to tasks of this type. Each selected server is loaded and all of its tools are allowed (`mcp__<name>__*`), in addition to `allowedTools`."
           }
         }
       },
@@ -8630,6 +8906,10 @@
           "message": {
             "description": "Details or instructions",
             "type": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "For prerequisite checks: true if Axiom needs it (Node.js), false if only some features do (npx, uvx, Docker for MCP servers). Absent for engine checks."
           }
         }
       },
@@ -8701,7 +8981,9 @@
       "McpServer": {
         "required": [
           "id",
-          "name"
+          "name",
+          "transport",
+          "enabled"
         ],
         "type": "object",
         "properties": {
@@ -8728,10 +9010,72 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts. This is the server's complete environment: it does not receive the task's or session's environment variables."
           },
           "serverUrl": {
             "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "stdio",
+              "http",
+              "sse"
+            ],
+            "description": "Transport. `stdio` requires `serverCommand`; `http` (streamable HTTP) and `sse` require `serverUrl`. Inferred from the populated fields when omitted on create/update."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`. Values may contain `${secret:NAME}` references, resolved when a session or task starts."
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "description": "Connection/request timeout in milliseconds. Honoured by engines that support a per-server timeout (OpenCode)."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the server is included in sessions and tasks. Defaults to true."
+          },
+          "createdOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modifiedOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true,
+            "description": "Non-blocking problems, e.g. `${secret:NAME}` references to secrets that do not exist (yet)."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerTool"
+            },
+            "readOnly": true,
+            "description": "Tools found by the last successful connection test."
+          },
+          "toolsDiscoveredOn": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "usageCount": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true,
+            "description": "Number of references from action types, session templates and toolsets (see `/usage`)."
           }
         }
       },
@@ -8742,7 +9086,8 @@
         "type": "object",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Unique name. 1-64 characters: letters, digits, '-' and '_'; must start and end with a letter or digit and must not contain '__'. Used in `mcp__<name>__` tool prefixes."
           },
           "description": {
             "type": "string"
@@ -8760,10 +9105,37 @@
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "description": "Environment variables for stdio servers. Values may be plain text or contain `${secret:NAME}` references, resolved when a session or task starts. This is the server's complete environment: it does not receive the task's or session's environment variables."
           },
           "serverUrl": {
             "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "stdio",
+              "http",
+              "sse"
+            ],
+            "description": "Transport. `stdio` requires `serverCommand`; `http` (streamable HTTP) and `sse` require `serverUrl`. Inferred from the populated fields when omitted on create/update."
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "HTTP headers sent to remote (`http`/`sse`) servers, e.g. `Authorization`. Not allowed for `stdio`. Values may contain `${secret:NAME}` references, resolved when a session or task starts."
+          },
+          "timeout": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1,
+            "description": "Connection/request timeout in milliseconds. Honoured by engines that support a per-server timeout (OpenCode)."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the server is included in sessions and tasks. Defaults to true."
           }
         }
       },
@@ -9962,7 +10334,9 @@
           "overriddenFields": {
             "description": "Names of fields (model, engine, environment) overridden by the user on a built-in template. Empty for user-defined templates.",
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "readOnly": true
           },
           "templateId": {
@@ -10059,7 +10433,9 @@
           "environment": {
             "description": "Environment variables; replaces the built-in default. Values can reference secrets using ${secret:NAME} syntax.",
             "type": "object",
-            "additionalProperties": { "type": "string" }
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -11280,13 +11656,13 @@
         ],
         "type": "object",
         "properties": {
-            "validationErrors": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              },
-              "description": "Schema validation errors recorded when the event was ingested. Absent when the event was valid or was ingested before validation existed."
+          "validationErrors": {
+            "type": "array",
+            "items": {
+              "type": "string"
             },
+            "description": "Schema validation errors recorded when the event was ingested. Absent when the event was valid or was ingested before validation existed."
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -13092,11 +13468,284 @@
             "description": "Only set when filterLabels is given: cost of records in the window that have no subject and were therefore excluded"
           }
         }
+      },
+      "McpServerUsage": {
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "field"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "actionType",
+              "sessionTemplate",
+              "toolset"
+            ],
+            "description": "Kind of item that references the server."
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Id of the referencing item."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name of the referencing item."
+          },
+          "field": {
+            "type": "string",
+            "enum": [
+              "mcpServers",
+              "allowedTools",
+              "tools"
+            ],
+            "description": "Field holding the reference: an explicit server selection, or `mcp__<name>__...` tool names."
+          },
+          "templateId": {
+            "type": "string",
+            "description": "For session templates: the template id (used in UI routes)."
+          }
+        },
+        "description": "An item that references an MCP server."
+      },
+      "McpServerInUseError": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "integer"
+          },
+          "usages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerUsage"
+            }
+          }
+        }
+      },
+      "McpServerTool": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "McpServerTestResult": {
+        "type": "object",
+        "required": [
+          "success",
+          "tools",
+          "durationMs"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Whether the initialize handshake and tool listing succeeded."
+          },
+          "serverName": {
+            "type": "string"
+          },
+          "serverVersion": {
+            "type": "string"
+          },
+          "protocolVersion": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerTool"
+            }
+          },
+          "error": {
+            "type": "string",
+            "description": "Why the test failed."
+          },
+          "log": {
+            "type": "string",
+            "description": "Captured server output (stderr for stdio servers), possibly truncated."
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "McpCatalogInput": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "description": "A value the user must (or may) supply when adding a catalog server.",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Environment variable, header or argument name."
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "secret": {
+            "type": "boolean",
+            "description": "Whether the value is a credential (suggest storing it as an Axiom secret)."
+          },
+          "defaultValue": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string",
+            "description": "How the value is embedded, with `{value}` as the placeholder, e.g. `Bearer {value}`. Absent means the value is used as-is."
+          }
+        }
+      },
+      "McpCatalogEntry": {
+        "type": "object",
+        "required": [
+          "id",
+          "source",
+          "name",
+          "title",
+          "transport"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Catalog id (curated id or registry server name)."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "curated",
+              "registry"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Suggested Axiom server name."
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "homepage": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "stdio",
+              "http",
+              "sse"
+            ]
+          },
+          "command": {
+            "type": "string"
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Arguments; `{arg:NAME}` placeholders are replaced by the matching `arguments` input."
+          },
+          "url": {
+            "type": "string"
+          },
+          "runtime": {
+            "type": "string",
+            "enum": [
+              "node",
+              "uv",
+              "docker",
+              "remote"
+            ],
+            "description": "What must be installed on the Axiom host to run the server."
+          },
+          "env": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCatalogInput"
+            }
+          },
+          "headers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCatalogInput"
+            }
+          },
+          "arguments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpCatalogInput"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "description": "Setup hints, e.g. how to create the token."
+          }
+        }
+      },
+      "McpRuntimeStatus": {
+        "type": "object",
+        "properties": {
+          "node": {
+            "type": "boolean",
+            "description": "`npx` is available."
+          },
+          "uv": {
+            "type": "boolean",
+            "description": "`uvx` is available."
+          },
+          "docker": {
+            "type": "boolean",
+            "description": "`docker` is available."
+          }
+        }
       }
     },
     "responses": {
       "NotFound": {
         "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Invalid request",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Conflict with an existing resource",
         "content": {
           "application/json": {
             "schema": {

@@ -178,6 +178,13 @@ class McpServerIntegrationTest {
     @Test
     @Transactional
     void testUnknownToolReturnsError() throws Exception {
+        // The axiom-tools server is only generated when at least one script tool exists.
+        ToolDefinitionEntity anyTool = new ToolDefinitionEntity();
+        anyTool.name = "unknown_tool_test_placeholder";
+        anyTool.description = "Placeholder so the axiom-tools server is generated";
+        anyTool.scriptTemplate = "echo hi";
+        anyTool.persist();
+
         Path mcpConfig = generator.generateMcpConfig(88889L, Map.of(), null);
         assertNotNull(mcpConfig);
 
@@ -222,6 +229,7 @@ class McpServerIntegrationTest {
                 serverProcess.destroyForcibly();
                 serverProcess.waitFor(5, TimeUnit.SECONDS);
             }
+            anyTool.delete();
         }
     }
 

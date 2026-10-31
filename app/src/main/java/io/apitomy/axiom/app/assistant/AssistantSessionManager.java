@@ -1,5 +1,8 @@
 package io.apitomy.axiom.app.assistant;
 
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+import io.apitomy.axiom.app.mcp.McpServerResolver;
+
 import io.apitomy.axiom.core.config.AxiomHome;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,7 +19,6 @@ import io.apitomy.axiom.app.validation.ConfigItemType;
 import io.apitomy.axiom.app.validation.ConfigProblem;
 import io.apitomy.axiom.app.validation.ConfigValidationException;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
-import io.apitomy.axiom.core.entities.McpServerEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
@@ -79,6 +81,13 @@ public class AssistantSessionManager {
 
     @ConfigProperty(name = "quarkus.http.port", defaultValue = "9090")
     int httpPort;
+
+    /** Registered names of built-in MCP servers (never resolved from the database). */
+    private static final java.util.Set<String> BUILT_IN_SERVER_NAMES =
+            java.util.Set.of("axiom-tools", "axiom-sdk", "axiom", "workbench");
+
+    @Inject
+    McpServerResolver mcpServerResolver;
 
     @Inject
     AgentRegistry agentRegistry;
@@ -253,14 +262,35 @@ public class AssistantSessionManager {
 
             // Resolve MCP servers from template, augmented with any servers
             // implied by the allowed tools list.
-            Map<String, AssistantContextBuilder.McpServerConfig> mcpConfigs =
-                    resolveMcpServers(sessionId, mcpToken, template, subject, compositionId, sessionDir,
-                            resolvedEnv, resolvedAllowedTools);
+            // Servers the template selects explicitly must exist (servers implied by allowed tools may be
+            // provided by the engine's own configuration, so those are not checked).
+            List<String> missingServers = mcpServerResolver.findMissing(template.mcpServers().stream()
+                    .filter(serverName -> !serverName.startsWith("@")).toList());
+            if (!missingServers.isEmpty()) {
+                throw new IllegalArgumentException("Session template '" + template.name()
+                        + "' selects MCP server(s) that do not exist: " + String.join(", ", missingServers));
+            }
 
-            // Build and write MCP config JSON to session directory
+            Map<String, McpServerDefinition> mcpConfigs;
+            try {
+                mcpConfigs = resolveMcpServers(sessionId, mcpToken, template, subject, compositionId,
+                        sessionDir, resolvedEnv, resolvedAllowedTools);
+            } catch (MissingSecretException e) {
+                throw new IllegalArgumentException(
+                        "Session template '" + template.name() + "': " + e.getMessage(), e);
+            }
+
+            // Build and write MCP config JSON to session directory (owner-only: may contain secrets)
             String mcpConfig = contextBuilder.buildMcpConfig(mcpConfigs);
             if (mcpConfig != null) {
-                Files.writeString(sessionDir.resolve("mcp-config.json"), mcpConfig);
+                Path mcpConfigFile = sessionDir.resolve("mcp-config.json");
+                Files.writeString(mcpConfigFile, mcpConfig);
+                try {
+                    Files.setPosixFilePermissions(mcpConfigFile,
+                            java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                } catch (UnsupportedOperationException e) {
+                    // Non-POSIX filesystem; leave default permissions.
+                }
             }
 
             // Determine working directory
@@ -1016,12 +1046,12 @@ public class AssistantSessionManager {
         }
     }
 
-    private Map<String, AssistantContextBuilder.McpServerConfig> resolveMcpServers(
+    private Map<String, McpServerDefinition> resolveMcpServers(
             String sessionId, String mcpToken, SessionTemplateService.SessionTemplate template,
             SubjectEntity subject, Long compositionId, Path sessionDir,
             Map<String, String> sessionEnv,
             List<String> allowedTools) throws IOException {
-        Map<String, AssistantContextBuilder.McpServerConfig> configs = new LinkedHashMap<>();
+        Map<String, McpServerDefinition> configs = new LinkedHashMap<>();
 
         String apiUrl = "http://localhost:" + httpPort + "/api/v1";
 
@@ -1045,7 +1075,7 @@ public class AssistantSessionManager {
                 }
                 env.put("AXIOM_ASSISTANT_SESSION_ID", sessionId);
                 env.put("AXIOM_SESSION_TOKEN", mcpToken);
-                configs.put("axiom", AssistantContextBuilder.McpServerConfig.stdio(
+                configs.put("axiom", McpServerDefinition.stdio(
                         "node", List.of(serverJsPath), env));
 
             } else if ("@axiom-workbench".equals(serverName)) {
@@ -1057,7 +1087,7 @@ public class AssistantSessionManager {
                     env.put("AXIOM_COMPOSITION_ID", String.valueOf(compositionId));
                 }
                 env.put("AXIOM_SESSION_TOKEN", mcpToken);
-                configs.put("workbench", AssistantContextBuilder.McpServerConfig.stdio("node",
+                configs.put("workbench", McpServerDefinition.stdio("node",
                         List.of(serverDir.resolve("server.js").toAbsolutePath().toString()), env));
 
             } else if ("@axiom-tools".equals(serverName)) {
@@ -1074,7 +1104,7 @@ public class AssistantSessionManager {
                     Map<String, String> env = new LinkedHashMap<>(sessionEnv);
                     env.putIfAbsent("AXIOM_API_URL", apiUrl);
                     configs.put("axiom-tools",
-                            AssistantContextBuilder.McpServerConfig.stdio("node",
+                            McpServerDefinition.stdio("node",
                                     List.of(serverDir.resolve("tools-server.js")
                                                     .toAbsolutePath().toString(),
                                             toolsFile.toAbsolutePath().toString()),
@@ -1089,46 +1119,14 @@ public class AssistantSessionManager {
                 Map<String, String> env = new LinkedHashMap<>();
                 env.put("AXIOM_API_URL", apiUrl);
                 configs.put("axiom-sdk",
-                        AssistantContextBuilder.McpServerConfig.stdio("node",
+                        McpServerDefinition.stdio("node",
                                 List.of(serverDir.resolve("sdk-server.js")
                                         .toAbsolutePath().toString()),
                                 env));
 
             } else {
-                // Resolve from database
-                McpServerEntity entity = McpServerEntity.find("name", serverName).firstResult();
-                if (entity != null) {
-                    if (entity.serverUrl != null && !entity.serverUrl.isBlank()) {
-                        // HTTP transport
-                        configs.put(serverName,
-                                AssistantContextBuilder.McpServerConfig.http(entity.serverUrl));
-                    } else if (entity.serverCommand != null) {
-                        // Stdio transport
-                        List<String> args = new ArrayList<>();
-                        if (entity.serverArgs != null && !entity.serverArgs.isBlank()) {
-                            JsonNode argsNode = objectMapper.readTree(entity.serverArgs);
-                            if (argsNode.isArray()) {
-                                for (JsonNode arg : argsNode) {
-                                    args.add(arg.asText());
-                                }
-                            }
-                        }
-                        Map<String, String> env = new LinkedHashMap<>();
-                        if (entity.serverEnv != null && !entity.serverEnv.isBlank()) {
-                            JsonNode envNode = objectMapper.readTree(entity.serverEnv);
-                            envNode.fields().forEachRemaining(
-                                    field -> env.put(field.getKey(),
-                                            field.getValue().asText()));
-                        }
-                        configs.put(serverName,
-                                AssistantContextBuilder.McpServerConfig.stdio(
-                                        entity.serverCommand, args, env));
-                    } else {
-                        LOG.warnf("MCP server has neither URL nor command: %s", serverName);
-                    }
-                } else {
-                    LOG.warnf("MCP server not found: %s", serverName);
-                }
+                // Resolve user-defined server via the shared resolver
+                configs.putAll(mcpServerResolver.resolveByName(List.of(serverName)));
             }
         }
 
@@ -1183,20 +1181,13 @@ public class AssistantSessionManager {
 
         // Auto-include external MCP servers referenced in allowed tools
         for (String tool : allowedTools) {
-            if (tool.startsWith("mcp__") && !tool.startsWith("mcp__axiom-tools__")
-                    && !tool.startsWith("mcp__axiom-sdk__")
-                    && !tool.startsWith("mcp__axiom__")
-                    && !tool.startsWith("mcp__workbench__")) {
-                int secondSep = tool.indexOf("__", 5);
-                if (secondSep > 5) {
-                    String externalName = tool.substring(5, secondSep);
-                    if (!serverNames.contains(externalName)) {
-                        LOG.infof("Auto-including MCP server '%s' (implied by allowed tools)",
-                                externalName);
-                        serverNames.add(externalName);
-                    }
-                }
-            }
+            McpServerResolver.serverNameOf(tool)
+                    .filter(name -> !BUILT_IN_SERVER_NAMES.contains(name))
+                    .filter(name -> !serverNames.contains(name))
+                    .ifPresent(name -> {
+                        LOG.infof("Auto-including MCP server '%s' (implied by allowed tools)", name);
+                        serverNames.add(name);
+                    });
         }
     }
 

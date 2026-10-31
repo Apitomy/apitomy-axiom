@@ -60,6 +60,72 @@ class ConfigPackApplyTest {
     @Inject
     ObjectMapper mapper;
 
+    /** MCP server transport, headers, timeout and enabled flag survive export and import. */
+    @Test
+    void mcpServerFieldsRoundTripThroughPack() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        Long id = QuarkusTransaction.requiringNew().call(() -> {
+            io.apitomy.axiom.core.entities.McpServerEntity e = new io.apitomy.axiom.core.entities.McpServerEntity();
+            e.name = "rt-" + sfx;
+            e.serverUrl = "https://x.io/sse";
+            e.transport = "sse";
+            e.headers = "{\"Authorization\":\"Bearer t\"}";
+            e.timeoutMs = 4000;
+            e.enabled = false;
+            e.persist();
+            return e.id;
+        });
+        PackExportRequest req = new PackExportRequest();
+        req.setMcpServerIds(List.of(id));
+        JsonNode pack = importExportService.exportPack(req);
+        QuarkusTransaction.requiringNew().run(() ->
+                io.apitomy.axiom.core.entities.McpServerEntity.deleteById(id));
+
+        importExportService.importPack(pack);
+        QuarkusTransaction.requiringNew().run(() -> {
+            io.apitomy.axiom.core.entities.McpServerEntity e =
+                    io.apitomy.axiom.core.entities.McpServerEntity.find("name", "rt-" + sfx).firstResult();
+            assertNotNull(e);
+            assertEquals("sse", e.transport);
+            assertTrue(e.headers.contains("Bearer t"));
+            assertEquals(4000, e.timeoutMs);
+            assertFalse(e.enabled);
+            e.delete();
+        });
+    }
+
+    /** Action type MCP server selections survive export and import. */
+    @Test
+    void actionTypeMcpServersRoundTripThroughPack() throws Exception {
+        String sfx = UUID.randomUUID().toString().substring(0, 8);
+        Long id = QuarkusTransaction.requiringNew().call(() -> {
+            ActionTypeEntity at = new ActionTypeEntity();
+            at.name = "atm-" + sfx;
+            at.executionMode = "agent";
+            at.promptTemplate = "Do it";
+            at.mcpServers.addAll(List.of("github", "jira"));
+            at.persist();
+            return at.id;
+        });
+        JsonNode item = QuarkusTransaction.requiringNew().call(() ->
+                importExportService.serializeActionType(ActionTypeEntity.findById(id)));
+        assertEquals("github", item.path("mcpServers").get(0).asText());
+        QuarkusTransaction.requiringNew().run(() -> ActionTypeEntity.deleteById(id));
+
+        ObjectNode pack = mapper.createObjectNode();
+        pack.putArray("actionTypes").add(item);
+        pack.putArray("mcpServers")
+                .add(mapper.createObjectNode().put("name", "github").put("serverCommand", "npx"))
+                .add(mapper.createObjectNode().put("name", "jira").put("serverCommand", "npx"));
+        importExportService.importOrUpdatePack(pack);
+        QuarkusTransaction.requiringNew().run(() -> {
+            ActionTypeEntity at = ActionTypeEntity.find("name", "atm-" + sfx).firstResult();
+            assertEquals(List.of("github", "jira"), at.mcpServers);
+            at.delete();
+            io.apitomy.axiom.core.entities.McpServerEntity.delete("name in ?1", List.of("github", "jira"));
+        });
+    }
+
     /** A pack with an action type, a workflow using it, and a subscription naming the workflow applies. */
     @Test
     void packWithCrossReferencesApplies() throws Exception {

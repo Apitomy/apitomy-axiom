@@ -12,6 +12,10 @@ vi.mock("../config/api", async (orig) => ({
     fetchEngines: vi.fn().mockResolvedValue([]),
     fetchModels: vi.fn().mockResolvedValue([]),
     validateActionType: vi.fn().mockResolvedValue({ valid: true, messages: [] }),
+    fetchMcpServers: vi.fn().mockResolvedValue([
+        { id: 1, name: "github", description: "GitHub", transport: "stdio", enabled: true },
+        { id: 2, name: "jira", transport: "http", enabled: false },
+    ]),
 }));
 
 describe("ActionTypeEditor", () => {
@@ -42,5 +46,25 @@ describe("ActionTypeEditor", () => {
         render(<ActionTypeEditor value={{ name: "at", executionMode: "node", inputs: [], outputs: [] }} onChange={() => {}}
             problems={[{ severity: "error", field: "codeTemplate", message: "codeTemplate is required" }]} />);
         expect(screen.getByText(/Problems/)).toBeTruthy();
+    });
+
+    it("selects MCP servers for agent action types", async () => {
+        const onChange = vi.fn();
+        render(<ActionTypeEditor value={{ name: "at", executionMode: "agent", mcpServers: ["jira"], inputs: [], outputs: [] }}
+            onChange={onChange} />);
+        fireEvent.click(screen.getByText("MCP Servers (1)"));
+        const github = await screen.findByRole("checkbox", { name: /github/ });
+        expect(screen.getByRole("checkbox", { name: /jira/ })).toBeChecked();
+        expect(screen.getByText(/disabled/i)).toBeTruthy();
+        fireEvent.click(github);
+        expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ mcpServers: ["jira", "github"] }));
+    });
+
+    it("lists selected servers that no longer exist", async () => {
+        render(<ActionTypeEditor value={{ name: "at", executionMode: "agent", mcpServers: ["gone"], inputs: [], outputs: [] }}
+            onChange={() => {}} />);
+        fireEvent.click(screen.getByText("MCP Servers (1)"));
+        expect(await screen.findByRole("checkbox", { name: /gone/ })).toBeChecked();
+        expect(screen.getByText("Not found")).toBeTruthy();
     });
 });

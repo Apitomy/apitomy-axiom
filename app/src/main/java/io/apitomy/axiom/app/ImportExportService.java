@@ -15,6 +15,9 @@ import io.apitomy.axiom.core.entities.DashboardEntity;
 import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.EventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.McpServerEntity;
+import io.apitomy.axiom.api.beans.NewMcpServer;
+import io.apitomy.axiom.app.mcp.McpServerService;
+import io.apitomy.axiom.app.mcp.McpServerValidationException;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.SessionTemplateEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
@@ -42,6 +45,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -192,30 +196,113 @@ public class ImportExportService {
     public ImportResult importPack(JsonNode pack) {
         validatePack(pack);
         List<String> conflicts = new ArrayList<>();
-
-        checkConflicts(pack, "tools", "name", "tool", conflicts);
-        checkConflicts(pack, "toolsets", "name", "toolset", conflicts);
-        checkConflicts(pack, "mcpServers", "name", "mcpServer", conflicts);
-        checkConflicts(pack, "actionTypes", "name", "actionType", conflicts);
-        checkConflicts(pack, "sessionTemplates", "templateId", "sessionTemplate", conflicts);
-        checkConflicts(pack, "eventSources", "id", "eventSource", conflicts);
-        checkConflicts(pack, "subscriptions", "name", "subscription", conflicts);
-        checkConflicts(pack, "workflowDefinitions", "name", "workflowDefinition", conflicts);
-        checkConflicts(pack, "dashboards", "name", "dashboard", conflicts);
-
+        CONFLICT_SECTIONS.forEach(c -> checkConflicts(pack, c[0], c[1], c[2], conflicts));
         if (!conflicts.isEmpty()) {
-            ObjectNode error = objectMapper.createObjectNode();
-            ArrayNode arr = error.putArray("conflicts");
-            for (String c : conflicts) {
-                String[] parts = c.split(":", 2);
-                ObjectNode conflict = arr.addObject();
-                conflict.put("type", parts[0]);
-                conflict.put("name", parts[1]);
-            }
-            throw new WebApplicationException(
-                    Response.status(409).entity(error).build());
+            throwConflicts(conflicts);
         }
+        return doImport(pack);
+    }
 
+    /** How {@link #importPack(JsonNode, ConflictMode)} treats items whose name already exists. */
+    public enum ConflictMode {
+        /** Reject the whole pack with 409 listing the conflicts. */
+        FAIL,
+        /** Keep the existing items and import only the new ones. */
+        SKIP,
+        /** Replace the existing items. */
+        OVERWRITE;
+
+        /**
+         * Parses an API value.
+         *
+         * @param value {@code fail}, {@code skip} or {@code overwrite} (null means fail)
+         * @return the mode
+         * @throws IllegalArgumentException for unknown values
+         */
+        public static ConflictMode fromValue(String value) {
+            return value == null || value.isBlank() ? FAIL : ConflictMode.valueOf(value.trim().toUpperCase(Locale.ROOT));
+        }
+    }
+
+    /** Pack section, key field and conflict type name, in import order. */
+    private static final List<String[]> CONFLICT_SECTIONS = List.of(
+            new String[] {"tools", "name", "tool"},
+            new String[] {"toolsets", "name", "toolset"},
+            new String[] {"mcpServers", "name", "mcpServer"},
+            new String[] {"actionTypes", "name", "actionType"},
+            new String[] {"sessionTemplates", "templateId", "sessionTemplate"},
+            new String[] {"eventSources", "id", "eventSource"},
+            new String[] {"subscriptions", "name", "subscription"},
+            new String[] {"workflowDefinitions", "name", "workflowDefinition"},
+            new String[] {"dashboards", "name", "dashboard"});
+
+    /**
+     * Imports a configuration pack, handling items that already exist according to {@code mode}.
+     *
+     * @param pack the pack JSON
+     * @param mode the conflict mode
+     * @return counts of imported items (for {@code OVERWRITE}, created plus updated)
+     */
+    @Transactional
+    public ImportResult importPack(JsonNode pack, ConflictMode mode) {
+        return switch (mode) {
+            case FAIL -> importPack(pack);
+            case SKIP -> importPack(withoutExistingItems(pack));
+            case OVERWRITE -> toImportResult(importOrUpdatePack(pack));
+        };
+    }
+
+    private JsonNode withoutExistingItems(JsonNode pack) {
+        ObjectNode copy = pack.deepCopy();
+        for (String[] c : CONFLICT_SECTIONS) {
+            JsonNode items = copy.path(c[0]);
+            if (!items.isArray()) {
+                continue;
+            }
+            ArrayNode kept = objectMapper.createArrayNode();
+            for (JsonNode item : items) {
+                List<String> conflicts = new ArrayList<>();
+                ObjectNode single = objectMapper.createObjectNode();
+                single.putArray(c[0]).add(item);
+                checkConflicts(single, c[0], c[1], c[2], conflicts);
+                if (conflicts.isEmpty()) {
+                    kept.add(item);
+                } else {
+                    LOG.infof("Skipping existing %s", conflicts.get(0));
+                }
+            }
+            copy.set(c[0], kept);
+        }
+        return copy;
+    }
+
+    private static ImportResult toImportResult(UpsertResult u) {
+        ImportResult result = new ImportResult();
+        result.setTools(u.toolsCreated() + u.toolsUpdated());
+        result.setToolsets(u.toolsetsCreated() + u.toolsetsUpdated());
+        result.setMcpServers(u.mcpServersCreated() + u.mcpServersUpdated());
+        result.setActionTypes(u.actionTypesCreated() + u.actionTypesUpdated());
+        result.setSessionTemplates(u.sessionTemplatesCreated() + u.sessionTemplatesUpdated());
+        result.setEventSources(u.eventSourcesCreated() + u.eventSourcesUpdated());
+        result.setSubscriptions(u.subscriptionsCreated() + u.subscriptionsUpdated());
+        result.setWorkflowDefinitions(u.workflowDefinitionsCreated() + u.workflowDefinitionsUpdated());
+        result.setDashboards(u.dashboardsCreated() + u.dashboardsUpdated());
+        return result;
+    }
+
+    private void throwConflicts(List<String> conflicts) {
+        ObjectNode error = objectMapper.createObjectNode();
+        ArrayNode arr = error.putArray("conflicts");
+        for (String c : conflicts) {
+            String[] parts = c.split(":", 2);
+            ObjectNode conflict = arr.addObject();
+            conflict.put("type", parts[0]);
+            conflict.put("name", parts[1]);
+        }
+        throw new WebApplicationException(Response.status(409).entity(error).build());
+    }
+
+    private ImportResult doImport(JsonNode pack) {
         int tools = importTools(pack.path("tools"));
         int toolsets = importToolsets(pack.path("toolsets"));
         int mcpServers = importMcpServers(pack.path("mcpServers"));
@@ -259,7 +346,8 @@ public class ImportExportService {
             int eventSourcesCreated, int eventSourcesUpdated,
             int subscriptionsCreated, int subscriptionsUpdated,
             int workflowDefinitionsCreated, int workflowDefinitionsUpdated,
-            int dashboardsCreated, int dashboardsUpdated
+            int dashboardsCreated, int dashboardsUpdated,
+            int mcpServersCreated, int mcpServersUpdated
     ) {}
 
     /**
@@ -280,6 +368,7 @@ public class ImportExportService {
 
         int[] tools = upsertTools(pack.path("tools"));
         int[] toolsets = upsertToolsets(pack.path("toolsets"));
+        int[] mcpServers = upsertMcpServers(pack.path("mcpServers"));
         int[] actionTypes = upsertActionTypes(pack.path("actionTypes"));
         int[] sessionTemplates = upsertSessionTemplates(pack.path("sessionTemplates"));
         int[] workflowDefs = upsertWorkflowDefinitions(pack.path("workflowDefinitions"));
@@ -288,6 +377,7 @@ public class ImportExportService {
         int[] dashboards = upsertDashboards(pack.path("dashboards"));
 
         String packName = pack.path("metadata").path("name").asText("unnamed");
+        LOG.infof("Upserted MCP servers: %d created, %d updated", mcpServers[0], mcpServers[1]);
         LOG.infof("Upserted configuration pack '%s': %d tools created, %d updated; "
                         + "%d action types created, %d updated; "
                         + "%d toolsets created, %d updated; "
@@ -314,7 +404,8 @@ public class ImportExportService {
                 eventSources[0], eventSources[1],
                 subscriptions[0], subscriptions[1],
                 workflowDefs[0], workflowDefs[1],
-                dashboards[0], dashboards[1]
+                dashboards[0], dashboards[1],
+                mcpServers[0], mcpServers[1]
         );
     }
 
@@ -329,6 +420,7 @@ public class ImportExportService {
      */
     private void validatePack(JsonNode pack) {
         normalizeWorkflowContent(pack.path("workflowDefinitions"));
+        normalizeAllowedTools(pack.path("actionTypes"));
         ValidationContext ctx = contextFactory.forPack(pack);
         Map<String, List<ConfigProblem>> problemsByItem = new LinkedHashMap<>();
         for (Map.Entry<String, ConfigItemType> entry : PACK_ARRAYS) {
@@ -341,6 +433,12 @@ public class ImportExportService {
                     String key = type.jsonName() + "/" + itemName(item);
                     problemsByItem.computeIfAbsent(key, k -> new ArrayList<>()).addAll(errors);
                 }
+            }
+        }
+        for (JsonNode item : pack.path("mcpServers")) {
+            List<ConfigProblem> errors = validateMcpServer(item);
+            if (!errors.isEmpty()) {
+                problemsByItem.computeIfAbsent("mcp-server/" + itemName(item), k -> new ArrayList<>()).addAll(errors);
             }
         }
         Set<String> dashboardNames = new HashSet<>();
@@ -373,6 +471,43 @@ public class ImportExportService {
     }
 
     /** Parses string-valued workflow {@code content} (as written by older exports) into a JSON object. */
+    /**
+     * Validates an MCP server item with the same rules as the REST API.
+     *
+     * @param item the pack item
+     * @return errors (empty if valid)
+     */
+    private List<ConfigProblem> validateMcpServer(JsonNode item) {
+        try {
+            McpServerService.validateDefinition(objectMapper.treeToValue(item, NewMcpServer.class));
+            return List.of();
+        } catch (McpServerValidationException e) {
+            return List.of(ConfigProblem.error("", "MCP_SERVER_INVALID", e.getMessage()));
+        } catch (Exception e) {
+            return List.of(ConfigProblem.error("", "PARSE_ERROR", "Invalid MCP server: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Converts comma-separated {@code allowedTools} strings (older packs) to arrays, the API shape.
+     *
+     * @param actionTypes the pack's action type items
+     */
+    private void normalizeAllowedTools(JsonNode actionTypes) {
+        for (JsonNode item : actionTypes) {
+            JsonNode tools = item.path("allowedTools");
+            if (item instanceof ObjectNode obj && tools.isTextual()) {
+                ArrayNode arr = objectMapper.createArrayNode();
+                for (String t : tools.asText().split(",")) {
+                    if (!t.isBlank()) {
+                        arr.add(t.trim());
+                    }
+                }
+                obj.set("allowedTools", arr);
+            }
+        }
+    }
+
     private void normalizeWorkflowContent(JsonNode workflows) {
         for (JsonNode item : workflows) {
             JsonNode content = item.path("content");
@@ -528,16 +663,43 @@ public class ImportExportService {
         int count = 0;
         for (JsonNode item : items) {
             McpServerEntity entity = new McpServerEntity();
-            entity.name = item.path("name").asText();
-            entity.description = textOrNull(item, "description");
-            entity.serverCommand = textOrNull(item, "serverCommand");
-            entity.serverArgs = jsonOrNull(item, "serverArgs");
-            entity.serverEnv = jsonOrNull(item, "serverEnv");
-            entity.serverUrl = textOrNull(item, "serverUrl");
+            applyMcpServerFields(entity, item);
             entity.persist();
             count++;
         }
         return count;
+    }
+
+    private int[] upsertMcpServers(JsonNode items) {
+        if (!items.isArray()) return new int[]{0, 0};
+        int created = 0, updated = 0;
+        for (JsonNode item : items) {
+            McpServerEntity entity = McpServerEntity.find("name", item.path("name").asText()).firstResult();
+            boolean isNew = entity == null;
+            if (isNew) {
+                entity = new McpServerEntity();
+            }
+            applyMcpServerFields(entity, item);
+            entity.persist();
+            if (isNew) created++;
+            else updated++;
+        }
+        return new int[]{created, updated};
+    }
+
+    private void applyMcpServerFields(McpServerEntity entity, JsonNode item) {
+        entity.name = item.path("name").asText();
+        entity.description = textOrNull(item, "description");
+        entity.serverCommand = textOrNull(item, "serverCommand");
+        entity.serverArgs = jsonOrNull(item, "serverArgs");
+        entity.serverEnv = jsonOrNull(item, "serverEnv");
+        entity.serverUrl = textOrNull(item, "serverUrl");
+        String transport = textOrNull(item, "transport");
+        entity.transport = transport != null ? transport
+                : (entity.serverUrl != null && !entity.serverUrl.isBlank() ? "http" : "stdio");
+        entity.headers = jsonOrNull(item, "headers");
+        entity.timeoutMs = item.hasNonNull("timeout") ? item.get("timeout").asInt() : null;
+        entity.enabled = !item.has("enabled") || item.get("enabled").asBoolean(true);
     }
 
     private int importActionTypes(JsonNode items) {
@@ -566,6 +728,7 @@ public class ImportExportService {
                     entity.labels.add(l.asText());
                 }
             }
+            readMcpServers(item, entity.mcpServers);
             entity.persist();
             count++;
         }
@@ -680,6 +843,8 @@ public class ImportExportService {
                     entity.labels.add(l.asText());
                 }
             }
+            entity.mcpServers.clear();
+            readMcpServers(item, entity.mcpServers);
             entity.persist();
             if (isNew) created++;
             else updated++;
@@ -798,6 +963,12 @@ public class ImportExportService {
         putJsonIfPossible(n, "serverArgs", e.serverArgs);
         putJsonIfPossible(n, "serverEnv", e.serverEnv);
         putIfNotNull(n, "serverUrl", e.serverUrl);
+        putIfNotNull(n, "transport", e.transport);
+        putJsonIfPossible(n, "headers", e.headers);
+        if (e.timeoutMs != null) {
+            n.put("timeout", e.timeoutMs);
+        }
+        n.put("enabled", e.enabled);
         return n;
     }
 
@@ -820,7 +991,14 @@ public class ImportExportService {
             var outputsArr = n.putArray("outputs");
             e.outputs.forEach(f -> serializeField(outputsArr.addObject(), f));
         }
-        putIfNotNull(n, "allowedTools", e.allowedTools);
+        if (e.allowedTools != null && !e.allowedTools.isBlank()) {
+            ArrayNode tools = n.putArray("allowedTools");
+            for (String t : e.allowedTools.split(",")) {
+                if (!t.isBlank()) {
+                    tools.add(t.trim());
+                }
+            }
+        }
         putIfNotNull(n, "promptTemplate", e.promptTemplate);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
         putIfNotNull(n, "codeTemplate", e.codeTemplate);
@@ -834,7 +1012,22 @@ public class ImportExportService {
             var labelsArr = n.putArray("labels");
             e.labels.forEach(labelsArr::add);
         }
+        if (e.mcpServers != null && !e.mcpServers.isEmpty()) {
+            var mcpArr = n.putArray("mcpServers");
+            e.mcpServers.forEach(mcpArr::add);
+        }
         return n;
+    }
+
+    private static void readMcpServers(JsonNode item, List<String> target) {
+        JsonNode node = item.path("mcpServers");
+        if (node.isArray()) {
+            for (JsonNode s : node) {
+                if (!target.contains(s.asText())) {
+                    target.add(s.asText());
+                }
+            }
+        }
     }
 
     private void serializeField(ObjectNode n, ActionTypeField f) {

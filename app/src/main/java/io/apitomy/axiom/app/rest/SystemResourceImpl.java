@@ -217,6 +217,7 @@ public class SystemResourceImpl implements SystemResource {
                     check.setName(r.name());
                     check.setStatus(StartupCheck.Status.fromValue(r.status()));
                     check.setMessage(r.message());
+                    check.setRequired(r.required());
                     return check;
                 })
                 .toList());
@@ -306,10 +307,17 @@ public class SystemResourceImpl implements SystemResource {
      * {@inheritDoc}
      */
     @Override
-    public ImportResult importPack(InputStream data) {
+    public ImportResult importPack(String onConflict, InputStream data) {
+        ImportExportService.ConflictMode mode;
+        try {
+            mode = ImportExportService.ConflictMode.fromValue(onConflict);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid onConflict value: " + onConflict
+                    + " (expected fail, skip or overwrite)", 400);
+        }
         try {
             JsonNode pack = packObjectMapper.readTree(data);
-            return importExportService.importPack(pack);
+            return importExportService.importPack(pack, mode);
         } catch (ConfigValidationException e) {
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("message", "Configuration pack has invalid items");

@@ -30,6 +30,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class McpConfigGeneratorTest {
 
     @Inject
+    io.apitomy.axiom.app.assistant.AssistantContextBuilder contextBuilder;
+
+    @Inject
+    io.apitomy.axiom.app.mcp.McpServerResolver resolver;
+
+    @Inject
     McpConfigGenerator generator;
 
     @Inject
@@ -252,7 +258,7 @@ class McpConfigGeneratorTest {
         mcpTool.persist();
 
         try {
-            Path configFile = generator.generateMcpConfig(9010L, Map.of(), null);
+            Path configFile = generator.generateMcpConfig(9010L, Map.of(), List.of("mcp__test-external-stdio__*"));
             JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
             JsonNode servers = config.get("mcpServers");
@@ -284,7 +290,7 @@ class McpConfigGeneratorTest {
         mcpTool.persist();
 
         try {
-            Path configFile = generator.generateMcpConfig(9011L, Map.of(), null);
+            Path configFile = generator.generateMcpConfig(9011L, Map.of(), List.of("mcp__test-external-http__*"));
             JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
             JsonNode servers = config.get("mcpServers");
@@ -296,6 +302,119 @@ class McpConfigGeneratorTest {
             assertEquals("http://localhost:8080/mcp", extServer.get("url").asText());
         } finally {
             mcpTool.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testInvalidExternalServerIsOmittedAndConfigStaysValidJson() throws Exception {
+        McpServerEntity broken = new McpServerEntity();
+        broken.name = "test-broken";
+        broken.serverCommand = "npx";
+        broken.serverArgs = "not-json";
+        broken.persist();
+        McpServerEntity noTransport = new McpServerEntity();
+        noTransport.name = "test-no-transport";
+        noTransport.persist();
+        McpServerEntity ok = new McpServerEntity();
+        ok.name = "test-ok";
+        ok.serverCommand = "npx";
+        ok.serverArgs = "[\"arg with \\\"quotes\\\"\"]";
+        ok.persist();
+
+        try {
+            List<String> allowed = List.of("mcp__test-broken__x", "mcp__test-no-transport__x", "mcp__test-ok__x");
+            Path configFile = generator.generateMcpConfig(9013L, Map.of(), allowed);
+            JsonNode servers = objectMapper.readTree(Files.readString(configFile)).get("mcpServers");
+            assertFalse(servers.has("test-broken"));
+            assertFalse(servers.has("test-no-transport"));
+            assertEquals("arg with \"quotes\"", servers.get("test-ok").get("args").get(0).asText());
+        } finally {
+            broken.delete();
+            noTransport.delete();
+            ok.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testTaskAndSessionPathsProduceSameExternalServerConfig() throws Exception {
+        McpServerEntity mcp = new McpServerEntity();
+        mcp.name = "test-same";
+        mcp.serverCommand = "npx";
+        mcp.serverArgs = "[\"-y\"]";
+        mcp.serverEnv = "{\"K\":\"v\"}";
+        mcp.persist();
+        try {
+            Path configFile = generator.generateMcpConfig(9014L, Map.of(), List.of("mcp__test-same__x"));
+            JsonNode taskNode = objectMapper.readTree(Files.readString(configFile)).get("mcpServers").get("test-same");
+            String sessionJson = contextBuilder.buildMcpConfig(resolver.resolveByName(List.of("test-same")));
+            JsonNode sessionNode = objectMapper.readTree(sessionJson).get("mcpServers").get("test-same");
+            assertEquals(sessionNode, taskNode);
+        } finally {
+            mcp.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testActiveExternalServerNamesExcludesDisabled() {
+        McpServerEntity on = new McpServerEntity();
+        on.name = "test-active-on";
+        on.serverCommand = "npx";
+        on.persist();
+        McpServerEntity off = new McpServerEntity();
+        off.name = "test-active-off";
+        off.serverCommand = "npx";
+        off.enabled = false;
+        off.persist();
+        try {
+            java.util.Set<String> names = generator.activeExternalServerNames();
+            assertTrue(names.contains("test-active-on"));
+            assertFalse(names.contains("test-active-off"));
+        } finally {
+            on.delete();
+            off.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testUnrestrictedToolsDoNotLoadExternalServers() throws Exception {
+        McpServerEntity mcp = new McpServerEntity();
+        mcp.name = "test-implicit";
+        mcp.serverCommand = "npx";
+        mcp.persist();
+        try {
+            for (List<String> allowed : java.util.Arrays.asList(null, List.<String>of())) {
+                Path configFile = generator.generateMcpConfig(9020L, Map.of(), allowed);
+                if (configFile != null) {
+                    JsonNode servers = objectMapper.readTree(Files.readString(configFile)).get("mcpServers");
+                    assertFalse(servers.has("test-implicit"), "external servers must be selected explicitly");
+                }
+            }
+        } finally {
+            mcp.delete();
+        }
+    }
+
+    @Test
+    @Transactional
+    void testExternalStdioServerGetsOnlyItsOwnEnvironment() throws Exception {
+        McpServerEntity mcp = new McpServerEntity();
+        mcp.name = "test-own-env";
+        mcp.serverCommand = "npx";
+        mcp.serverEnv = "{\"OWN\":\"1\"}";
+        mcp.persist();
+        try {
+            Path configFile = generator.generateMcpConfig(9021L, Map.of("TASK_SECRET", "s", "AXIOM_TRACE_ID", "t"),
+                    List.of("mcp__test-own-env__*"));
+            JsonNode env = objectMapper.readTree(Files.readString(configFile))
+                    .get("mcpServers").get("test-own-env").get("env");
+            assertEquals(1, env.size());
+            assertEquals("1", env.get("OWN").asText());
+        } finally {
+            mcp.delete();
         }
     }
 

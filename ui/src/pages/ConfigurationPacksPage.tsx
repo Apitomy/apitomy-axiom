@@ -1,3 +1,4 @@
+import { plainCredentialKeys } from "../utils/mcpServerJson";
 import { useState, useEffect, useCallback } from "react";
 import {
     Alert,
@@ -10,6 +11,7 @@ import {
     FlexItem,
     Form,
     FormGroup,
+    Radio,
     Label,
     Modal,
     ModalBody,
@@ -37,6 +39,7 @@ import {
     type ToolDefinition,
     type Toolset,
     type McpServer,
+    type PackConflictMode,
     type SessionTemplate,
     type EventSourceConfig,
     type Subscription,
@@ -78,6 +81,7 @@ export function ConfigurationPacksPage() {
     const [selectedTools, setSelectedTools] = useState<Set<number>>(new Set());
     const [selectedToolsets, setSelectedToolsets] = useState<Set<number>>(new Set());
     const [selectedMcpServers, setSelectedMcpServers] = useState<Set<number>>(new Set());
+    const [onConflict, setOnConflict] = useState<PackConflictMode>("fail");
     const [selectedSessionTemplates, setSelectedSessionTemplates] = useState<Set<string>>(new Set());
     const [selectedEventSources, setSelectedEventSources] = useState<Set<string>>(new Set());
     const [selectedSubscriptions, setSelectedSubscriptions] = useState<Set<number>>(new Set());
@@ -132,6 +136,10 @@ export function ConfigurationPacksPage() {
         + selectedEventSources.size + selectedSubscriptions.size
         + selectedWorkflowDefs.size
         + selectedDashboards.size;
+
+    const plainCredentials = mcpServers
+        .filter((m) => selectedMcpServers.has(m.id))
+        .flatMap((m) => plainCredentialKeys(m).map((key) => `${m.name}: ${key}`));
 
     const handleExport = async () => {
         setExporting(true);
@@ -217,7 +225,7 @@ export function ConfigurationPacksPage() {
         setImportConflicts(null);
         try {
             const text = await importFile.text();
-            const result = await importPack(text);
+            const result = await importPack(text, onConflict);
             setImportResult(result);
             setImportFile(null);
             setImportFilename("");
@@ -451,6 +459,14 @@ export function ConfigurationPacksPage() {
                             </div>
 
                             <div style={{ marginTop: "24px" }}>
+                                {plainCredentials.length > 0 && (
+                                    <Alert variant="warning" isInline style={{ marginBottom: "16px" }}
+                                        title="Selected MCP servers contain plain-text credentials">
+                                        {plainCredentials.join(", ")}. These values will be written into the pack file
+                                        as-is. Replace them with <code>{"${secret:NAME}"}</code> references on the MCP
+                                        server to keep them out of exported packs.
+                                    </Alert>
+                                )}
                                 <Button variant="primary" icon={<DownloadIcon />}
                                     onClick={handleExport}
                                     isDisabled={!packName.trim() || totalSelected === 0 || exporting}
@@ -505,7 +521,7 @@ export function ConfigurationPacksPage() {
                             {importConflicts && (
                                 <Alert variant="danger" title="Import failed — name conflicts detected"
                                     isInline style={{ marginBottom: "16px" }}>
-                                    <p>The following items already exist:</p>
+                                    <p>The following items already exist. Choose to skip or overwrite them and import again:</p>
                                     <ul style={{ margin: "8px 0 0 16px" }}>
                                         {importConflicts.map((c, i) => (
                                             <li key={i}><strong>{c.type}</strong>: {c.name}</li>
@@ -549,6 +565,16 @@ export function ConfigurationPacksPage() {
                                     </ul>
                                 </Alert>
                             )}
+
+                            <FormGroup label="If an item already exists" role="radiogroup" fieldId="on-conflict"
+                                isInline style={{ marginBottom: "16px" }}>
+                                <Radio id="on-conflict-fail" name="on-conflict" label="Cancel the import"
+                                    isChecked={onConflict === "fail"} onChange={() => setOnConflict("fail")} />
+                                <Radio id="on-conflict-skip" name="on-conflict" label="Keep the existing item (skip)"
+                                    isChecked={onConflict === "skip"} onChange={() => setOnConflict("skip")} />
+                                <Radio id="on-conflict-overwrite" name="on-conflict" label="Overwrite existing items"
+                                    isChecked={onConflict === "overwrite"} onChange={() => setOnConflict("overwrite")} />
+                            </FormGroup>
 
                             <Button variant="primary" icon={<UploadIcon />}
                                 onClick={handleImport}

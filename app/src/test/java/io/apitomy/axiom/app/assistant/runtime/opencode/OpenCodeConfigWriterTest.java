@@ -1,9 +1,10 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.apitomy.axiom.app.assistant.AssistantContextBuilder.McpServerConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -24,8 +25,8 @@ class OpenCodeConfigWriterTest {
 
     @Test
     void buildsLocalServerWithCommandArgsAndEnvironment() {
-        Map<String, McpServerConfig> servers = Map.of("axiom",
-                McpServerConfig.stdio("node", List.of("/home/u/.axiom/assistant-mcp-server/server.js"),
+        Map<String, McpServerDefinition> servers = Map.of("axiom",
+                McpServerDefinition.stdio("node", List.of("/home/u/.axiom/assistant-mcp-server/server.js"),
                         Map.of("AXIOM_API_URL", "http://localhost:9090/api/v1")));
 
         JsonNode config = OpenCodeConfigWriter.buildConfig(servers);
@@ -43,7 +44,7 @@ class OpenCodeConfigWriterTest {
     @Test
     void omitsEnvironmentWhenEmpty() {
         JsonNode config = OpenCodeConfigWriter.buildConfig(
-                Map.of("plain", McpServerConfig.stdio("npx", List.of("-y", "some-mcp"), Map.of())));
+                Map.of("plain", McpServerDefinition.stdio("npx", List.of("-y", "some-mcp"), Map.of())));
 
         assertFalse(config.path("mcp").path("plain").has("environment"));
     }
@@ -51,7 +52,7 @@ class OpenCodeConfigWriterTest {
     @Test
     void buildsRemoteServerForHttpTransport() {
         JsonNode config = OpenCodeConfigWriter.buildConfig(
-                Map.of("remote", McpServerConfig.http("http://127.0.0.1:8000/mcp")));
+                Map.of("remote", McpServerDefinition.http("http://127.0.0.1:8000/mcp")));
 
         JsonNode remote = config.path("mcp").path("remote");
         assertEquals("remote", remote.path("type").asText());
@@ -61,9 +62,27 @@ class OpenCodeConfigWriterTest {
     }
 
     @Test
+    void remoteServerIncludesHeadersAndTimeout() {
+        JsonNode config = OpenCodeConfigWriter.buildConfig(Map.of("remote",
+                McpServerDefinition.remote("sse", "https://x.io/sse", Map.of("Authorization", "Bearer t"), 7000)));
+
+        JsonNode remote = config.path("mcp").path("remote");
+        assertEquals("remote", remote.path("type").asText());
+        assertEquals("Bearer t", remote.path("headers").path("Authorization").asText());
+        assertEquals(7000, remote.path("timeout").asInt());
+    }
+
+    @Test
+    void localServerIncludesTimeout() {
+        JsonNode config = OpenCodeConfigWriter.buildConfig(Map.of("l",
+                new McpServerDefinition("npx", List.of(), Map.of(), null, null, Map.of(), 3000)));
+        assertEquals(3000, config.path("mcp").path("l").path("timeout").asInt());
+    }
+
+    @Test
     void writesConfigFileToSessionDirectory(@TempDir Path sessionDir) throws Exception {
-        Map<String, McpServerConfig> servers = new LinkedHashMap<>();
-        servers.put("remote", McpServerConfig.http("http://127.0.0.1:8000/mcp"));
+        Map<String, McpServerDefinition> servers = new LinkedHashMap<>();
+        servers.put("remote", McpServerDefinition.http("http://127.0.0.1:8000/mcp"));
 
         Path written = OpenCodeConfigWriter.writeConfig(sessionDir, servers);
 
@@ -94,6 +113,6 @@ class OpenCodeConfigWriterTest {
     @Test
     void omitsPermissionBlockWhenNull() {
         assertFalse(OpenCodeConfigWriter.buildConfig(
-                Map.of("remote", McpServerConfig.http("http://x/mcp")), null).has("permission"));
+                Map.of("remote", McpServerDefinition.http("http://x/mcp")), null).has("permission"));
     }
 }

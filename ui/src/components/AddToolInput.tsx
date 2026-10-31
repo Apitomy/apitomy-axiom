@@ -106,8 +106,11 @@ export function AddToolInput({
         sdkToolValues.forEach((t) =>
             items.push({ value: t, style: MCP_STYLE }));
 
-        mcpServers.forEach((s) =>
-            items.push({ value: `mcp__${s.name}__*`, style: MCP_STYLE }));
+        mcpServers.forEach((s) => {
+            items.push({ value: `mcp__${s.name}__*`, style: MCP_STYLE });
+            (s.tools || []).forEach((t) =>
+                items.push({ value: `mcp__${s.name}__${t.name}`, style: MCP_STYLE }));
+        });
 
         BUILTIN_TOOLS.forEach((t) =>
             items.push({ value: t }));

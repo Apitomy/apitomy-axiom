@@ -1,9 +1,10 @@
 package io.apitomy.axiom.app.assistant.runtime.opencode;
 
+import io.apitomy.axiom.app.mcp.McpServerDefinition;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.apitomy.axiom.app.assistant.AssistantContextBuilder.McpServerConfig;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -33,7 +34,7 @@ public final class OpenCodeConfigWriter {
      * @param servers MCP servers keyed by server name; may be null
      * @return the config document
      */
-    public static ObjectNode buildConfig(Map<String, McpServerConfig> servers) {
+    public static ObjectNode buildConfig(Map<String, McpServerDefinition> servers) {
         return buildConfig(servers, null);
     }
 
@@ -45,12 +46,12 @@ public final class OpenCodeConfigWriter {
      * @param permission OpenCode permission block; may be null
      * @return the config document
      */
-    public static ObjectNode buildConfig(Map<String, McpServerConfig> servers, ObjectNode permission) {
+    public static ObjectNode buildConfig(Map<String, McpServerDefinition> servers, ObjectNode permission) {
         ObjectNode root = MAPPER.createObjectNode();
         root.put("$schema", SCHEMA_URL);
         ObjectNode mcp = root.putObject("mcp");
         if (servers != null) {
-            servers.forEach((String name, McpServerConfig config) -> mcp.set(name, toServerNode(config)));
+            servers.forEach((String name, McpServerDefinition config) -> mcp.set(name, toServerNode(config)));
         }
         if (permission != null) {
             root.set("permission", permission);
@@ -69,7 +70,7 @@ public final class OpenCodeConfigWriter {
      * @return path of the written file, or {@code null} if there were no servers
      * @throws IOException if the file cannot be written
      */
-    public static Path writeConfig(Path sessionDirectory, Map<String, McpServerConfig> servers)
+    public static Path writeConfig(Path sessionDirectory, Map<String, McpServerDefinition> servers)
             throws IOException {
         return writeConfig(sessionDirectory, servers, null);
     }
@@ -85,7 +86,7 @@ public final class OpenCodeConfigWriter {
      * @return path of the written file, or {@code null} if there were no servers and no permission block
      * @throws IOException if the file cannot be written
      */
-    public static Path writeConfig(Path sessionDirectory, Map<String, McpServerConfig> servers,
+    public static Path writeConfig(Path sessionDirectory, Map<String, McpServerDefinition> servers,
                                    ObjectNode permission) throws IOException {
         if ((servers == null || servers.isEmpty()) && permission == null) {
             return null;
@@ -100,11 +101,15 @@ public final class OpenCodeConfigWriter {
         return file;
     }
 
-    private static ObjectNode toServerNode(McpServerConfig config) {
+    private static ObjectNode toServerNode(McpServerDefinition config) {
         ObjectNode node = MAPPER.createObjectNode();
         if (config.isHttpTransport()) {
             node.put("type", "remote");
             node.put("url", config.url());
+            if (!config.headers().isEmpty()) {
+                ObjectNode headers = node.putObject("headers");
+                config.headers().forEach(headers::put);
+            }
         } else {
             node.put("type", "local");
             ArrayNode command = node.putArray("command");
@@ -114,6 +119,9 @@ public final class OpenCodeConfigWriter {
                 ObjectNode environment = node.putObject("environment");
                 config.env().forEach(environment::put);
             }
+        }
+        if (config.timeoutMs() != null) {
+            node.put("timeout", config.timeoutMs());
         }
         node.put("enabled", true);
         return node;
