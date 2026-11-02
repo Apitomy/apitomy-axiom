@@ -25,6 +25,8 @@ public class AgentRegistry {
 
     private static final Logger LOG = Logger.getLogger(AgentRegistry.class);
 
+    private static final AgentMcpManager NO_OP_MCP_MANAGER = (workItemId, environment, allowedTools) -> null;
+
     @ConfigProperty(name = "axiom.agent.default-type", defaultValue = "claude-code")
     String defaultAgentType;
 
@@ -40,8 +42,11 @@ public class AgentRegistry {
             agentMap.put(agent.getType(), agent);
             LOG.infof("Registered agent: %s (%s)", agent.getType(),
                     agent.getClass().getSimpleName());
-            if (agent instanceof AgentMcpManager mcpManager) {
+            AgentMcpManager mcpManager = agent.getTaskMcpManager();
+            if (mcpManager != null) {
                 mcpManagerMap.put(agent.getType(), mcpManager);
+                LOG.infof("Registered MCP manager for agent %s (%s)", agent.getType(),
+                        mcpManager.getClass().getSimpleName());
             }
         }
         LOG.infof("Agent registry: %d agent(s) available, default: %s",
@@ -82,24 +87,22 @@ public class AgentRegistry {
     }
 
     /**
-     * Returns the MCP manager for the given agent type, falling back to the
-     * default agent's MCP manager.
+     * Returns the per-task MCP manager for the given agent type. A null, blank or
+     * unknown type resolves to the default agent type, mirroring {@link #getAgent(String)}.
+     * A known agent without a per-task manager gets a no-op manager; it never falls back
+     * to another agent's manager.
      *
      * @param agentType the agent type, or null for default
-     * @return the MCP manager, or a no-op manager if none is available
+     * @return the MCP manager, or a no-op manager if the agent needs none
      */
     public AgentMcpManager getMcpManager(String agentType) {
-        if (agentType != null && !agentType.isBlank()) {
-            AgentMcpManager mgr = mcpManagerMap.get(agentType);
-            if (mgr != null) {
-                return mgr;
-            }
+        String resolvedType = agentType != null && !agentType.isBlank() && agentMap.containsKey(agentType)
+                ? agentType : defaultAgentType;
+        AgentMcpManager mgr = mcpManagerMap.get(resolvedType);
+        if (mgr != null) {
+            return mgr;
         }
-        AgentMcpManager defaultMgr = mcpManagerMap.get(defaultAgentType);
-        if (defaultMgr != null) {
-            return defaultMgr;
-        }
-        return (workItemId, environment, allowedTools) -> null;
+        return NO_OP_MCP_MANAGER;
     }
 
     /**
