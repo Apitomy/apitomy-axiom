@@ -9150,6 +9150,13 @@
           "enabled": {
             "type": "boolean",
             "description": "Whether the server is included in sessions and tasks. Defaults to true."
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerTool"
+            },
+            "description": "Tools reported by a successful connection test of this definition (see `POST /mcp-servers/test`). Only honoured on create, where they are stored as the server's discovered tools so the test does not have to be repeated. Ignored on update."
           }
         }
       },
@@ -9445,6 +9452,30 @@
           },
           "dashboards": {
             "type": "integer"
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImportSkippedItem"
+            },
+            "description": "Items left untouched because they already exist (only with `onConflict=skip`)."
+          }
+        }
+      },
+      "ImportSkippedItem": {
+        "type": "object",
+        "required": [
+          "type",
+          "name"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Item type, e.g. `mcpServer` or `actionType`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name (or id) of the existing item."
           }
         }
       },

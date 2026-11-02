@@ -125,4 +125,48 @@ describe("McpServersPage create modal", () => {
         await userEvent.click(await screen.findByRole("button", { name: "Add from catalog" }));
         expect(await screen.findByRole("button", { name: "Select GitHub" })).toBeInTheDocument();
     });
+
+    it("stores the tools from a successful test when creating", async () => {
+        const tools = [{ name: "read_file" }];
+        vi.mocked(api.testNewMcpServer).mockResolvedValueOnce({ success: true, serverName: "fs", tools, durationMs: 3 });
+        vi.mocked(api.createMcpServer).mockResolvedValueOnce({ id: 3, name: "fs" } as never);
+        renderWithRouter(<McpServersPage />, "/mcp-servers");
+        await userEvent.click(await screen.findByRole("button", { name: "Add MCP Server" }));
+        const dialog = await screen.findByRole("dialog");
+        await userEvent.type(within(dialog).getByLabelText(/^Name/), "fs");
+        await userEvent.type(within(dialog).getByLabelText(/^Command/), "npx");
+        await userEvent.click(within(dialog).getByRole("button", { name: "Test" }));
+        await within(dialog).findByText(/Connected to fs/);
+        await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+        expect(api.createMcpServer).toHaveBeenCalledWith(expect.objectContaining({ name: "fs", tools }));
+    });
+
+    it("validates the name inline and clears errors when the form changes", async () => {
+        vi.mocked(api.createMcpServer).mockRejectedValueOnce(new Error("Server said no"));
+        renderWithRouter(<McpServersPage />, "/mcp-servers");
+        await userEvent.click(await screen.findByRole("button", { name: "Add MCP Server" }));
+        const dialog = await screen.findByRole("dialog");
+        const name = within(dialog).getByLabelText(/^Name/);
+        await userEvent.type(name, "bad name!");
+        await userEvent.type(within(dialog).getByLabelText(/^Command/), "npx");
+        expect(within(dialog).getByText(/Use letters, digits/)).toBeInTheDocument();
+        expect(within(dialog).getByRole("button", { name: "Create" })).toBeDisabled();
+        await userEvent.clear(name);
+        await userEvent.type(name, "ok");
+        await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+        expect(await within(dialog).findByText("Server said no")).toBeInTheDocument();
+        await userEvent.type(name, "2");
+        expect(within(dialog).queryByText("Server said no")).not.toBeInTheDocument();
+    });
+
+    it("names the server and warns when it is in use before deleting", async () => {
+        vi.mocked(api.fetchMcpServers).mockResolvedValue([
+            { id: 1, name: "github", transport: "stdio", enabled: true, usageCount: 2 },
+        ] as never);
+        renderWithRouter(<McpServersPage />, "/mcp-servers");
+        await userEvent.click(await screen.findByRole("button", { name: "Delete github" }));
+        const dialog = await screen.findByRole("dialog");
+        expect(within(dialog).getByText("github")).toBeInTheDocument();
+        expect(within(dialog).getByText(/This server is in use \(2 reference/)).toBeInTheDocument();
+    });
 });

@@ -10,6 +10,7 @@ vi.mock("../config/api", async (orig) => ({
     fetchMcpRuntimeStatus: vi.fn().mockResolvedValue({ node: true, uv: false, docker: true }),
     fetchSecrets: vi.fn().mockResolvedValue([{ id: 1, name: "EXISTING" }]),
     createSecret: vi.fn().mockResolvedValue({ id: 2, name: "GITHUB_TOKEN" }),
+    deleteSecret: vi.fn().mockResolvedValue(undefined),
     createMcpServer: vi.fn().mockResolvedValue({ id: 9, name: "github" }),
     testNewMcpServer: vi.fn(),
 }));
@@ -76,5 +77,75 @@ describe("McpCatalogModal", () => {
         }));
         expect(api.createSecret).not.toHaveBeenCalled();
         expect(await screen.findByText(/Connected to github/)).toBeInTheDocument();
+    });
+
+    it("blocks a new secret whose name already exists instead of silently using the old value", async () => {
+        render(<McpCatalogModal isOpen onClose={() => {}} onCreated={() => {}} />);
+        await userEvent.click(await screen.findByRole("button", { name: "Select GitHub" }));
+        const dialog = screen.getByRole("dialog");
+        const secretName = within(dialog).getByLabelText("Secret name for Authorization");
+        await userEvent.clear(secretName);
+        await userEvent.type(secretName, "EXISTING");
+        await userEvent.type(within(dialog).getByLabelText("Value for Authorization"), "ghp_new");
+        expect(within(dialog).getByText(/A secret named EXISTING already exists/)).toBeInTheDocument();
+        expect(within(dialog).getByRole("button", { name: "Add server" })).toBeDisabled();
+    });
+
+    it("deletes the secrets it created when the server cannot be created", async () => {
+        vi.mocked(api.createMcpServer).mockRejectedValueOnce(new Error("An MCP server named 'github' already exists"));
+        const onCreated = vi.fn();
+        render(<McpCatalogModal isOpen onClose={() => {}} onCreated={onCreated} />);
+        await userEvent.click(await screen.findByRole("button", { name: "Select GitHub" }));
+        await userEvent.type(screen.getByLabelText("Value for Authorization"), "ghp_secret");
+        await userEvent.click(screen.getByRole("button", { name: "Add server" }));
+        expect(await screen.findByText("An MCP server named 'github' already exists")).toBeInTheDocument();
+        expect(api.createSecret).toHaveBeenCalled();
+        expect(api.deleteSecret).toHaveBeenCalledWith(2);
+        expect(onCreated).not.toHaveBeenCalled();
+    });
+
+    it("stores the tools found by a successful test when adding the server", async () => {
+        const tools = [{ name: "list_issues", description: "Lists issues" }];
+        vi.mocked(api.testNewMcpServer).mockResolvedValueOnce({ success: true, serverName: "github", tools, durationMs: 5 });
+        render(<McpCatalogModal isOpen onClose={() => {}} onCreated={() => {}} />);
+        await userEvent.click(await screen.findByRole("button", { name: "Select GitHub" }));
+        await userEvent.type(screen.getByLabelText("Value for Authorization"), "ghp_secret");
+        await userEvent.click(screen.getByRole("button", { name: "Test" }));
+        await screen.findByText(/Connected to github/);
+        await userEvent.click(screen.getByRole("button", { name: "Add server" }));
+        expect(api.createMcpServer).toHaveBeenLastCalledWith(expect.objectContaining({ tools }));
+    });
+
+    it("discards a test result once the form is edited", async () => {
+        vi.mocked(api.testNewMcpServer).mockResolvedValueOnce({ success: true, serverName: "github", tools: [], durationMs: 5 });
+        render(<McpCatalogModal isOpen onClose={() => {}} onCreated={() => {}} />);
+        await userEvent.click(await screen.findByRole("button", { name: "Select GitHub" }));
+        await userEvent.type(screen.getByLabelText("Value for Authorization"), "ghp_secret");
+        await userEvent.click(screen.getByRole("button", { name: "Test" }));
+        await screen.findByText(/Connected to github/);
+        await userEvent.type(screen.getByLabelText(/^Server name/), "2");
+        expect(screen.queryByText(/Connected to github/)).not.toBeInTheDocument();
+    });
+
+    it("validates the server name inline", async () => {
+        render(<McpCatalogModal isOpen onClose={() => {}} onCreated={() => {}} />);
+        await userEvent.click(await screen.findByRole("button", { name: "Select GitHub" }));
+        await userEvent.type(screen.getByLabelText("Value for Authorization"), "ghp_secret");
+        const name = screen.getByLabelText(/^Server name/);
+        await userEvent.clear(name);
+        await userEvent.type(name, "bad name");
+        expect(screen.getByText(/Use letters, digits/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Add server" })).toBeDisabled();
+    });
+
+    it("clears an add error when going back to the list", async () => {
+        vi.mocked(api.createMcpServer).mockRejectedValueOnce(new Error("boom"));
+        render(<McpCatalogModal isOpen onClose={() => {}} onCreated={() => {}} />);
+        await userEvent.click(await screen.findByRole("button", { name: "Select GitHub" }));
+        await userEvent.type(screen.getByLabelText("Value for Authorization"), "ghp_secret");
+        await userEvent.click(screen.getByRole("button", { name: "Add server" }));
+        expect(await screen.findByText("boom")).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "Back" }));
+        expect(screen.queryByText("boom")).not.toBeInTheDocument();
     });
 });

@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.apitomy.axiom.api.beans.DashboardTab;
 import io.apitomy.axiom.api.beans.ImportResult;
+import io.apitomy.axiom.api.beans.ImportSkippedItem;
 import io.apitomy.axiom.api.beans.PackExportRequest;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActionTypeField;
@@ -247,12 +248,25 @@ public class ImportExportService {
     public ImportResult importPack(JsonNode pack, ConflictMode mode) {
         return switch (mode) {
             case FAIL -> importPack(pack);
-            case SKIP -> importPack(withoutExistingItems(pack));
+            case SKIP -> {
+                List<String> skipped = new ArrayList<>();
+                ImportResult result = importPack(withoutExistingItems(pack, skipped));
+                result.setSkipped(skipped.stream().map(ImportExportService::toSkippedItem).toList());
+                yield result;
+            }
             case OVERWRITE -> toImportResult(importOrUpdatePack(pack));
         };
     }
 
-    private JsonNode withoutExistingItems(JsonNode pack) {
+    private static ImportSkippedItem toSkippedItem(String conflict) {
+        String[] parts = conflict.split(":", 2);
+        ImportSkippedItem item = new ImportSkippedItem();
+        item.setType(parts[0]);
+        item.setName(parts.length > 1 ? parts[1] : "");
+        return item;
+    }
+
+    private JsonNode withoutExistingItems(JsonNode pack, List<String> skipped) {
         ObjectNode copy = pack.deepCopy();
         for (String[] c : CONFLICT_SECTIONS) {
             JsonNode items = copy.path(c[0]);
@@ -269,6 +283,7 @@ public class ImportExportService {
                     kept.add(item);
                 } else {
                     LOG.infof("Skipping existing %s", conflicts.get(0));
+                    skipped.addAll(conflicts);
                 }
             }
             copy.set(c[0], kept);

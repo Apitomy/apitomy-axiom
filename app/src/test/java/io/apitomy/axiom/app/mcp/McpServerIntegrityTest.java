@@ -22,6 +22,7 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -188,5 +189,40 @@ class McpServerIntegrityTest {
         List<String> missing = QuarkusTransaction.requiringNew().call(() ->
                 resolver.findMissing(List.of("mi-here", "mi-absent")));
         assertEquals(List.of("mi-absent"), missing);
+    }
+
+    @Test
+    void toolsFromAPreCreateTestAreStoredOnCreate() {
+        int id = given().contentType(ContentType.JSON)
+                .body("{\"name\":\"mi-tools\",\"serverCommand\":\"npx\","
+                        + "\"tools\":[{\"name\":\"echo\",\"description\":\"Echoes\"},{\"name\":\"sum\"}]}")
+                .post(BASE).then().statusCode(200)
+                .body("tools.name", containsInAnyOrder("echo", "sum"))
+                .body("toolsDiscoveredOn", org.hamcrest.Matchers.notNullValue())
+                .extract().path("id");
+        // Tools are ignored on update: the stored list is unchanged.
+        given().contentType(ContentType.JSON)
+                .body("{\"name\":\"mi-tools\",\"serverCommand\":\"npx\",\"tools\":[{\"name\":\"other\"}]}")
+                .put(BASE + "/{id}", id).then().statusCode(200)
+                .body("tools.name", containsInAnyOrder("echo", "sum"));
+    }
+
+    @Test
+    void serversWithoutToolsHaveNoDiscoveryTime() {
+        given().contentType(ContentType.JSON).body("{\"name\":\"mi-notools\",\"serverCommand\":\"npx\"}")
+                .post(BASE).then().statusCode(200)
+                .body("tools", empty())
+                .body("toolsDiscoveredOn", org.hamcrest.Matchers.nullValue());
+    }
+
+    @Test
+    void missingCommandAndUrlHasItsOwnMessage() {
+        given().contentType(ContentType.JSON).body("{\"name\":\"mi-neither\"}")
+                .post(BASE).then().statusCode(400)
+                .body("message", equalTo("A server command (stdio) or a server URL (HTTP) is required"));
+        given().contentType(ContentType.JSON)
+                .body("{\"name\":\"mi-both\",\"serverCommand\":\"npx\",\"serverUrl\":\"http://localhost/mcp\"}")
+                .post(BASE).then().statusCode(400)
+                .body("message", containsString("but not both"));
     }
 }

@@ -80,4 +80,21 @@ describe("ConfigurationPacksPage", () => {
         expect(await screen.findByText(/plain-text credentials/)).toBeInTheDocument();
         expect(screen.getByText(/brave: BRAVE_API_KEY/)).toBeInTheDocument();
     });
+
+    it("lists the items skipped because they already exist", async () => {
+        vi.mocked(api.importPack).mockResolvedValueOnce({ mcpServers: 0, skipped: [{ type: "mcpServer", name: "gh" }] });
+        const user = userEvent.setup();
+        const { container } = renderWithRouter(<ConfigurationPacksPage />, "/packs");
+        await user.click(await screen.findByText("Import Pack"));
+        const input = container.querySelector("input[type=file]") as HTMLInputElement;
+        await user.upload(input, new File([JSON.stringify({ mcpServers: [{ name: "gh" }] })], "pack.json",
+            { type: "application/json" }));
+        await user.click(screen.getByRole("radio", { name: /Keep the existing item/ }));
+        const importButton = await screen.findByRole("button", { name: "Import" });
+        await vi.waitFor(() => expect(importButton).toBeEnabled());
+        await user.click(importButton);
+        expect(await screen.findByText("Nothing new was imported.")).toBeInTheDocument();
+        expect(screen.getByText(/Skipped 1 existing item/)).toBeInTheDocument();
+        expect(screen.getByText("mcpServer: gh")).toBeInTheDocument();
+    });
 });

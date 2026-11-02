@@ -221,6 +221,8 @@ export interface ImportResult {
     subscriptions?: number;
     workflowDefinitions?: number;
     dashboards?: number;
+    /** Items left untouched because they already exist (only with onConflict=skip). */
+    skipped?: { type: string; name: string }[];
 }
 
 export interface AssistantApplyResult {
@@ -627,6 +629,8 @@ export type NewMcpServer = Omit<McpServer, "id" | "createdOn" | "modifiedOn" | "
     | "tools" | "toolsDiscoveredOn" | "usageCount"> & {
     transport?: McpTransport;
     enabled?: boolean;
+    /** Tools from a successful pre-create connection test; stored on create, ignored on update. */
+    tools?: McpServerTool[];
 };
 
 export type NewToolDefinition = Omit<ToolDefinition, "id">;
