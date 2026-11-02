@@ -19,7 +19,7 @@
         "@patternfly/react-icons": "6.7.0",
         "@patternfly/react-table": "6.7.0",
         "@types/react-syntax-highlighter": "15.5.13",
-        "@xyflow/react": "12.12.0",
+        "@xyflow/react": "12.12.1",
         "echarts": "6.1.0",
         "elkjs": "0.12.1",
         "mermaid": "12.2.0",
