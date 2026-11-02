@@ -15,6 +15,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -63,9 +64,9 @@ class McpServerIntegrationTest {
 
             // Parse the config to extract server.js path and tools JSON path
             JsonNode config = objectMapper.readTree(Files.readString(mcpConfig));
-            JsonNode args = config.get("mcpServers").get("axiom-tools").get("args");
-            String serverJsPath = args.get(0).asText();
-            String toolsJsonPath = args.get(1).asText();
+            List<String> real = McpTestSupport.realCommand(config.get("mcpServers").get("axiom-tools"));
+            String serverJsPath = real.get(1);
+            String toolsJsonPath = real.get(2);
 
             assertTrue(Files.exists(Path.of(serverJsPath)), "tools-server.js should exist");
             assertTrue(Files.exists(Path.of(toolsJsonPath)), "tools JSON should exist");
@@ -189,12 +190,11 @@ class McpServerIntegrationTest {
         assertNotNull(mcpConfig);
 
         JsonNode config = objectMapper.readTree(Files.readString(mcpConfig));
-        JsonNode args = config.get("mcpServers").get("axiom-tools").get("args");
+        List<String> real = McpTestSupport.realCommand(config.get("mcpServers").get("axiom-tools"));
 
         Process serverProcess = null;
         try {
-            ProcessBuilder pb = new ProcessBuilder("node",
-                    args.get(0).asText(), args.get(1).asText());
+            ProcessBuilder pb = new ProcessBuilder(real);
             serverProcess = pb.start();
 
             OutputStream stdin = serverProcess.getOutputStream();
@@ -255,10 +255,9 @@ class McpServerIntegrationTest {
             assertNotNull(mcpConfig);
 
             JsonNode config = objectMapper.readTree(Files.readString(mcpConfig));
-            JsonNode args = config.get("mcpServers").get("axiom-tools").get("args");
+            List<String> real = McpTestSupport.realCommand(config.get("mcpServers").get("axiom-tools"));
 
-            ProcessBuilder pb = new ProcessBuilder("node",
-                    args.get(0).asText(), args.get(1).asText());
+            ProcessBuilder pb = new ProcessBuilder(real);
             serverProcess = pb.start();
 
             OutputStream stdin = serverProcess.getOutputStream();

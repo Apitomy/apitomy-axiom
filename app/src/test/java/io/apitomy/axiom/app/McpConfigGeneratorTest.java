@@ -39,6 +39,9 @@ class McpConfigGeneratorTest {
     McpConfigGenerator generator;
 
     @Inject
+    io.apitomy.axiom.app.mcp.McpEnvironmentIsolation isolation;
+
+    @Inject
     ObjectMapper objectMapper;
 
     @BeforeEach
@@ -77,14 +80,14 @@ class McpConfigGeneratorTest {
 
         JsonNode axiomTools = config.get("mcpServers").get("axiom-tools");
         assertNotNull(axiomTools, "axiom-tools server should be present");
-        assertEquals("node", axiomTools.get("command").asText());
+        assertTrue(McpTestSupport.isLaunched(axiomTools), "axiom-tools should start through the env launcher");
 
-        JsonNode args = axiomTools.get("args");
-        assertTrue(args.isArray(), "args should be an array");
-        assertEquals(2, args.size(), "args should have tools-server.js path and tools JSON path");
+        List<String> real = McpTestSupport.realCommand(axiomTools);
+        assertEquals(3, real.size(), "real command should be node, tools-server.js and the tools JSON path");
+        assertEquals("node", real.get(0));
 
-        String serverJsPath = args.get(0).asText();
-        String toolsJsonPath = args.get(1).asText();
+        String serverJsPath = real.get(1);
+        String toolsJsonPath = real.get(2);
 
         assertTrue(serverJsPath.endsWith("tools-server.js"),
                 "First arg should be tools-server.js path");
@@ -102,13 +105,12 @@ class McpConfigGeneratorTest {
 
         JsonNode axiomSdk = config.get("mcpServers").get("axiom-sdk");
         assertNotNull(axiomSdk, "axiom-sdk server should be present");
-        assertEquals("node", axiomSdk.get("command").asText());
 
-        JsonNode args = axiomSdk.get("args");
-        assertTrue(args.isArray(), "args should be an array");
-        assertEquals(1, args.size(), "SDK server args should only have sdk-server.js path");
+        List<String> real = McpTestSupport.realCommand(axiomSdk);
+        assertEquals(2, real.size(), "SDK server should run node with only the sdk-server.js path");
+        assertEquals("node", real.get(0));
 
-        String sdkServerPath = args.get(0).asText();
+        String sdkServerPath = real.get(1);
         assertTrue(sdkServerPath.endsWith("sdk-server.js"),
                 "Arg should be sdk-server.js path");
         assertTrue(Files.exists(Path.of(sdkServerPath)), "sdk-server.js should exist");
@@ -119,10 +121,11 @@ class McpConfigGeneratorTest {
     }
 
     @Test
-    void testEnvironmentVariablesInToolsServer() throws Exception {
+    void testToolsServerGetsOnlyAxiomVariablesOfTheAgentEnvironment() throws Exception {
         Map<String, String> env = Map.of(
                 "GH_TOKEN", "ghp_test123",
-                "GITHUB_TOKEN", "ghp_test456"
+                "ANTHROPIC_API_KEY", "sk-test",
+                "AXIOM_TRACE_ID", "trace-1"
         );
 
         Path configFile = generator.generateMcpConfig(9004L, env, null);
@@ -130,8 +133,10 @@ class McpConfigGeneratorTest {
 
         JsonNode axiomToolsEnv = config.get("mcpServers").get("axiom-tools").get("env");
         assertNotNull(axiomToolsEnv, "axiom-tools env should be present");
-        assertEquals("ghp_test123", axiomToolsEnv.get("GH_TOKEN").asText());
-        assertEquals("ghp_test456", axiomToolsEnv.get("GITHUB_TOKEN").asText());
+        assertFalse(axiomToolsEnv.has("GH_TOKEN"), "agent variables must not reach the tools server");
+        assertFalse(axiomToolsEnv.has("ANTHROPIC_API_KEY"), "the model key must not reach the tools server");
+        assertEquals("trace-1", axiomToolsEnv.get("AXIOM_TRACE_ID").asText());
+        assertTrue(axiomToolsEnv.has("AXIOM_API_URL"));
     }
 
     // ── Tools JSON file content ──────────────────────────────────────
@@ -141,8 +146,7 @@ class McpConfigGeneratorTest {
         Path configFile = generator.generateMcpConfig(9005L, Map.of(), null);
         JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
-        String toolsJsonPath = config.get("mcpServers").get("axiom-tools")
-                .get("args").get(1).asText();
+        String toolsJsonPath = McpTestSupport.realCommand(config.get("mcpServers").get("axiom-tools")).get(2);
         JsonNode tools = objectMapper.readTree(Files.readString(Path.of(toolsJsonPath)));
 
         assertTrue(tools.isArray(), "Tools should be a JSON array");
@@ -161,8 +165,7 @@ class McpConfigGeneratorTest {
         Path configFile = generator.generateMcpConfig(9006L, Map.of(), null);
         JsonNode config = objectMapper.readTree(Files.readString(configFile));
 
-        String toolsJsonPath = config.get("mcpServers").get("axiom-tools")
-                .get("args").get(1).asText();
+        String toolsJsonPath = McpTestSupport.realCommand(config.get("mcpServers").get("axiom-tools")).get(2);
         JsonNode tools = objectMapper.readTree(Files.readString(Path.of(toolsJsonPath)));
 
         JsonNode testTool = null;
@@ -201,13 +204,15 @@ class McpConfigGeneratorTest {
         JsonNode cfg1 = objectMapper.readTree(Files.readString(config1));
         JsonNode cfg2 = objectMapper.readTree(Files.readString(config2));
 
-        String serverJs1 = cfg1.get("mcpServers").get("axiom-tools").get("args").get(0).asText();
-        String serverJs2 = cfg2.get("mcpServers").get("axiom-tools").get("args").get(0).asText();
+        List<String> real1 = McpTestSupport.realCommand(cfg1.get("mcpServers").get("axiom-tools"));
+        List<String> real2 = McpTestSupport.realCommand(cfg2.get("mcpServers").get("axiom-tools"));
+        String serverJs1 = real1.get(1);
+        String serverJs2 = real2.get(1);
         assertEquals(serverJs1, serverJs2,
                 "Both configs should reference the same tools-server.js");
 
-        String toolsJson1 = cfg1.get("mcpServers").get("axiom-tools").get("args").get(1).asText();
-        String toolsJson2 = cfg2.get("mcpServers").get("axiom-tools").get("args").get(1).asText();
+        String toolsJson1 = real1.get(2);
+        String toolsJson2 = real2.get(2);
         assertNotEquals(toolsJson1, toolsJson2,
                 "Each task should get its own tools JSON file");
     }
@@ -266,12 +271,7 @@ class McpConfigGeneratorTest {
                     "Config should include the external MCP server");
 
             JsonNode extServer = servers.get("test-external-stdio");
-            assertEquals("npx", extServer.get("command").asText());
-
-            JsonNode args = extServer.get("args");
-            assertTrue(args.isArray());
-            assertEquals("-y", args.get(0).asText());
-            assertEquals("@test/mcp-server", args.get(1).asText());
+            assertEquals(List.of("npx", "-y", "@test/mcp-server"), McpTestSupport.realCommand(extServer));
 
             JsonNode env = extServer.get("env");
             assertEquals("test-key", env.get("API_KEY").asText());
@@ -328,7 +328,7 @@ class McpConfigGeneratorTest {
             JsonNode servers = objectMapper.readTree(Files.readString(configFile)).get("mcpServers");
             assertFalse(servers.has("test-broken"));
             assertFalse(servers.has("test-no-transport"));
-            assertEquals("arg with \"quotes\"", servers.get("test-ok").get("args").get(0).asText());
+            assertEquals("arg with \"quotes\"", McpTestSupport.realCommand(servers.get("test-ok")).get(1));
         } finally {
             broken.delete();
             noTransport.delete();
@@ -348,7 +348,8 @@ class McpConfigGeneratorTest {
         try {
             Path configFile = generator.generateMcpConfig(9014L, Map.of(), List.of("mcp__test-same__x"));
             JsonNode taskNode = objectMapper.readTree(Files.readString(configFile)).get("mcpServers").get("test-same");
-            String sessionJson = contextBuilder.buildMcpConfig(resolver.resolveByName(List.of("test-same")));
+            String sessionJson = contextBuilder.buildMcpConfig(
+                    isolation.isolateAll(resolver.resolveByName(List.of("test-same"))));
             JsonNode sessionNode = objectMapper.readTree(sessionJson).get("mcpServers").get("test-same");
             assertEquals(sessionNode, taskNode);
         } finally {

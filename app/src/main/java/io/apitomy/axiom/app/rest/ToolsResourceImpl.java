@@ -3,6 +3,7 @@ package io.apitomy.axiom.app.rest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.ToolsResource;
+import io.apitomy.axiom.api.beans.Environment;
 import io.apitomy.axiom.api.beans.NewToolDefinition;
 import io.apitomy.axiom.api.beans.ToolDefinition;
 import io.apitomy.axiom.api.beans.ToolParameter;
@@ -51,6 +52,9 @@ public class ToolsResourceImpl implements ToolsResource {
 
     @Inject
     EnvironmentResolver environmentResolver;
+
+    @Inject
+    io.apitomy.axiom.app.mcp.McpEnvironmentIsolation environmentIsolation;
 
     @Inject
     ConfigItemValidationService validationService;
@@ -173,8 +177,12 @@ public class ToolsResourceImpl implements ToolsResource {
                 ProcessBuilder pb = new ProcessBuilder("/bin/bash", scriptFile.toString())
                         .redirectErrorStream(true);
 
+                // Like a tool called by an agent, a test run gets only the passthrough variables of Axiom's
+                // own environment plus the tool's declared variables (#617).
+                environmentIsolation.restrictToPassthrough(pb.environment());
+
                 // Inject environment variables with ${secret:NAME} resolution
-                Map<String, String> testEnv = resolveTestEnvironment(data);
+                Map<String, String> testEnv = resolveTestEnvironment(entity, data);
                 if (!testEnv.isEmpty()) {
                     pb.environment().putAll(testEnv);
                     LOG.infof("Injected %d environment variable(s) for tool test", testEnv.size());
@@ -236,27 +244,61 @@ public class ToolsResourceImpl implements ToolsResource {
     }
 
     /**
-     * Resolves environment variables for a tool test request.
-     * If the request has an explicit environment map, resolves ${secret:NAME}
-     * references in the values. Otherwise returns an empty map.
+     * Resolves the environment for a tool test run: the tool's own saved environment, overlaid with any
+     * variables given in the test request. {@code ${secret:NAME}} references are resolved in both.
+     *
+     * @param entity the tool under test
+     * @param data the test request
+     * @return the resolved environment (never null)
      */
-    private Map<String, String> resolveTestEnvironment(ToolTestRequest data) {
-        // Check if the request has environment variables
-        // The generated bean's getEnvironment() returns an Environment object or null
+    private Map<String, String> resolveTestEnvironment(ToolDefinitionEntity entity, ToolTestRequest data) {
+        Map<String, String> merged = new java.util.LinkedHashMap<>();
+        if (entity.environment != null && !entity.environment.isBlank()) {
+            try {
+                merged.putAll(objectMapper.readValue(entity.environment, new TypeReference<Map<String, String>>() {}));
+            } catch (Exception e) {
+                LOG.warnf(e, "Failed to read the saved environment of tool '%s'", entity.name);
+            }
+        }
         var env = data.getEnvironment();
-        if (env == null || env.getAdditionalProperties().isEmpty()) {
+        if (env != null) {
+            env.getAdditionalProperties().forEach((k, v) -> merged.put(k, v == null ? "" : String.valueOf(v)));
+        }
+        if (merged.isEmpty()) {
             return Map.of();
         }
-
-        // Convert to JSON and use EnvironmentResolver for ${secret:NAME} resolution
         try {
-            String envJson = objectMapper.writeValueAsString(env);
-            return environmentResolver.resolve(envJson);
+            return environmentResolver.resolve(objectMapper.writeValueAsString(merged));
         } catch (MissingSecretException e) {
             throw e;   // reported as the test's execution error
         } catch (Exception e) {
             LOG.warnf(e, "Failed to resolve test environment variables");
             return Map.of();
+        }
+    }
+
+    private String environmentToJson(Environment env) {
+        if (env == null || env.getAdditionalProperties().isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(env.getAdditionalProperties());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Environment jsonToEnvironment(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, String> map = objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
+            Environment env = new Environment();
+            map.forEach(env::setAdditionalProperty);
+            return env;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -291,6 +333,7 @@ public class ToolsResourceImpl implements ToolsResource {
                 entity.parameters = null;
             }
         }
+        entity.environment = environmentToJson(data.getEnvironment());
         entity.labels.clear();
         if (data.getLabels() != null) {
             entity.labels.addAll(data.getLabels());
@@ -315,6 +358,7 @@ public class ToolsResourceImpl implements ToolsResource {
         }
 
         tool.setLabels(entity.labels);
+        tool.setEnvironment(jsonToEnvironment(entity.environment));
 
         return tool;
     }

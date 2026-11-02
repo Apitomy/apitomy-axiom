@@ -71,6 +71,9 @@ public class DraftTestRunner {
     ScriptExecutionService scriptExecutionService;
 
     @Inject
+    io.apitomy.axiom.app.mcp.McpEnvironmentIsolation environmentIsolation;
+
+    @Inject
     NodeExecutionService nodeExecutionService;
 
     @Inject
@@ -137,8 +140,8 @@ public class DraftTestRunner {
      *
      * @param content     the draft tool JSON
      * @param params      parameter values by name
-     * @param environment environment variables for the run ({@code ${secret:NAME}} allowed); a tool gets no
-     *                    other secrets
+     * @param environment environment variables for the run ({@code ${secret:NAME}} allowed), overlaid on the
+     *                    draft's own {@code environment}; a tool gets no other secrets
      * @param subject     the subject whose workspace to run in, or {@code null}
      * @return the result
      * @throws io.apitomy.axiom.core.services.MissingSecretException when a referenced secret does not exist
@@ -170,12 +173,22 @@ public class DraftTestRunner {
             scriptFile = fileDir.resolve("tool.sh");
             Files.writeString(scriptFile, script);
             workDir = scriptExecutionService.workingDirectory(subject);
-            ProcessBuilder pb = ScriptExecutionService.scriptProcess(scriptFile, workDir.path(),
-                    scriptExecutionService.buildBaseEnvironment("test-" + UUID.randomUUID(), workDir.path()));
-            // A tool has no environment of its own: it gets only the variables given for this test run.
+            Map<String, String> base = scriptExecutionService.buildBaseEnvironment("test-" + UUID.randomUUID(),
+                    workDir.path());
+            ProcessBuilder pb = ScriptExecutionService.scriptProcess(scriptFile, workDir.path(), base);
+            // Like a tool called by an agent, nothing of Axiom's own environment is inherited beyond the
+            // passthrough variables (#617); the Axiom-provided base variables stay.
+            environmentIsolation.restrictToPassthrough(pb.environment());
+            pb.environment().putAll(base);
+            // A tool gets its own declared environment plus the variables given for this test run.
+            Map<String, String> merged = new java.util.LinkedHashMap<>();
+            content.path("environment").fields()
+                    .forEachRemaining(e -> merged.put(e.getKey(), e.getValue().asText("")));
+            if (environment != null) {
+                merged.putAll(environment);
+            }
             ActionTypeEntity holder = new ActionTypeEntity();
-            holder.environment = environment == null || environment.isEmpty() ? null
-                    : objectMapper.writeValueAsString(environment);
+            holder.environment = merged.isEmpty() ? null : objectMapper.writeValueAsString(merged);
             scriptExecutionService.applyActionEnvironment(pb, holder);
             Instant start = Instant.now();
             ScriptExecutionService.CapturedOutput captured =

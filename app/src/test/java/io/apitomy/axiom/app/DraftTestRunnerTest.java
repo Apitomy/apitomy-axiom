@@ -131,6 +131,16 @@ class DraftTestRunnerTest {
     }
 
     @Test
+    void toolRunGetsOnlyItsOwnEnvironmentAndThePassthrough() throws Exception {
+        JsonNode tool = json("{\"name\":\"t\",\"parameters\":[],\"environment\":{\"OWN\":\"own\"},"
+                + "\"scriptTemplate\":\"echo \\\"own=$OWN server=${AXIOM_SERVER_ONLY_TEST_VAR:-none}"
+                + " path=${PATH:+set} work=${AXIOM_WORK_DIR:+set}\\\"\"}");
+        DraftTestRunner.Result r = QuarkusTransaction.requiringNew().call(() ->
+                runner.runTool(tool, Map.of(), Map.of(), null));
+        assertEquals("own=own server=none path=set work=set\n", r.stdout(), r.toString());
+    }
+
+    @Test
     void toolMissingRequiredParameterIsAnError() throws Exception {
         JsonNode tool = json("{\"name\":\"t\",\"parameters\":[{\"name\":\"who\",\"required\":true}],"
                 + "\"scriptTemplate\":\"echo {{who}}\"}");

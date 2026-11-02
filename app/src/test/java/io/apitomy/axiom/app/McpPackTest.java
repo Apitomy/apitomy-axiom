@@ -42,6 +42,7 @@ class McpPackTest {
             ActionTypeEntity.delete("name like ?1", "mp-%");
             SessionTemplateEntity.<SessionTemplateEntity>list("name like ?1", "mp-%").forEach(t -> t.delete());
             McpServerEntity.delete("name like ?1", "mp-%");
+            io.apitomy.axiom.core.entities.ToolDefinitionEntity.delete("name like ?1", "mp-%");
         });
     }
 
@@ -73,6 +74,26 @@ class McpPackTest {
         importExportService.importOrUpdatePack(pack);
         QuarkusTransaction.requiringNew().run(() -> assertEquals("Read,Bash(git log *)",
                 ActionTypeEntity.<ActionTypeEntity>find("name", "mp-at").firstResult().allowedTools));
+    }
+
+    @Test
+    void toolEnvironmentSurvivesExportAndImport() throws Exception {
+        JsonNode pack = mapper.readTree("""
+                {"tools": [{"name": "mp-tool", "scriptTemplate": "echo $T",
+                  "environment": {"T": "plain-token"}}]}
+                """);
+        importExportService.importPack(pack);
+        JsonNode exported = QuarkusTransaction.requiringNew().call(() -> importExportService.serializeTool(
+                io.apitomy.axiom.core.entities.ToolDefinitionEntity.find("name", "mp-tool").firstResult()));
+        assertEquals("plain-token", exported.path("environment").path("T").asText(), exported.toString());
+
+        ((ObjectNode) exported.path("environment")).put("T", "other-token");
+        ObjectNode update = mapper.createObjectNode();
+        update.putArray("tools").add(exported);
+        importExportService.importOrUpdatePack(update);
+        QuarkusTransaction.requiringNew().run(() -> assertEquals("{\"T\":\"other-token\"}",
+                io.apitomy.axiom.core.entities.ToolDefinitionEntity.<io.apitomy.axiom.core.entities.ToolDefinitionEntity>find(
+                        "name", "mp-tool").firstResult().environment));
     }
 
     @Test

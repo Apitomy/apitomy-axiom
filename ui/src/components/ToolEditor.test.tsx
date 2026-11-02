@@ -10,6 +10,7 @@ vi.mock("@patternfly/react-code-editor", () => ({
 vi.mock("../config/api", async (orig) => ({
     ...(await orig<typeof import("../config/api")>()),
     validateTool: vi.fn().mockResolvedValue({ valid: true, errors: [], warnings: [] }),
+    fetchSecrets: vi.fn().mockResolvedValue([]),
 }));
 
 describe("ToolEditor", () => {
@@ -43,5 +44,16 @@ describe("ToolEditor", () => {
         render(<ToolEditor value={{ name: "t", parameters: [] }} onChange={() => {}}
             problems={[{ severity: "error", field: "scriptTemplate", message: "required" }]} />);
         expect(screen.getByText(/Problems/)).toBeTruthy();
+    });
+
+    it("shows the tool's own environment and removes variables", () => {
+        const onChange = vi.fn();
+        render(<ToolEditor value={{ name: "t", parameters: [], environment: { GH_TOKEN: "${secret:GH_TOKEN}" } }}
+            onChange={onChange} />);
+        fireEvent.click(screen.getByText("Environment (1)"));
+        expect(screen.getByDisplayValue("${secret:GH_TOKEN}")).toBeTruthy();
+        expect(screen.getByText(/does not inherit the environment of the agent/)).toBeTruthy();
+        fireEvent.click(screen.getAllByLabelText(/Remove/)[0]);
+        expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ environment: undefined }));
     });
 });

@@ -91,4 +91,75 @@ class ToolTestEndpointTest {
             given().when().delete(TOOLS_PATH + "/" + toolId).then().statusCode(204);
         }
     }
+
+    @Test
+    void toolEnvironmentRoundTripsAndIsUsedByTestRuns() {
+        int toolId = given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "name": "test-env-tool",
+                        "scriptTemplate": "echo \\"own=$OWN extra=$EXTRA\\"",
+                        "environment": {"OWN": "from-tool", "EXTRA": "saved"}
+                    }
+                    """)
+                .when()
+                .post(TOOLS_PATH)
+                .then()
+                .statusCode(200)
+                .body("environment.OWN", equalTo("from-tool"))
+                .extract().path("id");
+
+        try {
+            given().when().get(TOOLS_PATH + "/" + toolId).then()
+                    .statusCode(200)
+                    .body("environment.EXTRA", equalTo("saved"));
+
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("""
+                        {
+                            "parameters": {},
+                            "environment": {"EXTRA": "from-request"}
+                        }
+                        """)
+                    .when()
+                    .post(TOOLS_PATH + "/" + toolId + "/test")
+                    .then()
+                    .statusCode(200)
+                    .body("success", is(true))
+                    .body("output", containsString("own=from-tool extra=from-request"));
+        } finally {
+            given().when().delete(TOOLS_PATH + "/" + toolId).then().statusCode(204);
+        }
+    }
+
+    @Test
+    void toolTestRunDoesNotInheritAxiomsEnvironment() {
+        int toolId = given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "name": "test-no-inherit-tool",
+                        "scriptTemplate": "echo \\"server=${AXIOM_SERVER_ONLY_TEST_VAR:-none} path=${PATH:+set}\\""
+                    }
+                    """)
+                .when()
+                .post(TOOLS_PATH)
+                .then()
+                .statusCode(200)
+                .extract().path("id");
+        try {
+            given()
+                    .contentType(ContentType.JSON)
+                    .body("{\"parameters\": {}}")
+                    .when()
+                    .post(TOOLS_PATH + "/" + toolId + "/test")
+                    .then()
+                    .statusCode(200)
+                    .body("output", containsString("server=none path=set"));
+        } finally {
+            given().when().delete(TOOLS_PATH + "/" + toolId).then().statusCode(204);
+        }
+    }
 }

@@ -8945,6 +8945,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "environment": {
+            "description": "Environment variables for the tool's script. Values can reference secrets using ${secret:NAME} syntax. A tool does not inherit the environment of the agent that calls it; it gets only these variables, the Axiom-provided AXIOM_* variables and the configured passthrough variables (such as PATH and HOME).",
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         }
       },
@@ -8973,6 +8980,13 @@
             "description": "Free-form labels for categorization",
             "type": "array",
             "items": {
+              "type": "string"
+            }
+          },
+          "environment": {
+            "description": "Environment variables for the tool's script. Values can reference secrets using ${secret:NAME} syntax. A tool does not inherit the environment of the agent that calls it; it gets only these variables, the Axiom-provided AXIOM_* variables and the configured passthrough variables (such as PATH and HOME).",
+            "type": "object",
+            "additionalProperties": {
               "type": "string"
             }
           }

@@ -401,6 +401,8 @@ Each tool has:
 - **Labels** — for organization and filtering
 - **Parameters** and a **script template** — for script-based tools, the typed parameters and the bash
   script that runs when the tool is called
+- **Environment** — the variables the script needs, such as `GH_TOKEN=${secret:GH_TOKEN}`. A tool gets only
+  these (plus `AXIOM_*` and the passthrough variables, see [Secrets](#secrets)), never the calling agent's
 
 Tools are referenced in the **Allowed Tools** list of action types. Only tools explicitly listed are
 available to the agent — unlisted tools are denied.
@@ -450,15 +452,24 @@ automatically.** A process gets only the variables declared in its **Environment
 reference a secret as `${secret:SECRET_NAME}`, for example `GH_TOKEN=${secret:GH_TOKEN}` (the **Add secret**
 picker fills this in):
 
-- **Action types** (AI agent, script and Node.js) get their own **Environment**. An AI agent's tools run with
-  the agent's environment, so declare the secrets its tools need on the action type.
+- **Action types** (AI agent, script and Node.js) get their own **Environment**.
 - **Session templates** have their own **Environment** for the assistant session.
-- **Workbench tool test runs** use the **Environment** given in the test dialog.
+- **Tools** have their own **Environment**. A script tool does not inherit the environment of the agent that
+  calls it, so declare the secrets a tool needs on the tool itself.
+- **MCP servers** have their own environment (see [MCP Servers](mcp-servers.md)).
+- **Tool test runs** use the tool's **Environment** plus any variables given in the test dialog, and, like a
+  tool called by an agent, only the passthrough variables of Axiom's own environment.
 
-An AI agent's environment reaches more than the agent. The tools the agent CLI brings with it, such as its
-shell, hooks and stdio MCP servers, run with that environment, so a tool command can read every variable
-declared on the action type, including the model key (for example `ANTHROPIC_API_KEY=${secret:...}`). This
-matters when the agent reads content Axiom does not control, such as repositories under scan, issue and PR
+Script tools and stdio MCP servers are started with only their own variables, the Axiom-provided `AXIOM_*`
+variables (script tools only, for example `AXIOM_API_URL` and `AXIOM_TRACE_ID`) and a short list of system
+variables passed through from Axiom: `PATH`, `HOME`, `TMPDIR`, `LANG` and `NODE_EXTRA_CA_CERTS` by default.
+Change that list with the `axiom.agent.env.passthrough` property (comma-separated), for example to add a proxy
+or locale variable your tools need. An agent's declared variables, including its model key, never reach
+them.
+
+An AI agent's environment still reaches the agent CLI's own built-in tools, such as its shell and hooks, so a
+shell command the agent runs can read every variable declared on the action type, including the model key
+(for example `ANTHROPIC_API_KEY=${secret:...}`). This matters when the agent reads content Axiom does not control, such as repositories under scan, issue and PR
 text, or web pages. A prompt injection in that content can ask the agent to print or send its environment,
 and the tools a scanning or triage agent needs, such as `curl`, `cat` or `python3`, are enough to do it.
 For agents that read untrusted content, use a scoped or low-value key for the model credential, keep the

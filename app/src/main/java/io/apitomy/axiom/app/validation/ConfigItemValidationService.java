@@ -102,15 +102,43 @@ public class ConfigItemValidationService {
         }
         ToolValidator.validate(tool).messages().forEach(m -> problems.add(new ConfigProblem(
                 m.severity().name().toLowerCase(Locale.ROOT), m.field(), "TOOL_INVALID", m.message())));
-        // A tool runs with the environment of the action type that allows it (or of a test run).
-        if (context.secretNames() != null && tool.getScriptTemplate() != null) {
-            for (String secret : ActionTypeValidator.usedSecrets(tool.getScriptTemplate(), context.secretNames(),
-                    false)) {
-                problems.add(ConfigProblem.warning("scriptTemplate", "UNDECLARED_SECRET", "Uses the secret " + secret
-                        + ". Tools get no secrets automatically: declare " + secret + "=${secret:" + secret
-                        + "} in the environment of each action type that allows this tool."));
+        // A tool runs with its own declared environment only, never with the calling agent's.
+        if (context.secretNames() != null) {
+            java.util.Set<String> declared = new java.util.HashSet<>();
+            item.path("environment").fieldNames().forEachRemaining(declared::add);
+            if (tool.getScriptTemplate() != null) {
+                for (String secret : ActionTypeValidator.usedSecrets(tool.getScriptTemplate(),
+                        context.secretNames(), false)) {
+                    if (!declared.contains(secret)) {
+                        problems.add(ConfigProblem.warning("scriptTemplate", "UNDECLARED_SECRET", "Uses the secret "
+                                + secret + ". Tools get no secrets automatically and don't inherit the calling "
+                                + "agent's environment: add " + secret + "=${secret:" + secret
+                                + "} to this tool's environment."));
+                    }
+                }
             }
+            checkSecretReferences(item, context, problems);
         }
+    }
+
+    /**
+     * Reports {@code ${secret:NAME}} references in an item's {@code environment} that name no existing secret.
+     *
+     * @param item     the item JSON
+     * @param context  the validation context (secret names must be known)
+     * @param problems the problem list to add to
+     */
+    private static void checkSecretReferences(JsonNode item, ValidationContext context,
+                                              List<ConfigProblem> problems) {
+        item.path("environment").fields().forEachRemaining(entry -> {
+            java.util.regex.Matcher m = SECRET_REFERENCE.matcher(entry.getValue().asText(""));
+            while (m.find()) {
+                if (!context.secretNames().contains(m.group(1))) {
+                    problems.add(ConfigProblem.error("environment." + entry.getKey(), "UNKNOWN_SECRET",
+                            "References secret '" + m.group(1) + "', which does not exist."));
+                }
+            }
+        });
     }
 
     private void validateActionType(JsonNode item, ValidationContext context, List<ConfigProblem> problems) {
@@ -216,15 +244,7 @@ public class ConfigItemValidationService {
             }
         }
         if (context.secretNames() != null) {
-            item.path("environment").fields().forEachRemaining(entry -> {
-                java.util.regex.Matcher m = SECRET_REFERENCE.matcher(entry.getValue().asText(""));
-                while (m.find()) {
-                    if (!context.secretNames().contains(m.group(1))) {
-                        problems.add(ConfigProblem.error("environment." + entry.getKey(), "UNKNOWN_SECRET",
-                                "References secret '" + m.group(1) + "', which does not exist."));
-                    }
-                }
-            });
+            checkSecretReferences(item, context, problems);
         }
     }
 

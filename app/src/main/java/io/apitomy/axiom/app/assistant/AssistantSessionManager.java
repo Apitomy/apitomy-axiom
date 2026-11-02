@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.assistant;
 
+import io.apitomy.axiom.app.mcp.McpEnvironmentIsolation;
 import io.apitomy.axiom.app.mcp.McpServerDefinition;
 import io.apitomy.axiom.app.mcp.McpServerResolver;
 
@@ -88,6 +89,9 @@ public class AssistantSessionManager {
 
     @Inject
     McpServerResolver mcpServerResolver;
+
+    @Inject
+    McpEnvironmentIsolation environmentIsolation;
 
     @Inject
     AgentRegistry agentRegistry;
@@ -1046,7 +1050,23 @@ public class AssistantSessionManager {
         }
     }
 
-    private Map<String, McpServerDefinition> resolveMcpServers(
+    /**
+     * Resolves the MCP servers of a session. Every stdio server is started through the environment launcher,
+     * so none inherits the session CLI's environment (#617).
+     *
+     * @param sessionId     the session ID
+     * @param mcpToken      the session's MCP token
+     * @param template      the session template
+     * @param subject       the subject, or {@code null}
+     * @param compositionId the workbench composition ID, or {@code null}
+     * @param sessionDir    the session directory
+     * @param sessionEnv    the session's resolved environment; only its {@code AXIOM_*} variables reach
+     *                      axiom-tools
+     * @param allowedTools  the allowed tools
+     * @return the server definitions by name
+     * @throws IOException if a built-in server cannot be installed or a file cannot be written
+     */
+    Map<String, McpServerDefinition> resolveMcpServers(
             String sessionId, String mcpToken, SessionTemplateService.SessionTemplate template,
             SubjectEntity subject, Long compositionId, Path sessionDir,
             Map<String, String> sessionEnv,
@@ -1097,12 +1117,19 @@ public class AssistantSessionManager {
                 List<ToolDefinitionEntity> scriptTools =
                         ToolDefinitionEntity.listAll();
                 if (!scriptTools.isEmpty()) {
-                    Path serverDir = mcpConfigGenerator.ensureMcpServerInstalled();
+                    // Each tool gets its own environment (resolved into tools.json), never the session's:
+                    // the server receives only the Axiom-provided AXIOM_* variables.
                     String toolsJson = mcpConfigGenerator.buildToolsJson(scriptTools);
+                    Path serverDir = mcpConfigGenerator.ensureMcpServerInstalled();
                     Path toolsFile = sessionDir.resolve("tools.json");
                     Files.writeString(toolsFile, toolsJson);
-                    Map<String, String> env = new LinkedHashMap<>(sessionEnv);
-                    env.putIfAbsent("AXIOM_API_URL", apiUrl);
+                    try {
+                        Files.setPosixFilePermissions(toolsFile,
+                                java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+                    } catch (UnsupportedOperationException e) {
+                        LOG.debugf("Could not restrict permissions on %s", toolsFile);
+                    }
+                    Map<String, String> env = mcpConfigGenerator.axiomToolsEnvironment(sessionEnv);
                     configs.put("axiom-tools",
                             McpServerDefinition.stdio("node",
                                     List.of(serverDir.resolve("tools-server.js")
@@ -1130,7 +1157,9 @@ public class AssistantSessionManager {
             }
         }
 
-        return configs;
+        // No stdio server inherits the session CLI's environment: each gets only the passthrough allowlist and
+        // its own variables.
+        return environmentIsolation.isolateAll(configs);
     }
 
     /**
