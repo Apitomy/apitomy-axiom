@@ -37,6 +37,7 @@ import {
     type McpServerTestResult,
     createMcpServer,
     createSecret,
+    deleteSecret,
     fetchMcpRuntimeStatus,
     fetchSecrets,
     searchMcpCatalog,
@@ -48,9 +49,11 @@ import {
     type CatalogValue,
     buildCatalogServer,
     catalogInputs,
+    conflictingNewSecrets,
     missingRequired,
     newSecretsToCreate,
 } from "../utils/mcpCatalog";
+import { mcpServerNameError } from "../utils/mcpServerName";
 
 const RUNTIME_COMMANDS: Record<string, { key: keyof McpRuntimeStatus; command: string; label: string }> = {
     node: { key: "node", command: "npx", label: "Node.js" },
@@ -81,6 +84,8 @@ function RuntimeLabel({ entry, runtimes }: { entry: McpCatalogEntry; runtimes: M
 function InputField({ field, value, secrets, onChange }: {
     field: CatalogFormInput; value: CatalogValue; secrets: string[]; onChange: (v: CatalogValue) => void;
 }) {
+    const secretExists = value.mode === "newSecret" && !!value.secretName
+        && secrets.includes(value.secretName.trim());
     const { input } = field;
     const group = `catalog-mode-${field.key}`;
     const kindLabel = field.kind === "env" ? "Environment variable" : field.kind === "header" ? "Header" : "Argument";
@@ -107,6 +112,7 @@ function InputField({ field, value, secrets, onChange }: {
                     {value.mode === "newSecret" && (
                         <FlexItem style={{ flex: 1 }}>
                             <TextInput aria-label={`Secret name for ${input.name}`} value={value.secretName ?? ""}
+                                validated={secretExists ? "error" : "default"}
                                 placeholder="Secret name" onChange={(_e, v) => onChange({ ...value, secretName: v })} />
                         </FlexItem>
                     )}
@@ -118,7 +124,14 @@ function InputField({ field, value, secrets, onChange }: {
                     </FlexItem>
                 </Flex>
             )}
-            <FormHelperText><HelperText><HelperTextItem>
+            <FormHelperText><HelperText>
+                {secretExists && (
+                    <HelperTextItem variant="error">
+                        A secret named {value.secretName?.trim()} already exists. Choose “Existing secret” to use
+                        it, or enter a different name.
+                    </HelperTextItem>
+                )}
+                <HelperTextItem>
                 {kindLabel}{input.description ? ` — ${input.description}` : ""}
                 {input.template ? ` (sent as ${input.template.replace("{value}", "<value>")})` : ""}
                 {value.mode === "newSecret" ? ". The value is saved as an Axiom secret when you add the server." : ""}
@@ -192,6 +205,21 @@ export function McpCatalogModal({ isOpen, onClose, onCreated }: McpCatalogModalP
     };
 
     const missing = missingRequired(inputs, values);
+    const nameError = mcpServerNameError(name);
+    const secretConflicts = conflictingNewSecrets(values, secrets);
+    const canSubmit = !busy && !!name.trim() && !nameError && missing.length === 0;
+
+    /** Edits invalidate a previous test result and error: they no longer describe the form. */
+    const changeName = (v: string) => {
+        setName(v);
+        setTestResult(null);
+        setError(null);
+    };
+    const changeValue = (key: string, v: CatalogValue) => {
+        setValues((prev) => ({ ...prev, [key]: v }));
+        setTestResult(null);
+        setError(null);
+    };
 
     const handleTest = () => {
         if (!selected) return;
@@ -208,16 +236,23 @@ export function McpCatalogModal({ isOpen, onClose, onCreated }: McpCatalogModalP
         if (!selected) return;
         setBusy(true);
         setError(null);
+        // Secrets are created first so the server never references a missing secret; if the server
+        // cannot be created they are deleted again so a failed add leaves nothing behind.
+        const createdSecretIds: number[] = [];
         try {
             for (const secret of newSecretsToCreate(values)) {
-                if (!secrets.includes(secret.name)) {
-                    await createSecret({ name: secret.name, value: secret.value,
-                        description: `MCP server ${name.trim()}` });
-                }
+                const createdSecret = await createSecret({ name: secret.name.trim(), value: secret.value,
+                    description: `MCP server ${name.trim()}` });
+                createdSecretIds.push(createdSecret.id);
             }
-            const created = await createMcpServer(buildCatalogServer(selected, name.trim(), values));
+            const server = buildCatalogServer(selected, name.trim(), values);
+            if (testResult?.success) {
+                server.tools = testResult.tools;
+            }
+            const created = await createMcpServer(server);
             onCreated(created);
         } catch (e) {
+            await Promise.allSettled(createdSecretIds.map((id) => deleteSecret(id)));
             setError((e as Error).message);
         } finally {
             setBusy(false);
@@ -285,14 +320,18 @@ export function McpCatalogModal({ isOpen, onClose, onCreated }: McpCatalogModalP
                         {selected.notes && <Alert variant="info" isInline isPlain title={selected.notes} />}
                         <div><RuntimeLabel entry={selected} runtimes={runtimes} /></div>
                         <FormGroup label="Server name" isRequired fieldId="catalog-name">
-                            <TextInput id="catalog-name" value={name} onChange={(_e, v) => setName(v)} />
-                            <FormHelperText><HelperText><HelperTextItem>
-                                Tools will be named <code>{`mcp__${name.trim() || "<name>"}__<tool>`}</code>.
-                            </HelperTextItem></HelperText></FormHelperText>
+                            <TextInput id="catalog-name" value={name} onChange={(_e, v) => changeName(v)}
+                                validated={nameError ? "error" : "default"} />
+                            <FormHelperText><HelperText>
+                                {nameError && <HelperTextItem variant="error">{nameError}</HelperTextItem>}
+                                <HelperTextItem>
+                                    Tools will be named <code>{`mcp__${name.trim() || "<name>"}__<tool>`}</code>.
+                                </HelperTextItem>
+                            </HelperText></FormHelperText>
                         </FormGroup>
                         {inputs.map((field) => (
                             <InputField key={field.key} field={field} value={values[field.key]} secrets={secrets}
-                                onChange={(v) => setValues((prev) => ({ ...prev, [field.key]: v }))} />
+                                onChange={(v) => changeValue(field.key, v)} />
                         ))}
                         {testResult && <McpTestResultPanel result={testResult} serverName={name.trim()} />}
                     </Form>
@@ -302,11 +341,11 @@ export function McpCatalogModal({ isOpen, onClose, onCreated }: McpCatalogModalP
                 {selected ? (
                     <>
                         <Button variant="primary" onClick={handleAdd} isLoading={busy}
-                            isDisabled={busy || !name.trim() || missing.length > 0}>Add server</Button>
-                        <Button variant="secondary" onClick={handleTest} isDisabled={busy || !name.trim() || missing.length > 0}>
+                            isDisabled={!canSubmit || secretConflicts.length > 0}>Add server</Button>
+                        <Button variant="secondary" onClick={handleTest} isDisabled={!canSubmit}>
                             Test
                         </Button>
-                        <Button variant="link" icon={<ArrowLeftIcon />} onClick={() => setSelected(null)}>Back</Button>
+                        <Button variant="link" icon={<ArrowLeftIcon />} onClick={() => { setSelected(null); setError(null); }}>Back</Button>
                     </>
                 ) : (
                     <Button variant="link" onClick={onClose}>Cancel</Button>

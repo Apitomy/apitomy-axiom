@@ -102,7 +102,8 @@ public class McpServerService {
     }
 
     /**
-     * Validates and creates a new MCP server.
+     * Validates and creates a new MCP server. Tools in {@link NewMcpServer#getTools()} (from a
+     * connection test run before saving) are stored as the server's discovered tools.
      *
      * @param data the server definition
      * @return the persisted entity
@@ -112,6 +113,14 @@ public class McpServerService {
         validate(data, null);
         McpServerEntity entity = new McpServerEntity();
         applyFields(entity, data);
+        if (data.getTools() != null && !data.getTools().isEmpty()) {
+            List<McpConnectionTester.ToolInfo> tools = data.getTools().stream()
+                    .filter(tool -> tool.getName() != null && !tool.getName().isBlank())
+                    .map(tool -> new McpConnectionTester.ToolInfo(tool.getName(), tool.getDescription()))
+                    .toList();
+            entity.discoveredTools = toJson(tools);
+            entity.toolsDiscoveredOn = Instant.now();
+        }
         entity.persist();
         return entity;
     }
@@ -242,9 +251,13 @@ public class McpServerService {
         validateName(data.getName());
         boolean hasCommand = notBlank(data.getServerCommand());
         boolean hasUrl = notBlank(data.getServerUrl());
-        if (hasCommand == hasUrl) {
+        if (hasCommand && hasUrl) {
             throw new McpServerValidationException(
                     "Specify either a server command (stdio) or a server URL (HTTP), but not both");
+        }
+        if (!hasCommand && !hasUrl) {
+            throw new McpServerValidationException(
+                    "A server command (stdio) or a server URL (HTTP) is required");
         }
         String transport = effectiveTransport(data);
         if (TRANSPORT_STDIO.equals(transport) && !hasCommand) {

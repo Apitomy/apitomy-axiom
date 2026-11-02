@@ -61,6 +61,13 @@ import {
     type PackImportProblem,
 } from "../config/api";
 
+/** Total number of items created or updated by an import. */
+function importedCount(result: ImportResult): number {
+    return (result.tools ?? 0) + (result.toolsets ?? 0) + (result.mcpServers ?? 0) + (result.actionTypes ?? 0)
+        + (result.sessionTemplates ?? 0) + (result.eventSources ?? 0) + (result.subscriptions ?? 0)
+        + (result.workflowDefinitions ?? 0) + (result.dashboards ?? 0);
+}
+
 export function ConfigurationPacksPage() {
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
     const [tools, setTools] = useState<ToolDefinition[]>([]);
@@ -551,7 +558,11 @@ export function ConfigurationPacksPage() {
                             {importResult && (
                                 <Alert variant="success" title="Pack imported successfully"
                                     isInline style={{ marginBottom: "16px" }}>
-                                    <p>Imported:</p>
+                                    {importedCount(importResult) === 0 ? (
+                                        <p>Nothing new was imported.</p>
+                                    ) : (
+                                        <p>Imported:</p>
+                                    )}
                                     <ul style={{ margin: "4px 0 0 16px" }}>
                                         {importResult.tools ? <li>{importResult.tools} tool(s)</li> : null}
                                         {importResult.toolsets ? <li>{importResult.toolsets} toolset(s)</li> : null}
@@ -563,6 +574,18 @@ export function ConfigurationPacksPage() {
                                         {importResult.workflowDefinitions ? <li>{importResult.workflowDefinitions} workflow definition(s)</li> : null}
                                         {importResult.dashboards ? <li>{importResult.dashboards} dashboard(s)</li> : null}
                                     </ul>
+                                    {importResult.skipped && importResult.skipped.length > 0 && (
+                                        <>
+                                            <p style={{ marginTop: "8px" }}>
+                                                Skipped {importResult.skipped.length} existing item(s):
+                                            </p>
+                                            <ul style={{ margin: "4px 0 0 16px" }}>
+                                                {importResult.skipped.map((item) => (
+                                                    <li key={`${item.type}:${item.name}`}>{item.type}: {item.name}</li>
+                                                ))}
+                                            </ul>
+                                        </>
+                                    )}
                                 </Alert>
                             )}
 

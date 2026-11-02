@@ -165,6 +165,31 @@ public class McpConnectionTester {
         return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
+    /**
+     * Describes a network failure in user-facing terms, e.g. "connection refused" instead of the
+     * bare {@code ConnectException} class name that the JDK HTTP client reports.
+     *
+     * @param e the I/O failure
+     * @return a readable description
+     */
+    static String networkMessage(IOException e) {
+        Throwable cause = e;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        if (e instanceof java.net.ConnectException || cause instanceof java.net.ConnectException) {
+            return "connection refused (is the server running and the URL correct?)";
+        }
+        if (e instanceof java.net.UnknownHostException || cause instanceof java.net.UnknownHostException) {
+            return "unknown host";
+        }
+        if (e instanceof javax.net.ssl.SSLException || cause instanceof javax.net.ssl.SSLException) {
+            return "TLS handshake failed: " + message(cause);
+        }
+        String msg = e.getMessage() != null ? e.getMessage() : cause.getMessage();
+        return msg != null ? msg : "I/O error (" + e.getClass().getSimpleName() + ")";
+    }
+
     private static Duration remaining(Instant deadline) throws McpException {
         Duration left = Duration.between(Instant.now(), deadline);
         if (left.isNegative() || left.isZero()) {
@@ -394,7 +419,7 @@ public class McpConnectionTester {
             } catch (java.net.http.HttpTimeoutException e) {
                 throw new McpException("Timed out waiting for the server");
             } catch (IOException e) {
-                throw new McpException("Could not connect to " + uri + ": " + message(e));
+                throw new McpException("Could not connect to " + uri + ": " + networkMessage(e));
             }
             try (InputStream body = response.body()) {
                 response.headers().firstValue("Mcp-Session-Id").ifPresent(s -> sessionId = s);
@@ -447,7 +472,7 @@ public class McpConnectionTester {
             try {
                 response = client.send(builder.build(), HttpResponse.BodyHandlers.ofInputStream());
             } catch (IOException e) {
-                throw new McpException("Could not connect to " + uri + ": " + message(e));
+                throw new McpException("Could not connect to " + uri + ": " + networkMessage(e));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new McpException("Interrupted");

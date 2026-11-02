@@ -124,4 +124,39 @@ describe("McpServerDetailPage", () => {
         await userEvent.click(await screen.findByRole("tab", { name: "Used by (1)" }));
         expect(screen.getByRole("link", { name: "Triage chat" })).toHaveAttribute("href", "/session-templates/t-1");
     });
+
+    it("keeps the selected tab in the URL", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({ id: 5, name: "gh", serverCommand: "npx",
+            tools: [{ name: "echo" }] } as never);
+        render(<MemoryRouter initialEntries={["/mcp-servers/5?tab=tools"]}><Routes>
+            <Route path="/mcp-servers/:mcpServerId" element={<McpServerDetailPage />} />
+        </Routes></MemoryRouter>);
+        expect(await screen.findByRole("tab", { name: "Tools (1)", selected: true })).toBeInTheDocument();
+    });
+
+    it("rejects a timeout that is not a positive whole number", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({ id: 5, name: "gh", serverCommand: "npx" } as never);
+        renderPage();
+        await userEvent.click(await screen.findByRole("tab", { name: "Connection" }));
+        const timeout = screen.getByLabelText("Timeout (ms)");
+        expect(timeout).not.toHaveAttribute("type", "number");
+        await userEvent.type(timeout, "-5");
+        expect(screen.getByText(/whole number of milliseconds/)).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Save Changes/ })).toBeDisabled();
+        await userEvent.clear(timeout);
+        await userEvent.type(timeout, "5000");
+        expect(screen.queryByText(/whole number of milliseconds/)).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /Save Changes/ })).toBeEnabled();
+    });
+
+    it("does not repeat the tool list in the test result", async () => {
+        vi.mocked(api.fetchMcpServer).mockResolvedValue({ id: 5, name: "gh", serverCommand: "npx" } as never);
+        vi.mocked(api.testMcpServer).mockResolvedValueOnce({ success: true, serverName: "gh",
+            tools: [{ name: "echo" }], durationMs: 3 });
+        renderPage();
+        await userEvent.click(await screen.findByRole("button", { name: /Test connection/ }));
+        expect(await screen.findByText(/Connected to gh/)).toBeInTheDocument();
+        await userEvent.click(screen.getByRole("tab", { name: "Tools (1)" }));
+        expect(screen.getAllByText("mcp__gh__echo")).toHaveLength(1);
+    });
 });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useSearchParams, Link } from "react-router-dom";
 import {
     Alert,
     Breadcrumb,
@@ -74,6 +74,10 @@ export function toPayload(form: NewMcpServer): NewMcpServer {
     return { ...base, serverUrl: form.serverUrl, headers: form.headers ?? {} };
 }
 
+/** Tab keys, in display order; the selected tab is kept in the {@code tab} query parameter. */
+const TAB_KEYS = ["info", "connection", "tools", "usage"] as const;
+type TabKey = typeof TAB_KEYS[number];
+
 export function McpServerDetailPage() {
     const { mcpServerId } = useParams<{ mcpServerId: string }>();
     const id = Number(mcpServerId);
@@ -83,7 +87,20 @@ export function McpServerDetailPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [dirty, setDirty] = useState(false);
-    const [activeTab, setActiveTab] = useState(0);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activeTab = Math.max(0, TAB_KEYS.indexOf((searchParams.get("tab") ?? "info") as TabKey));
+    const setActiveTab = (index: number) => {
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (index === 0) {
+                next.delete("tab");
+            } else {
+                next.set("tab", TAB_KEYS[index]);
+            }
+            return next;
+        }, { replace: true });
+    };
+    const [timeoutText, setTimeoutText] = useState("");
     const [saveError, setSaveError] = useState<string | null>(null);
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<McpServerTestResult | null>(null);
@@ -96,6 +113,7 @@ export function McpServerDetailPage() {
             serverArgs: s.serverArgs, serverEnv: s.serverEnv,
             transport: s.transport, headers: s.headers, timeout: s.timeout, enabled: s.enabled,
         });
+        setTimeoutText(s.timeout !== undefined && s.timeout !== null ? String(s.timeout) : "");
         setDirty(false);
     };
 
@@ -156,6 +174,9 @@ export function McpServerDetailPage() {
     }
 
     const transport: McpTransport = form.transport ?? "stdio";
+    const timeoutError = timeoutText.trim() && !/^[1-9][0-9]*$/.test(timeoutText.trim())
+        ? "Enter a whole number of milliseconds greater than 0, or leave empty for the engine default."
+        : null;
     const tools = server.tools ?? [];
 
     return (
@@ -178,7 +199,7 @@ export function McpServerDetailPage() {
                         {testing ? "Testing..." : "Test connection"}
                     </Button>
                     <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
-                        isDisabled={!dirty || !form.name || saving} isLoading={saving}>
+                        isDisabled={!dirty || !form.name || saving || !!timeoutError} isLoading={saving}>
                         {saving ? "Saving..." : "Save Changes"}
                     </Button>
                 </FlexItem>
@@ -195,7 +216,7 @@ export function McpServerDetailPage() {
 
             {testResult && (
                 <div style={{ marginBottom: "16px" }}>
-                    <McpTestResultPanel result={testResult} serverName={server.name} />
+                    <McpTestResultPanel result={testResult} serverName={server.name} showTools={false} />
                 </div>
             )}
 
@@ -286,13 +307,21 @@ export function McpServerDetailPage() {
                                 </>
                             )}
                             <FormGroup label="Timeout (ms)" fieldId="timeout">
-                                <TextInput id="timeout" type="number" min={1} value={form.timeout ?? ""}
+                                <TextInput id="timeout" type="text" inputMode="numeric" value={timeoutText}
                                     style={{ maxWidth: "200px" }}
-                                    onChange={(_e, v) => updateForm({ timeout: v ? Number(v) : undefined })}
+                                    validated={timeoutError ? "error" : "default"}
+                                    onChange={(_e, v) => {
+                                        setTimeoutText(v);
+                                        const trimmed = v.trim();
+                                        updateForm({ timeout: /^[1-9][0-9]*$/.test(trimmed) ? Number(trimmed) : undefined });
+                                    }}
                                     placeholder="Engine default" />
-                                <FormHelperText><HelperText><HelperTextItem>
-                                    Used by OpenCode and by connection tests. Claude Code uses its own default.
-                                </HelperTextItem></HelperText></FormHelperText>
+                                <FormHelperText><HelperText>
+                                    {timeoutError && <HelperTextItem variant="error">{timeoutError}</HelperTextItem>}
+                                    <HelperTextItem>
+                                        Used by OpenCode and by connection tests. Claude Code uses its own default.
+                                    </HelperTextItem>
+                                </HelperText></FormHelperText>
                             </FormGroup>
                         </Form>
                     </TabContent>

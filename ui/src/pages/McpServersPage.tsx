@@ -49,6 +49,7 @@ import { StringListEditor } from "../components/StringListEditor";
 import { McpTestResultPanel } from "../components/McpTestResultPanel";
 import { parseMcpServersJson } from "../utils/mcpServerJson";
 import { McpCatalogModal } from "../components/McpCatalogModal";
+import { mcpServerNameError } from "../utils/mcpServerName";
 
 const USAGE_TYPE_LABELS: Record<string, string> = {
     actionType: "Action type",
@@ -120,12 +121,24 @@ function CreateMcpServerModal({ isOpen, onClose, onCreated }: {
         return { name: name.trim(), transport, serverUrl: value };
     };
 
-    const canSubmitForm = name.trim() !== "" && target.trim() !== "";
+    const nameError = mcpServerNameError(name);
+    const canSubmitForm = name.trim() !== "" && target.trim() !== "" && !nameError;
+
+    /** Wraps a field setter: edits invalidate a previous error and test result. */
+    const edit = <T,>(setter: (value: T) => void) => (value: T) => {
+        setter(value);
+        setError(null);
+        setTestResult(null);
+    };
     const parsed = useMemo(() => (pasted.trim() ? parseMcpServersJson(pasted) : null), [pasted]);
 
     const handleCreate = () => {
         setError(null);
-        createMcpServer(draft())
+        const server = draft();
+        if (testResult?.success) {
+            server.tools = testResult.tools;
+        }
+        createMcpServer(server)
             .then((created) => onCreated([created]))
             .catch((e: Error) => setError(e.message));
     };
@@ -168,35 +181,39 @@ function CreateMcpServerModal({ isOpen, onClose, onCreated }: {
                         <Form style={{ marginTop: "16px" }}>
                             {error && <Alert variant="danger" isInline title={error} />}
                             <FormGroup label="Name" isRequired fieldId="name">
-                                <TextInput id="name" isRequired value={name} onChange={(_e, v) => setName(v)} />
-                                <FormHelperText><HelperText><HelperTextItem>
-                                    Letters, digits, <code>-</code> and <code>_</code>. Tools are named{" "}
-                                    <code>{`mcp__${name.trim() || "<name>"}__<tool>`}</code>.
-                                </HelperTextItem></HelperText></FormHelperText>
+                                <TextInput id="name" isRequired value={name} onChange={(_e, v) => edit(setName)(v)}
+                                    validated={nameError ? "error" : "default"} />
+                                <FormHelperText><HelperText>
+                                    {nameError && <HelperTextItem variant="error">{nameError}</HelperTextItem>}
+                                    <HelperTextItem>
+                                        Letters, digits, <code>-</code> and <code>_</code>. Tools are named{" "}
+                                        <code>{`mcp__${name.trim() || "<name>"}__<tool>`}</code>.
+                                    </HelperTextItem>
+                                </HelperText></FormHelperText>
                             </FormGroup>
                             <FormGroup label="Transport" isRequired role="radiogroup" fieldId="transport" isInline>
                                 <Radio id="transport-stdio" name="transport" label="stdio (local command)"
-                                    isChecked={transport === "stdio"} onChange={() => setTransport("stdio")} />
+                                    isChecked={transport === "stdio"} onChange={() => edit(setTransport)("stdio")} />
                                 <Radio id="transport-http" name="transport" label="HTTP (streamable)"
-                                    isChecked={transport === "http"} onChange={() => setTransport("http")} />
+                                    isChecked={transport === "http"} onChange={() => edit(setTransport)("http")} />
                                 <Radio id="transport-sse" name="transport" label="SSE (legacy)"
-                                    isChecked={transport === "sse"} onChange={() => setTransport("sse")} />
+                                    isChecked={transport === "sse"} onChange={() => edit(setTransport)("sse")} />
                             </FormGroup>
                             {transport === "stdio" ? (
                                 <>
                                     <FormGroup label="Command" isRequired fieldId="new-command">
                                         <TextInput id="new-command" isRequired value={target}
-                                            onChange={(_e, v) => setTarget(v)} placeholder="e.g. npx, uvx, docker, node" />
+                                            onChange={(_e, v) => edit(setTarget)(v)} placeholder="e.g. npx, uvx, docker, node" />
                                     </FormGroup>
                                     <FormGroup label="Arguments" fieldId="new-args">
-                                        <StringListEditor label="Arguments" items={args} onChange={setArgs}
+                                        <StringListEditor label="Arguments" items={args} onChange={edit(setArgs)}
                                             placeholder="e.g. -y" />
                                     </FormGroup>
                                 </>
                             ) : (
                                 <FormGroup label="URL" isRequired fieldId="new-url">
                                     <TextInput id="new-url" isRequired value={target}
-                                        onChange={(_e, v) => setTarget(v)} placeholder="https://mcp.example.com/mcp" />
+                                        onChange={(_e, v) => edit(setTarget)(v)} placeholder="https://mcp.example.com/mcp" />
                                 </FormGroup>
                             )}
                             <p className="axiom-text-subtle">
@@ -302,6 +319,7 @@ export function McpServersPage() {
         }
     };
 
+    const deleteServer = servers.find((s) => s.id === deleteTarget);
     const term = search.trim().toLowerCase();
     const visible = servers.filter((s) => !term || s.name.toLowerCase().includes(term)
         || (s.description || "").toLowerCase().includes(term));
@@ -411,7 +429,14 @@ export function McpServersPage() {
 
             <ConfirmDeleteModal isOpen={deleteTarget !== null} title="Delete MCP Server"
                 onConfirm={confirmDelete} onCancel={() => setDeleteTarget(null)}>
-                Delete this MCP server?
+                Delete the MCP server <strong>{deleteServer?.name}</strong>?
+                {deleteServer && (deleteServer.usageCount ?? 0) > 0 && (
+                    <Alert variant="warning" isInline style={{ marginTop: "12px" }}
+                        title={`This server is in use (${deleteServer.usageCount} reference(s))`}>
+                        It cannot be deleted until it is removed from the action types, session templates and
+                        toolsets that use it. Open the server's <em>Used by</em> tab to see them.
+                    </Alert>
+                )}
             </ConfirmDeleteModal>
 
             <McpCatalogModal isOpen={isCatalogOpen} onClose={() => setIsCatalogOpen(false)}

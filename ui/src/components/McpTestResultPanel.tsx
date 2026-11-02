@@ -8,10 +8,12 @@ export interface McpTestResultPanelProps {
     result: McpServerTestResult;
     /** Server name, used to show allowed-tool names ({@code mcp__<server>__<tool>}). */
     serverName: string;
+    /** Whether to list the tools found (default true). Off where the tools are already shown elsewhere. */
+    showTools?: boolean;
 }
 
 /** Shows the outcome of an MCP server connection test: the tools found, or why it failed. */
-export function McpTestResultPanel({ result, serverName }: McpTestResultPanelProps) {
+export function McpTestResultPanel({ result, serverName, showTools = true }: McpTestResultPanelProps) {
     const seconds = (result.durationMs / 1000).toFixed(1);
     if (!result.success) {
         return (
@@ -28,7 +30,7 @@ export function McpTestResultPanel({ result, serverName }: McpTestResultPanelPro
     return (
         <Alert variant="success" isInline
             title={`Connected to ${server || serverName} in ${seconds}s — ${result.tools.length} tool(s)`}>
-            {result.tools.length > 0 && (
+            {showTools && result.tools.length > 0 && (
                 <Table aria-label="Tools" variant="compact">
                     <Thead><Tr><Th>Allowed tool name</Th><Th>Description</Th></Tr></Thead>
                     <Tbody>

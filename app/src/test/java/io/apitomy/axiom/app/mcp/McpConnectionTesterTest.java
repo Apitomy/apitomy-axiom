@@ -215,4 +215,15 @@ class McpConnectionTesterTest {
         assertEquals("fake-sse", result.serverName());
         assertEquals(List.of("legacy"), toolNames(result));
     }
+
+    @Test
+    void networkFailuresAreDescribedReadably() {
+        assertEquals("connection refused (is the server running and the URL correct?)",
+                McpConnectionTester.networkMessage(new java.net.ConnectException()));
+        assertEquals("connection refused (is the server running and the URL correct?)",
+                McpConnectionTester.networkMessage(new IOException(null, new java.net.ConnectException())));
+        assertEquals("unknown host",
+                McpConnectionTester.networkMessage(new java.net.UnknownHostException("nope.invalid")));
+        assertEquals("boom", McpConnectionTester.networkMessage(new IOException("boom")));
+    }
 }

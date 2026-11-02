@@ -147,7 +147,10 @@ class McpPackTest {
     void conflictsCanBeSkipped() {
         createServer("mp-existing", "npx");
         given().contentType(ContentType.JSON).body(CONFLICT_PACK).queryParam("onConflict", "skip").post(IMPORT)
-                .then().statusCode(200).body("mcpServers", equalTo(1));
+                .then().statusCode(200).body("mcpServers", equalTo(1))
+                .body("skipped.size()", equalTo(1))
+                .body("skipped[0].type", equalTo("mcpServer"))
+                .body("skipped[0].name", equalTo("mp-existing"));
         QuarkusTransaction.requiringNew().run(() -> {
             assertEquals("npx", McpServerEntity.<McpServerEntity>find("name", "mp-existing").firstResult().serverCommand);
             assertEquals(1, McpServerEntity.count("name", "mp-new"));

@@ -97,6 +97,17 @@ export function newSecretsToCreate(values: Record<string, CatalogValue>): { name
         .map((v) => ({ name: v.secretName as string, value: v.value }));
 }
 
+/**
+ * Names entered for "New secret" inputs that already exist as secrets. Adding the server would not
+ * store the typed value under such a name, so the user must pick "Existing secret" or another name.
+ */
+export function conflictingNewSecrets(values: Record<string, CatalogValue>, existing: string[]): string[] {
+    const names = Object.values(values)
+        .filter((v) => v.mode === "newSecret" && v.secretName)
+        .map((v) => (v.secretName as string).trim());
+    return [...new Set(names.filter((name) => existing.includes(name)))];
+}
+
 /** Whether every required input has a value. */
 export function missingRequired(inputs: CatalogFormInput[], values: Record<string, CatalogValue>): string[] {
     return inputs.filter((i) => i.input.required).filter((i) => {
