@@ -68,6 +68,20 @@ public interface Agent {
     }
 
     /**
+     * Returns the MCP manager that must be invoked for each task, in addition to the standard
+     * {@code mcpServers} config file Axiom generates for every task.
+     *
+     * <p>Agents that only consume that config file (e.g. Claude Code, Copilot) return {@code null}
+     * (the default). Agents that register MCP servers by other means (e.g. OpenCode, via its HTTP API)
+     * return their manager so {@link AgentRegistry#getMcpManager(String)} can find it.</p>
+     *
+     * @return the per-task MCP manager, or {@code null} if none is needed
+     */
+    default AgentMcpManager getTaskMcpManager() {
+        return null;
+    }
+
+    /**
      * Executes a prompt and returns the result asynchronously.
      *
      * @param request the agent request containing prompt, config, and environment

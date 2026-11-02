@@ -229,6 +229,17 @@ public class OpenCodeAgent implements Agent {
         return mcpManager;
     }
 
+    /**
+     * Returns the OpenCode MCP manager: OpenCode does not read the generated MCP config file, so each
+     * task's MCP servers must be registered with the OpenCode server via its HTTP API.
+     *
+     * @return the OpenCode MCP manager
+     */
+    @Override
+    public OpenCodeMcpManager getTaskMcpManager() {
+        return mcpManager;
+    }
+
     // --- Internal ---
 
     private CompletableFuture<AgentResult> executeInternal(AgentRequest request,
