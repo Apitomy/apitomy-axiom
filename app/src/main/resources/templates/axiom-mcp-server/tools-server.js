@@ -95,7 +95,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             result = execSync(`bash "${scriptFile}"`, {
                 encoding: "utf-8",
                 timeout: 30000,
-                env: { ...process.env }
+                // The server's own environment holds only the passthrough and AXIOM_* variables; each
+                // tool adds the variables it declares itself (secrets already resolved by Axiom).
+                env: { ...process.env, ...(tool.environment || {}) }
             });
         } finally {
             try { fs.unlinkSync(scriptFile); } catch (_) {}

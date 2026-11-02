@@ -56,6 +56,7 @@ CLI). Set the default agent used for tasks
 |----------|---------|--------------|
 | `axiom.home` | `~/.axiom` | Home for the database (`data/`), assistant sessions, task files, MCP servers, workspaces and the encryption key. Override with `-Daxiom.home=...` or the `AXIOM_HOME` environment variable |
 | `axiom.agent.default-type` | `claude-code` | Default agent type (`claude-code`, `opencode`, or `copilot`) |
+| `axiom.agent.env.passthrough` | `PATH,HOME,TMPDIR,LANG,NODE_EXTRA_CA_CERTS` | Comma-separated variables of Axiom's own environment passed through to script tools and stdio MCP servers. Nothing else is inherited: tools and servers get only these, their own declared environment and (script tools) the `AXIOM_*` variables |
 
 #### Claude Code Settings
 

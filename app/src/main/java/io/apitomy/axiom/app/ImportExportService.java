@@ -632,6 +632,7 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.parameters = jsonOrNull(item, "parameters");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            entity.environment = jsonOrNull(item, "environment");
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
                 for (JsonNode l : labelsNode) {
@@ -796,6 +797,7 @@ public class ImportExportService {
             entity.description = textOrNull(item, "description");
             entity.parameters = jsonOrNull(item, "parameters");
             entity.scriptTemplate = textOrNull(item, "scriptTemplate");
+            entity.environment = jsonOrNull(item, "environment");
             JsonNode labelsNode = item.path("labels");
             if (labelsNode.isArray()) {
                 for (JsonNode l : labelsNode) {
@@ -940,6 +942,7 @@ public class ImportExportService {
         putIfNotNull(n, "description", e.description);
         putJsonIfPossible(n, "parameters", e.parameters);
         putIfNotNull(n, "scriptTemplate", e.scriptTemplate);
+        putJsonIfPossible(n, "environment", e.environment);
         if (e.labels != null && !e.labels.isEmpty()) {
             var labelsArr = n.putArray("labels");
             e.labels.forEach(labelsArr::add);

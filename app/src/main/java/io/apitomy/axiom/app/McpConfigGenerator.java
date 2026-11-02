@@ -9,9 +9,12 @@ import io.apitomy.axiom.agents.copilot.CopilotMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager;
 import io.apitomy.axiom.agents.opencode.OpenCodeMcpManager.McpServerConfig;
 import io.apitomy.axiom.app.mcp.ClaudeMcpConfigWriter;
+import io.apitomy.axiom.app.mcp.McpEnvironmentIsolation;
 import io.apitomy.axiom.app.mcp.McpServerDefinition;
 import io.apitomy.axiom.app.mcp.McpServerResolver;
 import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -75,6 +78,12 @@ public class McpConfigGenerator {
     ObjectMapper objectMapper;
 
     @Inject
+    McpEnvironmentIsolation environmentIsolation;
+
+    @Inject
+    EnvironmentResolver environmentResolver;
+
+    @Inject
     ClaudeCodeMcpManager claudeCodeMcpManager;
 
     @Inject
@@ -116,17 +125,16 @@ public class McpConfigGenerator {
      * loaded when referenced ({@code mcp__<name>__...}).
      *
      * @param taskId the task ID (for unique temp file naming)
-     * @param environment environment variables to pass to MCP servers
+     * @param environment the calling agent's environment; only its Axiom-provided {@code AXIOM_*} variables
+     *                    reach the axiom-tools server, and no MCP server inherits the rest
      * @param allowedTools the action type's allowed tools list (may be null)
      * @return path to the generated MCP config file, or null if no tools match
-     * @throws io.apitomy.axiom.core.services.MissingSecretException if an included MCP server references a
-     *         secret that does not exist
+     * @throws io.apitomy.axiom.core.services.MissingSecretException if an included MCP server or script tool
+     *         references a secret that does not exist
      */
     public Path generateMcpConfig(Long taskId, Map<String, String> environment,
                                    List<String> allowedTools) {
-        // Ensure AXIOM_API_URL is available to SDK tools in the MCP server
-        Map<String, String> env = new java.util.LinkedHashMap<>(environment);
-        env.putIfAbsent("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
+        Map<String, String> env = axiomToolsEnvironment(environment);
 
         boolean hasRestrictions = allowedTools != null && !allowedTools.isEmpty();
 
@@ -150,6 +158,9 @@ public class McpConfigGenerator {
             return null;
         }
 
+        // Resolve each tool's own environment up front so a missing secret fails the task
+        String toolsJsonContent = scriptTools.isEmpty() ? null : buildToolsJson(scriptTools);
+
         try {
             Map<String, McpServerDefinition> servers = new java.util.LinkedHashMap<>();
             Path serverDir = (hasSdkTools || !scriptTools.isEmpty())
@@ -164,7 +175,7 @@ public class McpConfigGenerator {
 
             // Script tools → axiom-tools server (loads tools from JSON file)
             if (!scriptTools.isEmpty() && serverDir != null) {
-                Path toolsJson = writeToolsJson(scriptTools, taskId);
+                Path toolsJson = writeToolsJson(toolsJsonContent, scriptTools.size(), taskId);
                 servers.put("axiom-tools", McpServerDefinition.stdio("node",
                         List.of(serverDir.resolve("tools-server.js").toAbsolutePath().toString(),
                                 toolsJson.toAbsolutePath().toString()),
@@ -176,7 +187,8 @@ public class McpConfigGenerator {
             // Write config file to ~/.axiom/tasks/{taskId}/
             Path taskDir = getTaskDirectory(taskId);
             Path configFile = taskDir.resolve("mcp-config.json");
-            Files.writeString(configFile, ClaudeMcpConfigWriter.toJson(objectMapper, servers));
+            Files.writeString(configFile, ClaudeMcpConfigWriter.toJson(objectMapper,
+                    environmentIsolation.isolateAll(servers)));
             restrictToOwner(configFile);
             LOG.infof("Generated MCP config for task %d: %s (%d script tools, %d MCP servers)",
                     taskId, configFile, scriptTools.size(), externalServers.size());
@@ -289,29 +301,47 @@ public class McpConfigGenerator {
     }
 
     /**
-     * Writes the tool definitions for a task to a JSON file. The generated
-     * MCP server reads this file at startup to discover available tools.
+     * Writes the tool definitions for a task to a JSON file, readable by the owner only: it contains each
+     * tool's resolved environment. The generated MCP server reads this file at startup to discover available
+     * tools.
      *
-     * @param tools the script tool definitions to include
+     * @param json the tool definitions JSON (see {@link #buildToolsJson})
+     * @param toolCount the number of tools, for logging
      * @param taskId the task ID (for unique file naming)
      * @return path to the written tools JSON file
      * @throws IOException if the file cannot be written
      */
-    private Path writeToolsJson(List<ToolDefinitionEntity> tools, Long taskId) throws IOException {
-        String json = buildToolsJson(tools);
+    private Path writeToolsJson(String json, int toolCount, Long taskId) throws IOException {
         Path taskDir = getTaskDirectory(taskId);
         Path toolsFile = taskDir.resolve("tools.json");
         Files.writeString(toolsFile, json);
-        LOG.debugf("Wrote tools JSON for task %d: %s (%d tools)", (Object) taskId, toolsFile, tools.size());
+        restrictToOwner(toolsFile);
+        LOG.debugf("Wrote tools JSON for task %d: %s (%d tools)", (Object) taskId, toolsFile, toolCount);
         return toolsFile;
     }
 
     /**
-     * Builds the JSON array of tool definitions for the MCP server. Used by
-     * both the task execution path and the assistant session path.
+     * Builds the environment of the axiom-tools server from a calling agent's environment: only the
+     * Axiom-provided {@code AXIOM_*} variables, plus {@code AXIOM_API_URL}. Script tools declare everything
+     * else they need themselves.
+     *
+     * @param agentEnvironment the calling agent's environment (may be null)
+     * @return the axiom-tools server environment
+     */
+    public Map<String, String> axiomToolsEnvironment(Map<String, String> agentEnvironment) {
+        Map<String, String> env = McpEnvironmentIsolation.axiomVariables(agentEnvironment);
+        env.putIfAbsent("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
+        return env;
+    }
+
+    /**
+     * Builds the JSON array of tool definitions for the MCP server, including each tool's own environment
+     * with {@code ${secret:NAME}} references resolved. Used by both the task execution path and the
+     * assistant session path. The result may contain secret values: write it to an owner-only file.
      *
      * @param tools the tool definition entities to serialize
      * @return JSON string representing the tool definitions array
+     * @throws MissingSecretException if a tool's environment references a secret that does not exist
      */
     public String buildToolsJson(List<ToolDefinitionEntity> tools) {
         try {
@@ -328,9 +358,19 @@ public class McpConfigGenerator {
                     toolMap.put("parameters", params);
                 }
 
+                if (tool.environment != null && !tool.environment.isBlank()) {
+                    try {
+                        toolMap.put("environment", environmentResolver.resolve(tool.environment));
+                    } catch (MissingSecretException e) {
+                        throw new MissingSecretException("Tool '" + tool.name + "': " + e.getMessage());
+                    }
+                }
+
                 toolsList.add(toolMap);
             }
             return objectMapper.writeValueAsString(toolsList);
+        } catch (MissingSecretException e) {
+            throw e;
         } catch (Exception e) {
             LOG.warnf(e, "Failed to serialize tool definitions");
             return "[]";
@@ -351,7 +391,7 @@ public class McpConfigGenerator {
                                                     List<String> allowedTools) {
         boolean hasRestrictions = allowedTools != null && !allowedTools.isEmpty();
 
-        List<McpServerConfig> configs = new ArrayList<>();
+        Map<String, McpServerDefinition> servers = new java.util.LinkedHashMap<>();
 
         // SDK tools → axiom-sdk local MCP server
         boolean hasSdkTools = !hasRestrictions
@@ -360,13 +400,9 @@ public class McpConfigGenerator {
         if (hasSdkTools) {
             try {
                 Path serverDir = ensureMcpServerInstalled();
-                Map<String, String> sdkEnv = new java.util.LinkedHashMap<>();
-                sdkEnv.put("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1");
-                List<String> command = List.of(
-                        "node",
-                        serverDir.resolve("sdk-server.js").toAbsolutePath().toString()
-                );
-                configs.add(McpServerConfig.local("axiom-sdk", command, sdkEnv));
+                servers.put("axiom-sdk", McpServerDefinition.stdio("node",
+                        List.of(serverDir.resolve("sdk-server.js").toAbsolutePath().toString()),
+                        Map.of("AXIOM_API_URL", "http://localhost:" + httpPort + "/api/v1")));
             } catch (Exception e) {
                 LOG.errorf(e, "Failed to prepare axiom-sdk MCP server for task %d", taskId);
             }
@@ -380,26 +416,24 @@ public class McpConfigGenerator {
                 .toList();
 
         if (!scriptTools.isEmpty()) {
+            String toolsJsonContent = buildToolsJson(scriptTools);
             try {
                 Path serverDir = ensureMcpServerInstalled();
-                Path toolsJson = writeToolsJson(scriptTools, taskId);
-
-                List<String> command = List.of(
-                        "node",
-                        serverDir.resolve("tools-server.js").toAbsolutePath().toString(),
-                        toolsJson.toAbsolutePath().toString()
-                );
-                configs.add(McpServerConfig.local("axiom-tools", command, environment));
-
+                Path toolsJson = writeToolsJson(toolsJsonContent, scriptTools.size(), taskId);
+                servers.put("axiom-tools", McpServerDefinition.stdio("node",
+                        List.of(serverDir.resolve("tools-server.js").toAbsolutePath().toString(),
+                                toolsJson.toAbsolutePath().toString()),
+                        axiomToolsEnvironment(environment)));
             } catch (Exception e) {
                 LOG.errorf(e, "Failed to prepare axiom-tools MCP server for task %d", taskId);
             }
         }
 
         // External MCP servers
-        mcpServerResolver.resolveForAllowedTools(allowedTools)
-                .forEach((name, def) -> configs.add(toOpenCodeConfig(name, def)));
+        mcpServerResolver.resolveForAllowedTools(allowedTools).forEach(servers::putIfAbsent);
 
+        List<McpServerConfig> configs = new ArrayList<>();
+        environmentIsolation.isolateAll(servers).forEach((name, def) -> configs.add(toOpenCodeConfig(name, def)));
         return configs;
     }
 

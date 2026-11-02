@@ -47,6 +47,7 @@ import {
 } from "../config/api";
 import { EditLabelsModal } from "./EditLabelsModal";
 import { LabelDisplay } from "./LabelDisplay";
+import { EnvironmentTab } from "./EnvironmentTab";
 import { ValidationProblemsPanel } from "./ValidationProblemsPanel";
 
 /** A validation problem shown in the Problems tab. */
@@ -86,6 +87,7 @@ export function ToolEditor({ value, onChange, readOnly = false, problems, onVali
     const form = value;
     const params = value.parameters || [];
     const labels = value.labels || [];
+    const envVars = value.environment || {};
     const [activeTab, setActiveTab] = useState(0);
     const [isLabelsOpen, setIsLabelsOpen] = useState(false);
     const [ownMessages, setOwnMessages] = useState<ValidationMessage[]>([]);
@@ -169,10 +171,29 @@ export function ToolEditor({ value, onChange, readOnly = false, problems, onVali
                         />
                     </TabContent>
                 </Tab>
+                <Tab eventKey={5} title={<TabTitleText>
+                    Environment{Object.keys(envVars).length > 0 ? ` (${Object.keys(envVars).length})` : ""}
+                </TabTitleText>}>
+                    <TabContent id="env-tab" eventKey={5} activeKey={activeTab} style={{ marginTop: "24px" }}>
+                        <fieldset disabled={readOnly} style={READ_ONLY_FIELDSET_STYLE}>
+                            <EnvironmentTab
+                                envVars={envVars}
+                                description={"The tool's script gets only these variables, the Axiom-provided "
+                                    + "AXIOM_* variables and a few system variables such as PATH and HOME. It does "
+                                    + "not inherit the environment of the agent that calls it, so declare every "
+                                    + "secret it needs here as NAME=${secret:NAME}."}
+                                onChange={(updated) => updateForm({
+                                    environment: Object.keys(updated).length > 0 ? updated : undefined,
+                                })}
+                            />
+                        </fieldset>
+                    </TabContent>
+                </Tab>
                 {toolId !== undefined && (
                     <Tab eventKey={3} title={<TabTitleText>Test</TabTitleText>}>
                         <TabContent id="test-tab" eventKey={3} activeKey={activeTab} style={{ marginTop: "24px" }}>
-                            <TestTab toolId={toolId} params={params} scriptTemplate={form.scriptTemplate} />
+                            <TestTab toolId={toolId} params={params} scriptTemplate={form.scriptTemplate}
+                                toolEnvironment={envVars} />
                         </TabContent>
                     </Tab>
                 )}
@@ -356,10 +377,12 @@ function formatJson(text: string): string {
     }
 }
 
-function TestTab({ toolId, params, scriptTemplate }: {
+function TestTab({ toolId, params, scriptTemplate, toolEnvironment }: {
     toolId: number;
     params: ToolParameter[];
     scriptTemplate?: string;
+    /** The tool's own environment (possibly unsaved); test variables are added on top. */
+    toolEnvironment: Record<string, string>;
 }) {
     const effectiveTheme = useEffectiveTheme();
     const [paramValues, setParamValues] = useState<Record<string, string>>({});
@@ -383,7 +406,7 @@ function TestTab({ toolId, params, scriptTemplate }: {
         setRunning(true);
         setResult(null);
 
-        const environment: Record<string, string> = {};
+        const environment: Record<string, string> = { ...toolEnvironment };
         for (const ev of envVars) {
             if (ev.key.trim()) {
                 environment[ev.key.trim()] = ev.value;
@@ -443,8 +466,8 @@ function TestTab({ toolId, params, scriptTemplate }: {
             </Title>
             <HelperText style={{ marginBottom: "12px" }}>
                 <HelperTextItem>
-                    Provide environment variables for the test. Use <code>{"${secret:NAME}"}</code> to
-                    reference secrets from the Axiom secrets store.
+                    The tool's own environment is always included. Add or override variables for this test
+                    only. Use <code>{"${secret:NAME}"}</code> to reference secrets from the Axiom secrets store.
                 </HelperTextItem>
             </HelperText>
 

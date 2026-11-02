@@ -41,6 +41,13 @@ public class ToolDefinitionEntity extends PanacheEntity {
     @Column(name = "script_template", columnDefinition = "TEXT")
     public String scriptTemplate;
 
+    /**
+     * Optional JSON object of environment variables for the tool's script. Values may reference secrets with
+     * {@code ${secret:NAME}}. A tool never inherits the environment of the agent that calls it.
+     */
+    @Column(columnDefinition = "TEXT")
+    public String environment;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "tool_label", joinColumns = @JoinColumn(name = "tool_id"))
     @Column(name = "label")

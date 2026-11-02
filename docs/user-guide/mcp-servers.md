@@ -105,9 +105,12 @@ Use secret references for credentials. The server's page warns when it refers to
 exist. If a referenced secret is missing when a task or session starts, the task fails, or the session does
 not start, with a message naming the server and the secret.
 
-An MCP server gets **only** its own environment. It does not receive the variables of the task or session
-that uses it (not even the action type's declared secrets), so declare everything the server needs on the
-server itself.
+A stdio MCP server gets **only** its own environment. It does not receive the variables of the task or
+session that uses it (not even the action type's declared secrets or model key), so declare everything the
+server needs on the server itself. Axiom starts each stdio server through a small launcher that removes every
+inherited variable except the passthrough list (`PATH`, `HOME`, `TMPDIR`, `LANG` and `NODE_EXTRA_CA_CERTS`
+by default, configurable with `axiom.agent.env.passthrough`), so this also holds although the agent CLIs pass
+their own environment to the servers they start.
 
 ## Testing a server and listing its tools
 

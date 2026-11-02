@@ -574,6 +574,11 @@ export interface ToolDefinition {
     parameters?: ToolParameter[];
     scriptTemplate?: string;
     labels?: string[];
+    /**
+     * Environment variables for the tool's script (values may use ${secret:NAME}). A tool never inherits the
+     * environment of the agent that calls it.
+     */
+    environment?: Record<string, string>;
 }
 
 export type McpTransport = "stdio" | "http" | "sse";

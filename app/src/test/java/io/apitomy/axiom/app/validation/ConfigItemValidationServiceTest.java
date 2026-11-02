@@ -46,7 +46,7 @@ class ConfigItemValidationServiceTest {
     }
 
     @Test
-    void toolUsingASecretWarnsThatItMustBeDeclaredByTheActionType() throws Exception {
+    void toolUsingAnUndeclaredSecretWarnsThatItMustBeDeclaredByTheTool() throws Exception {
         List<ConfigProblem> problems = service.validate(ConfigItemType.TOOL, json("""
             {"name": "gh-comment", "description": "Comments on an issue", "parameters": [],
              "scriptTemplate": "curl -H \\"Authorization: token $GH_TOKEN\\" https://api.github.com"}
@@ -55,9 +55,31 @@ class ConfigItemValidationServiceTest {
         assertEquals(1, warnings.size(), problems.toString());
         assertEquals("warning", warnings.get(0).severity());
         assertEquals("scriptTemplate", warnings.get(0).path());
-        assertEquals("Uses the secret GH_TOKEN. Tools get no secrets automatically: declare GH_TOKEN="
-                + "${secret:GH_TOKEN} in the environment of each action type that allows this tool.",
+        assertEquals("Uses the secret GH_TOKEN. Tools get no secrets automatically and don't inherit the "
+                + "calling agent's environment: add GH_TOKEN=${secret:GH_TOKEN} to this tool's environment.",
                 warnings.get(0).message());
+    }
+
+    @Test
+    void toolDeclaringTheSecretItUsesHasNoWarning() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.TOOL, json("""
+            {"name": "gh-comment", "description": "Comments on an issue", "parameters": [],
+             "scriptTemplate": "curl -H \\"Authorization: token $GH_TOKEN\\" https://api.github.com",
+             "environment": {"GH_TOKEN": "${secret:GH_TOKEN}"}}
+            """), secrets("GH_TOKEN"));
+        assertTrue(problems.stream().noneMatch(p -> p.code().equals("UNDECLARED_SECRET")), problems.toString());
+    }
+
+    @Test
+    void toolReferencingAnUnknownSecretIsAnError() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.TOOL, json("""
+            {"name": "t", "description": "d", "parameters": [], "scriptTemplate": "echo hi",
+             "environment": {"TOKEN": "${secret:NOPE}"}}
+            """), secrets("GH_TOKEN"));
+        List<ConfigProblem> unknown = problems.stream().filter(p -> p.code().equals("UNKNOWN_SECRET")).toList();
+        assertEquals(1, unknown.size(), problems.toString());
+        assertTrue(unknown.get(0).isError());
+        assertEquals("environment.TOKEN", unknown.get(0).path());
     }
 
     @Test
