@@ -27,15 +27,20 @@ import io.apitomy.axiom.core.events.model.payloads.IssueReopenedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueUnassignedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueUnlabeledPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueUpdatedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrAssignedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrClosedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrCommentCreatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrCreatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrLabeledPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrMergedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrReopenedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrReviewCommentCreatedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrReviewDismissedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrReviewRequestedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrReviewSubmittedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrReviewUpdatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrSynchronizePayload;
+import io.apitomy.axiom.core.events.model.payloads.PrUnassignedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrUnlabeledPayload;
 import io.apitomy.axiom.core.events.model.payloads.PushPayload;
 import io.apitomy.axiom.core.events.model.payloads.ReleasePublishedPayload;
@@ -130,6 +135,13 @@ public class GitHubEventNormalizerV2 {
                 }
                 case "PullRequestReviewEvent" -> {
                     var result = normalizePrReviewEvent(action, payload, baseUrl, repoFullName, fullPr);
+                    if (result == null) return null;
+                    eventType = result.type;
+                    eventPayload = result.payload;
+                    ref = result.ref;
+                }
+                case "PullRequestReviewCommentEvent" -> {
+                    var result = normalizePrReviewCommentEvent(action, payload, baseUrl, repoFullName, fullPr);
                     if (result == null) return null;
                     eventType = result.type;
                     eventPayload = result.payload;
@@ -283,8 +295,16 @@ public class GitHubEventNormalizerV2 {
                             new PrClosedPayload(pr), ref);
                 }
             }
+            // The repository Events API reports a merge as its own "merged" action (webhooks use
+            // "closed" + merged=true, handled above).
+            case "merged" -> new NormalizationResult(EventType.PR_MERGED,
+                    new PrMergedPayload(pr), ref);
             case "reopened" -> new NormalizationResult(EventType.PR_REOPENED,
                     new PrReopenedPayload(pr), ref);
+            case "assigned" -> new NormalizationResult(EventType.PR_ASSIGNED,
+                    new PrAssignedPayload(pr, mapActor(payload.path("assignee"))), ref);
+            case "unassigned" -> new NormalizationResult(EventType.PR_UNASSIGNED,
+                    new PrUnassignedPayload(pr, mapActor(payload.path("assignee"))), ref);
             case "review_requested" -> new NormalizationResult(EventType.PR_REVIEW_REQUESTED,
                     new PrReviewRequestedPayload(pr, mapActor(payload.path("requested_reviewer"))), ref);
             case "labeled" -> new NormalizationResult(EventType.PR_LABELED,
@@ -296,31 +316,36 @@ public class GitHubEventNormalizerV2 {
                             textOrNull(payload, "before"),
                             textOrNull(payload, "after")), ref);
             default -> {
-                LOG.debugf("Unrecognized PullRequestEvent action: %s", action);
+                LOG.infof("Unrecognized PullRequestEvent action: %s", action);
                 yield null;
             }
         };
     }
 
     /** PullRequestEvent actions that {@link #normalize} turns into stream events. */
-    static final Set<String> PR_ACTIONS = Set.of("opened", "closed", "reopened", "review_requested",
-            "labeled", "unlabeled", "synchronize");
+    static final Set<String> PR_ACTIONS = Set.of("opened", "closed", "merged", "reopened",
+            "assigned", "unassigned", "review_requested", "labeled", "unlabeled", "synchronize");
 
     /** PullRequestReviewEvent actions that {@link #normalize} turns into stream events. */
-    static final Set<String> PR_REVIEW_ACTIONS = Set.of("created");
+    static final Set<String> PR_REVIEW_ACTIONS = Set.of("created", "updated", "dismissed");
+
+    /** PullRequestReviewCommentEvent actions that {@link #normalize} turns into stream events. */
+    static final Set<String> PR_REVIEW_COMMENT_ACTIONS = Set.of("created");
 
     /**
      * Tells whether a pull request event will be normalized, so callers can avoid fetching the full pull
      * request (an extra API call) for events that would be dropped anyway.
      *
      * @param event a single event JSON object from the Events API
-     * @return true if the event is a PullRequestEvent or PullRequestReviewEvent with a supported action
+     * @return true if the event is a PullRequestEvent, PullRequestReviewEvent or
+     *         PullRequestReviewCommentEvent with a supported action
      */
     public boolean isSupportedPullRequestEvent(JsonNode event) {
         String action = textOrNull(event.path("payload"), "action");
         return switch (event.path("type").asText("")) {
             case "PullRequestEvent" -> PR_ACTIONS.contains(action);
             case "PullRequestReviewEvent" -> PR_REVIEW_ACTIONS.contains(action);
+            case "PullRequestReviewCommentEvent" -> PR_REVIEW_COMMENT_ACTIONS.contains(action);
             default -> false;
         };
     }
@@ -329,6 +354,7 @@ public class GitHubEventNormalizerV2 {
                                                         String baseUrl, String repoFullName,
                                                         JsonNode fullPr) {
         if (!PR_REVIEW_ACTIONS.contains(action)) {
+            LOG.infof("Unrecognized PullRequestReviewEvent action: %s", action);
             return null;
         }
         JsonNode prNode = fullPr != null ? fullPr : payload.path("pull_request");
@@ -336,8 +362,38 @@ public class GitHubEventNormalizerV2 {
         NormalizedReview review = mapReview(payload.path("review"));
         int number = prNode.path("number").asInt();
         String ref = buildPrRef(baseUrl, repoFullName, number);
-        return new NormalizationResult(EventType.PR_REVIEW_SUBMITTED,
-                new PrReviewSubmittedPayload(pr, review), ref);
+        return switch (action) {
+            case "created" -> new NormalizationResult(EventType.PR_REVIEW_SUBMITTED,
+                    new PrReviewSubmittedPayload(pr, review), ref);
+            case "updated" -> new NormalizationResult(EventType.PR_REVIEW_UPDATED,
+                    new PrReviewUpdatedPayload(pr, review), ref);
+            case "dismissed" -> new NormalizationResult(EventType.PR_REVIEW_DISMISSED,
+                    new PrReviewDismissedPayload(pr, review), ref);
+            default -> null;
+        };
+    }
+
+    private NormalizationResult normalizePrReviewCommentEvent(String action, JsonNode payload,
+                                                               String baseUrl, String repoFullName,
+                                                               JsonNode fullPr) {
+        if (!PR_REVIEW_COMMENT_ACTIONS.contains(action)) {
+            LOG.infof("Unrecognized PullRequestReviewCommentEvent action: %s", action);
+            return null;
+        }
+        JsonNode prNode = fullPr != null ? fullPr : payload.path("pull_request");
+        NormalizedPullRequest pr = mapPullRequest(prNode);
+        JsonNode commentNode = payload.path("comment");
+        int number = prNode.path("number").asInt();
+        String ref = buildPrRef(baseUrl, repoFullName, number);
+        return new NormalizationResult(EventType.PR_REVIEW_COMMENT_CREATED,
+                new PrReviewCommentCreatedPayload(
+                        pr,
+                        mapComment(commentNode),
+                        textOrNull(commentNode, "path"),
+                        intOrNull(commentNode, "line"),
+                        idOrNull(commentNode, "pull_request_review_id"),
+                        idOrNull(commentNode, "in_reply_to_id")),
+                ref);
     }
 
     private NormalizationResult normalizePushEvent(JsonNode payload, String baseUrl,
@@ -651,6 +707,16 @@ public class GitHubEventNormalizerV2 {
         }
         source.set("rawPayload", rawPayload);
         return source;
+    }
+
+    private static Integer intOrNull(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isIntegralNumber() ? value.asInt() : null;
+    }
+
+    private static String idOrNull(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isIntegralNumber() ? String.valueOf(value.asLong()) : null;
     }
 
     private static String textOrNull(JsonNode node, String field) {

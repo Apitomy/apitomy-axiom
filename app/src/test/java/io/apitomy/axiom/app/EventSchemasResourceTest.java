@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app;
 
+import io.apitomy.axiom.core.events.model.EventType;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.events.core.EventStreamService;
 import io.apitomy.axiom.core.entities.StreamEventEntity;
@@ -32,7 +33,7 @@ class EventSchemasResourceTest {
     void listsAllEventTypes() {
         given().when().get("/api/v1/schemas/events").then()
                 .statusCode(200)
-                .body("$", hasSize(26))
+                .body("$", hasSize(EventType.values().length))
                 .body("type", hasItem("issue.closed"));
     }
 

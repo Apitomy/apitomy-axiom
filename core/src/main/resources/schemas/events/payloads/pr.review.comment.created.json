@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "An inline review comment was added to a pull request's diff.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "pullRequest"
+  ],
+  "properties": {
+    "type": {
+      "const": "pr.review.comment.created",
+      "description": "Payload type (same as the event type)."
+    },
+    "pullRequest": {
+      "$ref": "#/$defs/NormalizedPullRequest",
+      "description": "The pull request, as of this event."
+    },
+    "comment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NormalizedComment"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The review comment."
+    },
+    "path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Path of the commented file, relative to the repository root.",
+      "examples": [
+        "src/main/java/App.java"
+      ]
+    },
+    "line": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Diff line the comment applies to; null for file-level or outdated comments."
+    },
+    "reviewId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "ID of the review the comment belongs to."
+    },
+    "inReplyToId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "ID of the comment this one replies to; null when it starts a new thread."
+    }
+  }
+}
