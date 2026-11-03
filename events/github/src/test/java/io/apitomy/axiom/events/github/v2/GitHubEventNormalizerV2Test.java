@@ -10,9 +10,14 @@ import io.apitomy.axiom.core.events.model.payloads.IssueClosedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueCommentCreatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueCreatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.IssueLabeledPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrAssignedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrClosedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrCommentCreatedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PrMergedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrReviewCommentCreatedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrReviewDismissedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrReviewUpdatedPayload;
+import io.apitomy.axiom.core.events.model.payloads.PrUnassignedPayload;
 import io.apitomy.axiom.core.events.model.payloads.PushPayload;
 import io.apitomy.axiom.core.events.model.payloads.ReleasePublishedPayload;
 import org.junit.jupiter.api.BeforeEach;
@@ -193,6 +198,215 @@ class GitHubEventNormalizerV2Test {
         assertInstanceOf(PrClosedPayload.class, result.payload());
         PrClosedPayload closedPayload = (PrClosedPayload) result.payload();
         assertFalse(closedPayload.pullRequest().isMerged());
+    }
+
+    // ── Events API-shaped PR events (trimmed payloads) ──────────────────────
+
+    @Test
+    void pullRequestEvent_mergedAction_producesPrMerged() {
+        ObjectNode event = buildEvent("PullRequestEvent", "12360", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "merged");
+        payload.set("pull_request", buildTrimmedPullRequest(80));
+
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL,
+                buildPullRequest(80, "Merged PR", "closed", true));
+
+        assertNotNull(result);
+        assertEquals(EventType.PR_MERGED, result.type());
+        assertEquals("https://github.com/owner/repo/pull/80", result.ref());
+        PrMergedPayload merged = assertInstanceOf(PrMergedPayload.class, result.payload());
+        assertEquals("80", merged.pullRequest().number());
+        assertTrue(merged.pullRequest().isMerged());
+    }
+
+    @Test
+    void pullRequestEvent_mergedAction_withoutBackfill_stillProducesPrMerged() {
+        ObjectNode event = buildEvent("PullRequestEvent", "12361", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "merged");
+        payload.set("pull_request", buildTrimmedPullRequest(81));
+
+        // Without the backfill the trimmed PR lacks title/state/url, so skip schema validation here.
+        NormalizedEvent result = new GitHubEventNormalizerV2(mapper)
+                .normalize(event, EVENT_SOURCE_ID, BASE_URL, null);
+
+        assertNotNull(result);
+        assertEquals(EventType.PR_MERGED, result.type());
+        assertEquals("81", ((PrMergedPayload) result.payload()).pullRequest().number());
+    }
+
+    @Test
+    void pullRequestEvent_assigned_producesPrAssigned() {
+        ObjectNode event = buildEvent("PullRequestEvent", "12362", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "assigned");
+        payload.set("pull_request", buildTrimmedPullRequest(82));
+        payload.set("assignee", buildUser("helper"));
+
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL,
+                buildPullRequest(82, "Assigned PR", "open", false));
+
+        assertNotNull(result);
+        assertEquals(EventType.PR_ASSIGNED, result.type());
+        PrAssignedPayload assigned = assertInstanceOf(PrAssignedPayload.class, result.payload());
+        assertEquals("82", assigned.pullRequest().number());
+        assertEquals("helper", assigned.assignee().login());
+    }
+
+    @Test
+    void pullRequestEvent_unassigned_producesPrUnassigned() {
+        ObjectNode event = buildEvent("PullRequestEvent", "12363", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "unassigned");
+        payload.set("pull_request", buildTrimmedPullRequest(83));
+        payload.set("assignee", buildUser("helper"));
+
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL,
+                buildPullRequest(83, "Unassigned PR", "open", false));
+
+        assertNotNull(result);
+        assertEquals(EventType.PR_UNASSIGNED, result.type());
+        PrUnassignedPayload unassigned = assertInstanceOf(PrUnassignedPayload.class, result.payload());
+        assertEquals("helper", unassigned.assignee().login());
+    }
+
+    @Test
+    void pullRequestReviewEvent_updated_producesPrReviewUpdated() {
+        ObjectNode event = buildEvent("PullRequestReviewEvent", "12364", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "updated");
+        payload.set("pull_request", buildTrimmedPullRequest(84));
+        payload.set("review", buildReview(5001, "commented"));
+
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL,
+                buildPullRequest(84, "Reviewed PR", "open", false));
+
+        assertNotNull(result);
+        assertEquals(EventType.PR_REVIEW_UPDATED, result.type());
+        PrReviewUpdatedPayload updated = assertInstanceOf(PrReviewUpdatedPayload.class, result.payload());
+        assertEquals("5001", updated.review().id());
+        assertEquals("commented", updated.review().state());
+    }
+
+    @Test
+    void pullRequestReviewEvent_dismissed_producesPrReviewDismissed() {
+        ObjectNode event = buildEvent("PullRequestReviewEvent", "12365", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "dismissed");
+        payload.set("pull_request", buildTrimmedPullRequest(85));
+        payload.set("review", buildReview(5002, "dismissed"));
+
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL,
+                buildPullRequest(85, "Reviewed PR", "open", false));
+
+        assertNotNull(result);
+        assertEquals(EventType.PR_REVIEW_DISMISSED, result.type());
+        PrReviewDismissedPayload dismissed = assertInstanceOf(PrReviewDismissedPayload.class,
+                result.payload());
+        assertEquals("5002", dismissed.review().id());
+    }
+
+    @Test
+    void pullRequestReviewCommentEvent_created_producesPrReviewCommentCreated() {
+        ObjectNode event = buildEvent("PullRequestReviewCommentEvent", "12366", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "created");
+        payload.set("pull_request", buildTrimmedPullRequest(86));
+        ObjectNode comment = buildComment(99010, "Rename this variable");
+        comment.put("html_url", "https://github.com/owner/repo/pull/86#discussion_r99010");
+        comment.put("path", "src/Main.java");
+        comment.put("line", 42);
+        comment.put("in_reply_to_id", 99009L);
+        comment.put("pull_request_review_id", 5003L);
+        payload.set("comment", comment);
+
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL,
+                buildPullRequest(86, "Inline PR", "open", false));
+
+        assertNotNull(result);
+        assertEquals(EventType.PR_REVIEW_COMMENT_CREATED, result.type());
+        assertEquals("https://github.com/owner/repo/pull/86", result.ref());
+        PrReviewCommentCreatedPayload created = assertInstanceOf(PrReviewCommentCreatedPayload.class,
+                result.payload());
+        assertEquals("86", created.pullRequest().number());
+        assertEquals("99010", created.comment().id());
+        assertEquals("Rename this variable", created.comment().body());
+        assertEquals("src/Main.java", created.path());
+        assertEquals(42, created.line());
+        assertEquals("5003", created.reviewId());
+        assertEquals("99009", created.inReplyToId());
+    }
+
+    @Test
+    void pullRequestReviewCommentEvent_withoutLineOrReply_leavesThemNull() {
+        ObjectNode event = buildEvent("PullRequestReviewCommentEvent", "12367", "owner/repo");
+        ObjectNode payload = (ObjectNode) event.get("payload");
+        payload.put("action", "created");
+        payload.set("pull_request", buildTrimmedPullRequest(87));
+        ObjectNode comment = buildComment(99011, "File-level comment");
+        comment.put("path", "README.md");
+        payload.set("comment", comment);
+
+        NormalizedEvent result = normalizer.normalize(event, EVENT_SOURCE_ID, BASE_URL,
+                buildPullRequest(87, "File comment PR", "open", false));
+
+        PrReviewCommentCreatedPayload created = (PrReviewCommentCreatedPayload) result.payload();
+        assertNull(created.line());
+        assertNull(created.inReplyToId());
+        assertNull(created.reviewId());
+    }
+
+    @Test
+    void isSupportedPullRequestEvent_coversNewPrEvents() {
+        assertTrue(normalizer.isSupportedPullRequestEvent(typed("PullRequestEvent", "merged")));
+        assertTrue(normalizer.isSupportedPullRequestEvent(typed("PullRequestEvent", "assigned")));
+        assertTrue(normalizer.isSupportedPullRequestEvent(typed("PullRequestEvent", "unassigned")));
+        assertTrue(normalizer.isSupportedPullRequestEvent(typed("PullRequestReviewEvent", "updated")));
+        assertTrue(normalizer.isSupportedPullRequestEvent(typed("PullRequestReviewEvent", "dismissed")));
+        assertTrue(normalizer.isSupportedPullRequestEvent(typed("PullRequestReviewCommentEvent", "created")));
+        assertFalse(normalizer.isSupportedPullRequestEvent(typed("PullRequestReviewCommentEvent", "deleted")));
+        assertFalse(normalizer.isSupportedPullRequestEvent(typed("PullRequestEvent", "edited")));
+    }
+
+    private ObjectNode typed(String type, String action) {
+        ObjectNode event = buildEvent(type, "1", "owner/repo");
+        ((ObjectNode) event.get("payload")).put("action", action);
+        return event;
+    }
+
+    /** A PR as the Events API now reports it: only id, number, url, head and base. */
+    private ObjectNode buildTrimmedPullRequest(int number) {
+        ObjectNode pr = mapper.createObjectNode();
+        pr.put("id", 1000L + number);
+        pr.put("number", number);
+        pr.put("url", "https://api.github.com/repos/owner/repo/pulls/" + number);
+        ObjectNode head = mapper.createObjectNode();
+        head.put("ref", "feature/branch");
+        head.put("sha", "abc123");
+        pr.set("head", head);
+        ObjectNode base = mapper.createObjectNode();
+        base.put("ref", "main");
+        pr.set("base", base);
+        return pr;
+    }
+
+    private ObjectNode buildUser(String login) {
+        ObjectNode user = mapper.createObjectNode();
+        user.put("login", login);
+        user.put("html_url", "https://github.com/" + login);
+        return user;
+    }
+
+    private ObjectNode buildReview(long id, String state) {
+        ObjectNode review = mapper.createObjectNode();
+        review.put("id", id);
+        review.put("state", state);
+        review.put("body", "Review body");
+        review.put("html_url", "https://github.com/owner/repo/pull/1#pullrequestreview-" + id);
+        review.put("submitted_at", "2026-09-18T10:30:00Z");
+        review.set("user", buildUser("reviewer"));
+        return review;
     }
 
     // ── Test 7: PushEvent ───────────────────────────────────────────────────

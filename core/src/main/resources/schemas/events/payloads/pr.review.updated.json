@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "A submitted pull request review was edited.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "type",
+    "pullRequest"
+  ],
+  "properties": {
+    "type": {
+      "const": "pr.review.updated",
+      "description": "Payload type (same as the event type)."
+    },
+    "pullRequest": {
+      "$ref": "#/$defs/NormalizedPullRequest",
+      "description": "The pull request, as of this event."
+    },
+    "review": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NormalizedReview"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The review after the edit."
+    }
+  }
+}

@@ -470,10 +470,15 @@ All Issue fields plus:
 |------------|--------------|-------|
 | `pr.created` | `PullRequestEvent` / `opened` | Requires PR backfill |
 | `pr.closed` | `PullRequestEvent` / `closed` + `merged == false` | Requires PR backfill |
-| `pr.merged` | `PullRequestEvent` / `closed` + `merged == true` | Requires PR backfill |
+| `pr.merged` | `PullRequestEvent` / `merged` (Events API) or `closed` + `merged == true` (webhook shape) | Requires PR backfill |
 | `pr.reopened` | `PullRequestEvent` / `reopened` | Requires PR backfill |
+| `pr.assigned` | `PullRequestEvent` / `assigned` | Requires PR backfill |
+| `pr.unassigned` | `PullRequestEvent` / `unassigned` | Requires PR backfill |
 | `pr.review_requested` | `PullRequestEvent` / `review_requested` | Requires PR backfill |
 | `pr.review.submitted` | `PullRequestReviewEvent` / `created` | Requires PR backfill |
+| `pr.review.updated` | `PullRequestReviewEvent` / `updated` | Review body edited; requires PR backfill |
+| `pr.review.dismissed` | `PullRequestReviewEvent` / `dismissed` | Requires PR backfill |
+| `pr.review.comment.created` | `PullRequestReviewCommentEvent` / `created` | Inline diff comment; includes `path`, `line`, `reviewId`, `inReplyToId`; requires PR backfill |
 | `pr.comment.created` | `IssueCommentEvent` on PR | Detected by `pull_request` key |
 | `pr.labeled` | `PullRequestEvent` / `labeled` | Requires PR backfill |
 | `pr.unlabeled` | `PullRequestEvent` / `unlabeled` | Requires PR backfill |
