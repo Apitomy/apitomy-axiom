@@ -8,6 +8,8 @@ import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowEventSubscriptionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowWaitEntity;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
@@ -337,6 +339,66 @@ class WorkflowExecutionServiceTest {
         assertNotNull(completedRun);
         assertEquals("completed", completedRun.status,
                 "Run should advance to completed once the event result is applied");
+    }
+
+    /**
+     * Since Flow 3.0.5, a receive-event node without {@code outputs} writes
+     * nothing from the received event into the run context.
+     */
+    @Test
+    void onEventReceivedWithoutOutputsWritesNothingToContext() throws Exception {
+        long[] ids = createSubjectAndDefinition(
+                "Receive Event No Outputs Subject", RECEIVE_EVENT_CONTENT);
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+
+        QuarkusTransaction.requiringNew().run(() ->
+                workflowExecutionService.onEventReceived(run.id, "r1", Map.of(
+                        "type", "pr-merged", "payload", Map.of("number", 4242))));
+
+        JsonNode context = finalContext(run.id);
+        assertTrue(context.path("event").isMissingNode(),
+                "No event should be written to context: " + context);
+        assertTrue(context.path("payload").isMissingNode(),
+                "Event payload must not be flat-merged into context: " + context);
+    }
+
+    /**
+     * A receive-event node with declared {@code outputs} writes only the
+     * mapped event values into the run context.
+     */
+    @Test
+    void onEventReceivedWithOutputsWritesMappedValuesToContext() throws Exception {
+        String content = RECEIVE_EVENT_CONTENT.replace(
+                "\"config\": {\"eventType\": \"pr-merged\"}",
+                "\"config\": {\"eventType\": \"pr-merged\", \"outputs\": ["
+                        + "{\"contextKey\": \"prNumber\", \"expression\": \"event.payload.number\"}]}");
+        long[] ids = createSubjectAndDefinition("Receive Event Outputs Subject", content);
+        WorkflowRunEntity run = QuarkusTransaction.requiringNew().call(() ->
+                workflowExecutionService.triggerWorkflow(ids[0], ids[1]));
+
+        QuarkusTransaction.requiringNew().run(() ->
+                workflowExecutionService.onEventReceived(run.id, "r1", Map.of(
+                        "type", "pr-merged", "payload", Map.of("number", 4242))));
+
+        JsonNode context = finalContext(run.id);
+        assertEquals(4242, context.path("prNumber").asInt(), "Mapped output expected: " + context);
+        assertTrue(context.path("event").isMissingNode(),
+                "Only declared outputs should be written: " + context);
+    }
+
+    /**
+     * Reads the context of a completed run from its persisted instance state.
+     *
+     * @param runId the run id
+     * @return the run's context JSON
+     * @throws Exception if the state cannot be parsed
+     */
+    private JsonNode finalContext(long runId) throws Exception {
+        WorkflowRunEntity done = QuarkusTransaction.requiringNew().call(() ->
+                WorkflowRunEntity.findById(runId));
+        assertEquals("completed", done.status);
+        return new ObjectMapper().readTree(done.instanceState).path("context");
     }
 
     /**
