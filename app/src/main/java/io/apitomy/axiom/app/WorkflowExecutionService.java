@@ -391,9 +391,11 @@ public class WorkflowExecutionService {
 
     /**
      * Called when an Axiom event has matched a workflow's parked receive-event
-     * node, advancing the workflow. The event map is merged into workflow
-     * context under the {@code event} key so downstream nodes can reference
-     * fields such as {@code event.payload.number}. The caller
+     * node, advancing the workflow. The event map is delivered to the engine
+     * as the node's {@code event} result; only the node's declared
+     * {@code outputs} (EL expressions over {@code event}, e.g.
+     * {@code event.payload.number}) are written to the workflow context. A
+     * node without outputs writes nothing to the context. The caller
      * (WorkflowEventDispatcher) is responsible for deleting the corresponding
      * {@link WorkflowEventSubscriptionEntity} row in the same transaction.
      *
@@ -453,7 +455,7 @@ public class WorkflowExecutionService {
         WorkflowInstance instance = deserializeInstance(entity.instanceState);
 
         NodeResult result = new NodeResult(
-                NodeResultStatus.COMPLETED, Map.of("event", eventMap));
+                NodeResultStatus.COMPLETED, eventMap);
         advanceWorkflow(entity, workflow, instance, nodeId, result);
         return new ResumedRun(entity.id, entity.subjectId, nodeId, entity.traceId, traceNodeId);
     }

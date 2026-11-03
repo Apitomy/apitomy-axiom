@@ -30,7 +30,7 @@ The main configuration of each node type:
 | `action` | `actionType` (an action type name, or `sdk:<function>`); `inputs`: a map of input name to EL expression; optional `outputs` to rename or require task outputs. Task outputs are merged into the run context under their names |
 | `human-task` | Optional `title` and `description`; `inputs` shown to the person; `outputs`: the form fields, whose answers are merged into the context |
 | `wait` | `duration`: an ISO-8601 duration such as `PT1H` or `P1D` |
-| `receive-event` | `eventType` (required); optional `match` conditions, `outputs` (`{contextKey, expression}`), `correlationKey`, `lookback` and `timeout` (see [Dispatching Events to a Waiting Workflow](#dispatching-events-to-a-waiting-workflow)) |
+| `receive-event` | `eventType` (required); optional `match` conditions, `outputs` (`{contextKey, expression}`; without outputs nothing from the event is written to the context), `correlationKey`, `lookback` and `timeout` (see [Dispatching Events to a Waiting Workflow](#dispatching-events-to-a-waiting-workflow)) |
 
 ### Edges
 

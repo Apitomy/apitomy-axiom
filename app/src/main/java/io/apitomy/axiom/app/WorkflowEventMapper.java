@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * Builds the curated event map used for receive-event node matching and for
- * merging into workflow context. The map's {@code type} key is what the Flow
+ * evaluating the node's {@code outputs} mappings. The map's {@code type} key is what the Flow
  * engine's {@code matchesEvent} compares against a node's configured
  * {@code eventType}; the whole map is available to {@code match} EL
  * expressions and, on match, becomes the node's {@code event} output.
