@@ -45,7 +45,7 @@ describe("WorkflowRunsPage", () => {
         expect(screen.getByText("Subject 2")).toBeInTheDocument();
         expect(screen.getAllByText("Triage v1")).toHaveLength(2);
         const headers: string[] = screen.getAllByRole("columnheader").map((h) => h.textContent ?? "");
-        expect(headers).toEqual(["Status", "Run", "Workflow", "Started"]);
+        expect(headers).toEqual(["Status", "Run", "Workflow", "Labels", "Started"]);
         expect(screen.queryByRole("link")).toBeNull();
         expect(screen.queryByLabelText("Status")).toBeNull();
         expect(screen.queryByPlaceholderText("Subject ID")).toBeNull();
@@ -72,6 +72,16 @@ describe("WorkflowRunsPage", () => {
         expect(screen.getByText("Filters")).toBeInTheDocument();
         await userEvent.click(screen.getByRole("button", { name: "Close label group Filters" }));
         await waitFor(() => expect(lastFilters()).toEqual(expect.objectContaining({ status: undefined })));
+    });
+
+    it("shows run labels and adds a label chip when one is clicked", async () => {
+        vi.mocked(api.fetchWorkflowRuns).mockResolvedValue({
+            items: [{ ...run(1, "Run A"), labels: ["team:core", "urgent"] }], totalCount: 1, page: 1, limit: 20,
+        } as never);
+        renderWithRouter(<WorkflowRunsPage />);
+        expect(await screen.findByText("team:core")).toBeInTheDocument();
+        await userEvent.click(screen.getByText("urgent"));
+        await waitFor(() => expect(lastFilters().labels).toEqual(["urgent"]));
     });
 
     it("normalises and validates typed filter values", () => {

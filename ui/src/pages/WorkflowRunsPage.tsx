@@ -6,6 +6,7 @@ import {
     EmptyState,
     EmptyStateBody,
     Label,
+    LabelGroup,
     PageSection,
     Pagination,
     Title,
@@ -242,6 +243,7 @@ export function WorkflowRunsPage() {
                             <Th>Status</Th>
                             <Th>Run</Th>
                             <Th>Workflow</Th>
+                            <Th>Labels</Th>
                             <Th>Started</Th>
                         </Tr>
                     </Thead>
@@ -261,6 +263,18 @@ export function WorkflowRunsPage() {
                                     )}
                                 </Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>{describeRunWorkflow(run)}</Td>
+                                <Td>
+                                    {run.labels && run.labels.length > 0 && (
+                                        <LabelGroup numLabels={5} isCompact>
+                                            {run.labels.map((l) => (
+                                                <Label key={l} isCompact
+                                                    onClick={(e) => { e.stopPropagation(); addFilter("label", l); }}>
+                                                    {l}
+                                                </Label>
+                                            ))}
+                                        </LabelGroup>
+                                    )}
+                                </Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>
                                     {new Date(run.startedOn).toLocaleString()}
                                 </Td>
