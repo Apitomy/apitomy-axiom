@@ -186,6 +186,10 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
 
         long totalCount = StreamEventEntity.count();
 
+        if (Boolean.TRUE.equals(data.getMatchedOnly())) {
+            return previewMatchedOnly(filterExpression, fromTs, pageNum, pageSize, totalCount);
+        }
+
         List<StreamEventEntity> entities = StreamEventEntity.<StreamEventEntity>find(
                         "1=1", Sort.descending("timestamp"))
                 .page(Page.of(pageNum - 1, pageSize))
@@ -225,6 +229,71 @@ public class SubscriptionsResourceImpl implements SubscriptionsResource {
         if (totalCount > pageSize) {
             totalMatched = countTotalMatched(filterExpression, fromTs);
         }
+
+        SubscriptionPreviewResponse response = new SubscriptionPreviewResponse();
+        response.setResults(results);
+        response.setTotalCount(totalCount);
+        response.setTotalMatched(totalMatched);
+        response.setPage(pageNum);
+        response.setLimit(pageSize);
+        response.setErrorCount(errorCount);
+        response.setFirstError(firstError);
+        return response;
+    }
+
+    /**
+     * Builds a preview response containing only matched events, paginated over the matched set.
+     * Scans all events (newest first) in batches, evaluating the filter on each.
+     *
+     * @param filterExpression the EL filter expression (blank matches all)
+     * @param fromTs           optional cutoff; events before it are never matched
+     * @param pageNum          1-based page number within the matched set
+     * @param pageSize         page size
+     * @param totalCount       total number of events in the stream
+     * @return the preview response
+     */
+    private SubscriptionPreviewResponse previewMatchedOnly(String filterExpression, Instant fromTs,
+            int pageNum, int pageSize, long totalCount) {
+        long skip = (long) Math.max(pageNum - 1, 0) * pageSize;
+        List<SubscriptionPreviewResult> results = new ArrayList<>();
+        long totalMatched = 0;
+        int errorCount = 0;
+        String firstError = null;
+        int batchSize = 100;
+        int batchIndex = 0;
+        List<StreamEventEntity> batch;
+
+        do {
+            batch = StreamEventEntity.<StreamEventEntity>find("1=1", Sort.descending("timestamp"))
+                    .page(Page.of(batchIndex, batchSize))
+                    .list();
+            for (StreamEventEntity entity : batch) {
+                if (fromTs != null && entity.timestamp != null && entity.timestamp.isBefore(fromTs)) {
+                    continue;
+                }
+                boolean matched;
+                try {
+                    matched = filterEvaluator.evaluate(filterExpression, buildEventMap(entity));
+                } catch (RuntimeException e) {
+                    errorCount++;
+                    if (firstError == null) {
+                        firstError = e.getMessage() != null ? e.getMessage() : e.toString();
+                    }
+                    continue;
+                }
+                if (!matched) {
+                    continue;
+                }
+                if (totalMatched >= skip && results.size() < pageSize) {
+                    SubscriptionPreviewResult result = new SubscriptionPreviewResult();
+                    result.setEvent(toStreamEventBean(entity));
+                    result.setMatched(true);
+                    results.add(result);
+                }
+                totalMatched++;
+            }
+            batchIndex++;
+        } while (batch.size() == batchSize);
 
         SubscriptionPreviewResponse response = new SubscriptionPreviewResponse();
         response.setResults(results);

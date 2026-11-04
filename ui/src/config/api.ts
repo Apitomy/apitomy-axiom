@@ -2538,6 +2538,7 @@ export interface SubscriptionPreviewRequest {
     page?: number;
     limit?: number;
     processEventsFrom?: string;
+    matchedOnly?: boolean;
 }
 
 export interface SubscriptionPreviewResult {
