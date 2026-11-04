@@ -10,6 +10,8 @@ import {
     FormGroup,
     FormSelect,
     FormSelectOption,
+    HelperText,
+    HelperTextItem,
     Modal,
     ModalBody,
     ModalHeader,
@@ -397,6 +399,25 @@ function InfoTab({ form, readOnly, updateForm, onEditLabels }: {
                     <FormSelectOption value="node" label="Node.js — runs a JavaScript module" />
                 </FormSelect>
             </FormGroup>
+            {(form.executionMode === "script" || form.executionMode === "node") && (
+                <FormGroup label="Timeout (seconds)" fieldId="scriptTimeoutSeconds">
+                    <TextInput
+                        id="scriptTimeoutSeconds"
+                        type="number"
+                        min={1}
+                        value={form.timeoutSeconds ?? ""}
+                        isDisabled={readOnly}
+                        onChange={(_e, v) => updateForm({ timeoutSeconds: v === "" ? undefined : Number(v) })}
+                        placeholder="Global default (60)"
+                    />
+                    <HelperText>
+                        <HelperTextItem>
+                            Maximum run time before the {form.executionMode === "node" ? "action" : "script"} is
+                            killed. Leave empty to use the global default (axiom.script.timeout-seconds).
+                        </HelperTextItem>
+                    </HelperText>
+                </FormGroup>
+            )}
         </Form>
     );
 }

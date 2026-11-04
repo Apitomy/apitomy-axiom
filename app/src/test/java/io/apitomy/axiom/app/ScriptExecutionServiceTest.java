@@ -393,4 +393,45 @@ class ScriptExecutionServiceTest {
         assertTrue(run.stderr().contains("log line"));
         assertTrue(run.resolvedScript().contains("AXIOM_INPUT_name"));
     }
+
+    @Test
+    void effectiveTimeoutPrefersActionTypeOverGlobalDefault() {
+        ScriptExecutionService svc = newService();
+        svc.timeoutSeconds = 60;
+        ActionTypeEntity at = new ActionTypeEntity();
+        assertEquals(60, svc.effectiveTimeoutSeconds(null));
+        assertEquals(60, svc.effectiveTimeoutSeconds(at));
+        at.timeoutSeconds = 0;
+        assertEquals(60, svc.effectiveTimeoutSeconds(at));
+        at.timeoutSeconds = 900;
+        assertEquals(900, svc.effectiveTimeoutSeconds(at));
+    }
+
+    @Test
+    void scriptActionIsKilledAfterActionTypeTimeout() throws Exception {
+        ActionTypeEntity at = new ActionTypeEntity();
+        at.name = "slow-script";
+        at.executionMode = "script";
+        at.scriptTemplate = "#!/usr/bin/env bash\nsleep 30\n";
+        at.timeoutSeconds = 1;
+        ScriptExecutionService svc = newService();
+        svc.environmentResolver = new EnvironmentResolver() {
+            @Override
+            public boolean hasCustomEnvironment(String environmentJson) {
+                return true;
+            }
+
+            @Override
+            public Map<String, String> resolve(String environmentJson) {
+                return Map.of();
+            }
+        };
+        svc.timeoutSeconds = 60;
+        long start = System.nanoTime();
+        ScriptExecutionService.ActionRun run = svc.runScriptAction(at, Map.of(), null, "test-run");
+        long elapsedSeconds = java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - start);
+        assertFalse(run.finished());
+        assertTrue(elapsedSeconds < 15, "took " + elapsedSeconds + "s");
+        assertTrue(run.stdout().contains("timed out after 1s"), run.stdout());
+    }
 }

@@ -90,6 +90,21 @@ public class ScriptExecutionService {
     }
 
     /**
+     * The maximum run time for a script or node action of the given type: the action type's own
+     * {@code timeoutSeconds} when set to a positive value, otherwise the global default
+     * ({@code axiom.script.timeout-seconds}).
+     *
+     * @param actionType the action type, or {@code null}
+     * @return the timeout in seconds
+     */
+    int effectiveTimeoutSeconds(ActionTypeEntity actionType) {
+        if (actionType != null && actionType.timeoutSeconds != null && actionType.timeoutSeconds > 0) {
+            return actionType.timeoutSeconds;
+        }
+        return timeoutSeconds;
+    }
+
+    /**
      * Executes the script for a task asynchronously.
      *
      * @param task the task whose action type defines the script to run
@@ -160,9 +175,10 @@ public class ScriptExecutionService {
             pb.environment().putAll(placeholderEnv);
             Instant startTime = Instant.now();
             Process process = startScript(pb);
-            CapturedOutput captured = capture(process, timeoutSeconds);
+            int timeout = effectiveTimeoutSeconds(actionType);
+            CapturedOutput captured = capture(process, timeout);
             long durationMs = java.time.Duration.between(startTime, Instant.now()).toMillis();
-            return toActionRun(captured, "Script", timeoutSeconds, durationMs, script);
+            return toActionRun(captured, "Script", timeout, durationMs, script);
         } finally {
             Files.deleteIfExists(scriptFile);
             workDir.cleanUp();
@@ -184,7 +200,8 @@ public class ScriptExecutionService {
         Map<String, Object> inputs = task.workflowRunId != null
                 ? InputBindingResolver.parseInputs(task.input, objectMapper)
                 : Map.of();
-        LOG.infof("Executing script for task %d (%s), timeout %ds", task.id, task.actionType, timeoutSeconds);
+        LOG.infof("Executing script for task %d (%s), timeout %ds", task.id, task.actionType,
+                effectiveTimeoutSeconds(actionType));
         Instant startTime = Instant.now();
         ActionRun run = runScriptAction(actionType, inputs, subject, String.valueOf(task.id));
         String executionLog = buildExecutionLog(task, "Script Template", actionType.scriptTemplate,

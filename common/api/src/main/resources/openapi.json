@@ -8366,7 +8366,8 @@
           },
           "timeoutSeconds": {
             "format": "int32",
-            "description": "Timeout in seconds for agent execution. When empty, the global default (120s) is used.",
+            "description": "Maximum run time in seconds. For AI action types, when empty the global default (120s) is used. For script and node action types, when empty the global default (axiom.script.timeout-seconds, 60s) is used.",
+            "minimum": 1,
             "type": "integer"
           },
           "labels": {
@@ -8466,7 +8467,8 @@
           },
           "timeoutSeconds": {
             "format": "int32",
-            "description": "Timeout in seconds for agent execution. When empty, the global default (120s) is used.",
+            "description": "Maximum run time in seconds. For AI action types, when empty the global default (120s) is used. For script and node action types, when empty the global default (axiom.script.timeout-seconds, 60s) is used.",
+            "minimum": 1,
             "type": "integer"
           },
           "labels": {
