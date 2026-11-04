@@ -246,6 +246,49 @@ class SubscriptionsResourceTest {
                 .body("totalMatched", greaterThanOrEqualTo(0));
     }
 
+    @Test
+    void testPreviewMatchedOnlyReturnsOnlyMatchedEvents() {
+        String type = "matchedonly." + UUID.randomUUID().toString().substring(0, 8);
+        Instant now = Instant.now();
+        QuarkusTransaction.requiringNew().run(() -> {
+            for (int i = 0; i < 3; i++) {
+                createStreamEvent("mo-match-" + UUID.randomUUID(), "github", type,
+                        now.minus(i, ChronoUnit.MINUTES));
+            }
+            createStreamEvent("mo-other-" + UUID.randomUUID(), "github", "push", now);
+        });
+
+        String filter = "event.type == '" + type + "'";
+
+        // Page 1 of size 2: two matched results, totalMatched reflects whole matched set
+        given()
+            .contentType(ContentType.JSON)
+            .body(String.format("""
+                {"filterExpression": "%s", "page": 1, "limit": 2, "matchedOnly": true}
+                """, filter))
+            .when()
+                .post(SUBSCRIPTIONS_PATH + "/preview")
+            .then()
+                .statusCode(200)
+                .body("totalMatched", equalTo(3))
+                .body("results.size()", equalTo(2))
+                .body("results.matched", everyItem(equalTo(true)))
+                .body("results.event.type", everyItem(equalTo(type)));
+
+        // Page 2: the remaining matched result
+        given()
+            .contentType(ContentType.JSON)
+            .body(String.format("""
+                {"filterExpression": "%s", "page": 2, "limit": 2, "matchedOnly": true}
+                """, filter))
+            .when()
+                .post(SUBSCRIPTIONS_PATH + "/preview")
+            .then()
+                .statusCode(200)
+                .body("results.size()", equalTo(1))
+                .body("results[0].event.type", equalTo(type));
+    }
+
     private static final DateTimeFormatter JSON_DATE_FMT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC);
 

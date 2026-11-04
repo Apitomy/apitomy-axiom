@@ -507,6 +507,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
     const [previewLoading, setPreviewLoading] = useState(false);
     const [selectedEvent, setSelectedEvent] = useState<StreamEvent | null>(null);
     const [helpOpen, setHelpOpen] = useState(false);
+    const [matchedOnly, setMatchedOnly] = useState(false);
 
     // Debounce timer for auto-refresh
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -517,6 +518,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
             filterExpression: filterExpression || "",
             page,
             limit: perPage,
+            matchedOnly,
         };
         if (processEventsFrom) {
             req.processEventsFrom = new Date(processEventsFrom).toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -529,7 +531,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
             })
             .catch(console.error)
             .finally(() => setPreviewLoading(false));
-    }, [filterExpression, processEventsFrom, page, perPage]);
+    }, [filterExpression, processEventsFrom, page, perPage, matchedOnly]);
 
     // Auto-refresh preview when expression changes (debounced)
     useEffect(() => {
@@ -540,7 +542,7 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
         return () => {
             if (debounceRef.current) clearTimeout(debounceRef.current);
         };
-    }, [filterExpression, processEventsFrom, page, perPage]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [filterExpression, processEventsFrom, page, perPage, matchedOnly]); // eslint-disable-line react-hooks/exhaustive-deps
 
     return (
         <div>
@@ -630,9 +632,17 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
                             <SyncAltIcon />
                         </Button>
                     </ToolbarItem>
+                    <ToolbarItem alignSelf="center">
+                        <Switch
+                            id="preview-matched-only"
+                            label="Show matched only"
+                            isChecked={matchedOnly}
+                            onChange={(_e, checked) => { setMatchedOnly(checked); setPage(1); }}
+                        />
+                    </ToolbarItem>
                     <ToolbarItem variant="pagination" align={{ default: "alignEnd" }}>
                         <Pagination
-                            itemCount={totalCount}
+                            itemCount={matchedOnly ? totalMatched : totalCount}
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
@@ -650,7 +660,9 @@ function FilterTab({ filterExpression, setFilterExpression, processEventsFrom, e
                 </EmptyState>
             ) : results.length === 0 ? (
                 <EmptyState>
-                    <EmptyStateBody>No events in the stream.</EmptyStateBody>
+                    <EmptyStateBody>
+                        {matchedOnly ? "No matching events." : "No events in the stream."}
+                    </EmptyStateBody>
                 </EmptyState>
             ) : (
                 <Table aria-label="Filter Preview" variant="compact">
