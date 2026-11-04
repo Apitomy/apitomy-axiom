@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Button,
@@ -13,6 +13,7 @@ import {
     Toolbar,
     ToolbarContent,
     ToolbarItem,
+    Tooltip,
 } from "@patternfly/react-core";
 import {
     type ChipFilterCriteria,
@@ -22,6 +23,12 @@ import {
 } from "@apitomy/common-ui-components";
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
+import InProgressIcon from "@patternfly/react-icons/dist/esm/icons/in-progress-icon";
+import PauseCircleIcon from "@patternfly/react-icons/dist/esm/icons/pause-circle-icon";
+import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
+import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
+import BanIcon from "@patternfly/react-icons/dist/esm/icons/ban-icon";
+import QuestionCircleIcon from "@patternfly/react-icons/dist/esm/icons/question-circle-icon";
 import {
     type WorkflowDefinition, type WorkflowRunSummary,
     fetchWorkflowDefinitions, fetchWorkflowRuns,
@@ -98,6 +105,34 @@ export function describeRun(run: WorkflowRunSummary): string {
 export function describeRunWorkflow(run: WorkflowRunSummary): string {
     const workflow: string = run.definitionName || `Workflow #${run.definitionId}`;
     return `${workflow} v${run.definitionVersion}`;
+}
+
+/** Icons of workflow run statuses; unknown statuses use a generic icon. */
+const STATUS_ICONS: Record<string, ComponentType> = {
+    running: InProgressIcon,
+    waiting: PauseCircleIcon,
+    completed: CheckCircleIcon,
+    failed: ExclamationCircleIcon,
+    cancelled: BanIcon,
+};
+
+/**
+ * A clickable, colour-coded icon for a run status (same hues as the status labels), with a tooltip naming it.
+ *
+ * @param props the status and the click handler (the click does not reach the table row)
+ */
+function RunStatusIcon({ status, onClick }: { status: string; onClick: () => void }) {
+    const Icon: ComponentType = STATUS_ICONS[status] ?? QuestionCircleIcon;
+    const hue: string = (STATUS_COLORS[status] || "grey") === "grey" ? "gray" : STATUS_COLORS[status];
+    return (
+        <Tooltip content={status}>
+            <Button variant="plain" size="sm" aria-label={`Filter by status: ${status}`}
+                style={{ color: `var(--pf-t--global--color--nonstatus--${hue}--400)`, padding: 0 }}
+                onClick={(e) => { e.stopPropagation(); onClick(); }}>
+                <Icon />
+            </Button>
+        </Tooltip>
+    );
 }
 
 /**
@@ -250,11 +285,8 @@ export function WorkflowRunsPage() {
                     <Tbody>
                         {runs.map((run) => (
                             <Tr key={run.runId} isClickable onRowClick={() => navigate(`/runs/${run.runId}`)}>
-                                <Td>
-                                    <Label isCompact color={STATUS_COLORS[run.status] || "grey"}
-                                        onClick={(e) => { e.stopPropagation(); addFilter("status", run.status); }}>
-                                        {run.status}
-                                    </Label>
+                                <Td modifier="fitContent">
+                                    <RunStatusIcon status={run.status} onClick={() => addFilter("status", run.status)} />
                                 </Td>
                                 <Td>
                                     <div>{describeRun(run)}</div>

@@ -67,7 +67,8 @@ describe("WorkflowRunsPage", () => {
     it("adds a status chip from the table without leaving the page, and filters by it", async () => {
         renderWithRouter(<WorkflowRunsPage />);
         await screen.findByText("Run A");
-        await userEvent.click(screen.getAllByText("completed")[0]);
+        expect(screen.queryByText("completed")).toBeNull();
+        await userEvent.click(screen.getAllByRole("button", { name: "Filter by status: completed" })[0]);
         await waitFor(() => expect(lastFilters().status).toBe("completed"));
         expect(screen.getByText("Filters")).toBeInTheDocument();
         await userEvent.click(screen.getByRole("button", { name: "Close label group Filters" }));
