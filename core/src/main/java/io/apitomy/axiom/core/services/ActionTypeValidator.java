@@ -135,6 +135,7 @@ public final class ActionTypeValidator {
         validateName(def, messages);
         validateDescription(def, messages);
         validateExecutionMode(def, messages);
+        validateTimeout(def, messages);
         validatePromptTemplate(def, messages);
         validateScriptTemplate(def, messages);
         validateCodeTemplate(def, messages);
@@ -170,6 +171,13 @@ public final class ActionTypeValidator {
     private static void validateExecutionMode(NewActionType def, List<ValidationMessage> messages) {
         if (def.getExecutionMode() == null) {
             messages.add(error("executionMode", "Execution mode is required."));
+        }
+    }
+
+    private static void validateTimeout(NewActionType def, List<ValidationMessage> messages) {
+        Integer timeout = def.getTimeoutSeconds();
+        if (timeout != null && timeout <= 0) {
+            messages.add(error("timeoutSeconds", "Timeout must be a positive number of seconds."));
         }
     }
 

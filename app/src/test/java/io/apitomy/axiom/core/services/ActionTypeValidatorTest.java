@@ -42,6 +42,26 @@ class ActionTypeValidatorTest {
         assertFalse(result.hasWarnings());
     }
 
+    // ── Timeout validation ──────────────────────────────────────────
+
+    @Test
+    void nonPositiveTimeoutIsError() {
+        NewActionType at = makeScript("slow", "Slow script", "sleep 1");
+        at.setTimeoutSeconds(0);
+
+        ValidationResult result = ActionTypeValidator.validate(at);
+
+        assertTrue(result.errors().stream().anyMatch(m -> "timeoutSeconds".equals(m.field())));
+    }
+
+    @Test
+    void positiveTimeoutIsValid() {
+        NewActionType at = makeScript("slow", "Slow script", "sleep 1");
+        at.setTimeoutSeconds(600);
+
+        assertFalse(ActionTypeValidator.validate(at).hasErrors());
+    }
+
     // ── Name validation ─────────────────────────────────────────────
 
     @Test

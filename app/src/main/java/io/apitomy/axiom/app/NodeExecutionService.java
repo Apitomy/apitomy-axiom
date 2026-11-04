@@ -93,7 +93,7 @@ public class NodeExecutionService {
             subject = SubjectEntity.findById(task.subjectId);
         }
         LOG.infof("Executing node action for task %d (%s), timeout %ds",
-                task.id, task.actionType, scriptExecutionService.timeoutSeconds());
+                task.id, task.actionType, scriptExecutionService.effectiveTimeoutSeconds(actionType));
         Instant startTime = Instant.now();
         ScriptExecutionService.ActionRun run = runNodeAction(actionType,
                 InputBindingResolver.parseInputs(task.input, objectMapper), subject, String.valueOf(task.id));
@@ -124,7 +124,7 @@ public class NodeExecutionService {
         Path codeDir = Files.createTempDirectory("axiom-node-");
         ScriptExecutionService.WorkingDirectory workDir = null;
         try {
-            long timeoutSeconds = scriptExecutionService.timeoutSeconds();
+            long timeoutSeconds = scriptExecutionService.effectiveTimeoutSeconds(actionType);
             Path runner = writeRunner(codeDir);
             Path actionFile = codeDir.resolve("action.mjs");
             Files.writeString(actionFile, actionType.codeTemplate);

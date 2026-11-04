@@ -142,4 +142,23 @@ class NodeExecutionServiceTest {
         assertTrue(run.stderr().contains("counting"));
         assertNull(run.resolvedScript());
     }
+
+    @Test
+    void nodeActionIsKilledAfterActionTypeTimeout() throws Exception {
+        ActionTypeEntity at = new ActionTypeEntity();
+        at.name = "slow-node";
+        at.executionMode = "node";
+        at.timeoutSeconds = 1;
+        at.codeTemplate = "export async function run() {\n"
+                + "    await new Promise((r) => setTimeout(r, 30000));\n"
+                + "    return {};\n"
+                + "}\n";
+        long start = System.nanoTime();
+        ScriptExecutionService.ActionRun run = QuarkusTransaction.requiringNew().call(() ->
+                nodeExecutionService.runNodeAction(at, Map.of(), null, "test-run"));
+        long elapsedSeconds = java.util.concurrent.TimeUnit.NANOSECONDS.toSeconds(System.nanoTime() - start);
+        assertFalse(run.finished());
+        assertTrue(elapsedSeconds < 15, "took " + elapsedSeconds + "s");
+        assertTrue(run.stdout().contains("timed out after 1s"), run.stdout());
+    }
 }
