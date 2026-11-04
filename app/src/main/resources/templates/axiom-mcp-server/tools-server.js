@@ -30,7 +30,7 @@ log("INFO", "Axiom Tools MCP server started", {
     toolsFile,
 });
 
-const server = new Server({ name: "axiom-tools", version: "3.0.4" }, {
+const server = new Server({ name: "axiom-tools", version: "3.0.5-SNAPSHOT" }, {
     capabilities: { tools: {} }
 });
 
