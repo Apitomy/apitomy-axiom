@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
     Alert,
     AlertActionCloseButton,
@@ -25,6 +27,8 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import ExternalLinkAltIcon from "@patternfly/react-icons/dist/esm/icons/external-link-alt-icon";
+import { markdownMermaidComponents } from "../components/MermaidBlock";
+import "../axiom-markdown.css";
 import {
     type InboxItem,
     fetchInboxItems,
@@ -283,9 +287,13 @@ export function InboxPage() {
                     <ModalBody>
                         {/* Context section */}
                         {selectedItem.humanContext?.description && (
-                            <Content style={{ marginBottom: "16px" }}>
-                                <p>{selectedItem.humanContext.description}</p>
-                            </Content>
+                            <div className="axiom-markdown" style={{ marginBottom: "16px" }}>
+                                <Content>
+                                    <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
+                                        {selectedItem.humanContext.description}
+                                    </Markdown>
+                                </Content>
+                            </div>
                         )}
 
                         {/* Reference links */}
