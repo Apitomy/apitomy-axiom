@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { render } from "@testing-library/react";
 import { normalizeRunFilter, resolveWorkflowFilter, WorkflowRunsPage } from "./WorkflowRunsPage";
 import { renderWithRouter } from "../test/renderWithRouter";
+import { labelColor } from "../components/ColoredLabel";
 import * as api from "../config/api";
 
 function run(runId: number, title?: string) {
@@ -81,6 +82,9 @@ describe("WorkflowRunsPage", () => {
         } as never);
         renderWithRouter(<WorkflowRunsPage />);
         expect(await screen.findByText("team:core")).toBeInTheDocument();
+        for (const l of ["team:core", "urgent"]) {
+            expect(screen.getByText(l).closest(".pf-v6-c-label")).toHaveClass(`pf-m-${labelColor(l)}`);
+        }
         await userEvent.click(screen.getByText("urgent"));
         await waitFor(() => expect(lastFilters().labels).toEqual(["urgent"]));
     });
