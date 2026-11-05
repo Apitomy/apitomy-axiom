@@ -50,3 +50,23 @@ describe("InboxPage deep link", () => {
         expect(api.fetchInboxItem).not.toHaveBeenCalled();
     });
 });
+
+describe("InboxPage task description", () => {
+    it("renders the description as markdown", async () => {
+        vi.mocked(api.fetchInboxItems).mockResolvedValue({ items: [], totalCount: 0 } as
+            unknown as api.SearchResults<api.InboxItem>);
+        vi.mocked(api.fetchInboxItem).mockResolvedValue({
+            id: 6, subjectId: 1, actionType: "review", status: "pending", createdOn: "",
+            humanContext: {
+                title: "Review",
+                description: "Please **approve** this.\n\n- first item\n- [docs](https://example.com/docs)",
+            },
+        } as api.InboxItem);
+        renderAt("/inbox?task=6");
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog.querySelector("strong")).toHaveTextContent("approve");
+        expect(dialog.querySelectorAll("li")).toHaveLength(2);
+        expect(screen.getByRole("link", { name: "docs" })).toHaveAttribute("href", "https://example.com/docs");
+        expect(dialog).not.toHaveTextContent("**approve**");
+    });
+});
