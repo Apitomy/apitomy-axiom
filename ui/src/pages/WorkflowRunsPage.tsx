@@ -5,8 +5,6 @@ import {
     Content,
     EmptyState,
     EmptyStateBody,
-    Label,
-    LabelGroup,
     PageSection,
     Pagination,
     Title,
@@ -35,6 +33,7 @@ import {
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { STATUS_COLORS } from "../components/workflowRun";
+import { ColoredLabel } from "../components/ColoredLabel";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "status", label: "Status", testId: "runs-filter-status" },
@@ -296,16 +295,16 @@ export function WorkflowRunsPage() {
                                 </Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>{describeRunWorkflow(run)}</Td>
                                 <Td>
-                                    {run.labels && run.labels.length > 0 && (
-                                        <LabelGroup numLabels={5} isCompact>
-                                            {run.labels.map((l) => (
-                                                <Label key={l} isCompact
-                                                    onClick={(e) => { e.stopPropagation(); addFilter("label", l); }}>
-                                                    {l}
-                                                </Label>
-                                            ))}
-                                        </LabelGroup>
-                                    )}
+                                    {run.labels?.map((label) => (
+                                        <ColoredLabel key={label} isCompact
+                                            style={{ marginRight: "4px", cursor: "pointer" }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                addFilter("label", label);
+                                            }}>
+                                            {label}
+                                        </ColoredLabel>
+                                    ))}
                                 </Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>
                                     {new Date(run.startedOn).toLocaleString()}
