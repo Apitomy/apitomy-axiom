@@ -80,6 +80,17 @@ export function AiUsagePage() {
     const filterEngine = filters.find((f) => f.filterBy.value === "engine")?.filterValue;
     const filterModel = filters.find((f) => f.filterBy.value === "model")?.filterValue;
     const filterTraceId = filters.find((f) => f.filterBy.value === "traceId")?.filterValue;
+    /**
+     * Sets the "From" date filter to the first day of the current month (local time) and clears "To".
+     */
+    const onThisMonth = (): void => {
+        const now: Date = new Date();
+        const month: string = String(now.getMonth() + 1).padStart(2, "0");
+        setFilterDateFrom(`${now.getFullYear()}-${month}-01`);
+        setFilterDateTo("");
+        setPage(1);
+    };
+
     const isFiltered = filters.length > 0 || !!filterDateFrom || !!filterDateTo;
 
     const loadData = useCallback(() => {
@@ -200,13 +211,16 @@ export function AiUsagePage() {
                             <SyncAltIcon />
                         </Button>
                     </ToolbarItem>
-                    <ToolbarItem variant="label">From</ToolbarItem>
+                    <ToolbarItem>
+                        <Button variant="secondary" onClick={onThisMonth}>This Month</Button>
+                    </ToolbarItem>
+                    <ToolbarItem variant="label" style={{ alignSelf: "center" }}>From</ToolbarItem>
                     <ToolbarItem>
                         <TextInput type="date" aria-label="From date" value={filterDateFrom}
                             onChange={(_e, v) => { setFilterDateFrom(v); setPage(1); }}
                             style={{ width: "160px" }} />
                     </ToolbarItem>
-                    <ToolbarItem variant="label">To</ToolbarItem>
+                    <ToolbarItem variant="label" style={{ alignSelf: "center" }}>To</ToolbarItem>
                     <ToolbarItem>
                         <TextInput type="date" aria-label="To date" value={filterDateTo}
                             onChange={(_e, v) => { setFilterDateTo(v); setPage(1); }}
