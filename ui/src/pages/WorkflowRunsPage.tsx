@@ -106,6 +106,21 @@ export function describeRunWorkflow(run: WorkflowRunSummary): string {
     return `${workflow} v${run.definitionVersion}`;
 }
 
+/**
+ * Returns the "Workflow" filter value for a run: the workflow name when it uniquely resolves back to the run's
+ * definition, otherwise the numeric definition id.
+ *
+ * @param run the run summary
+ * @param definitions the known workflow definitions
+ * @returns the filter value
+ */
+export function workflowFilterValue(run: WorkflowRunSummary, definitions: WorkflowDefinition[]): string {
+    if (run.definitionName && resolveWorkflowFilter(run.definitionName, definitions) === run.definitionId) {
+        return run.definitionName;
+    }
+    return String(run.definitionId);
+}
+
 /** Icons of workflow run statuses; unknown statuses use a generic icon. */
 const STATUS_ICONS: Record<string, ComponentType> = {
     running: InProgressIcon,
@@ -293,7 +308,15 @@ export function WorkflowRunsPage() {
                                         <Content component="small" className="axiom-run-title">{run.title}</Content>
                                     )}
                                 </Td>
-                                <Td style={{ whiteSpace: "nowrap" }}>{describeRunWorkflow(run)}</Td>
+                                <Td style={{ whiteSpace: "nowrap" }}>
+                                    <Button variant="link" isInline aria-label={`Filter by workflow: ${describeRunWorkflow(run)}`}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            addFilter("workflow", workflowFilterValue(run, definitions));
+                                        }}>
+                                        {describeRunWorkflow(run)}
+                                    </Button>
+                                </Td>
                                 <Td>
                                     {run.labels?.map((label) => (
                                         <ColoredLabel key={label} isCompact
