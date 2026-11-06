@@ -89,6 +89,14 @@ describe("WorkflowRunsPage", () => {
         await waitFor(() => expect(lastFilters().labels).toEqual(["urgent"]));
     });
 
+    it("adds a workflow chip when the workflow cell is clicked, without opening the run", async () => {
+        renderWithRouter(<WorkflowRunsPage />);
+        await screen.findByText("Run A");
+        await userEvent.click(screen.getAllByRole("button", { name: "Filter by workflow: Triage v1" })[0]);
+        await waitFor(() => expect(lastFilters().definitionId).toBe(2));
+        expect(screen.getByText("Filters")).toBeInTheDocument();
+    });
+
     it("normalises and validates typed filter values", () => {
         expect(normalizeRunFilter("status", " Running ")).toBe("running");
         expect(normalizeRunFilter("subject", "12")).toBe("12");
