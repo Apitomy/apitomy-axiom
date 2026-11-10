@@ -17,6 +17,8 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests that {@link SecretExpiryChecker} emits each expiry event exactly once.
@@ -33,6 +35,9 @@ class SecretExpiryCheckerTest {
     @Inject
     EncryptionService encryptionService;
 
+    @Inject
+    SecretSseRecorder sseRecorder;
+
     @AfterEach
     void cleanup() {
         QuarkusTransaction.requiringNew().run(() -> {
@@ -41,14 +46,29 @@ class SecretExpiryCheckerTest {
         });
     }
 
-    private void secret(String name, Instant expiresOn, Integer warnDays) {
-        QuarkusTransaction.requiringNew().run(() -> {
+    private Long secret(String name, Instant expiresOn, Integer warnDays) {
+        return QuarkusTransaction.requiringNew().call(() -> {
             SecretEntity s = new SecretEntity();
             s.name = name;
             s.encryptedValue = encryptionService.encrypt("super-secret-value");
             s.expiresOn = expiresOn;
             s.warnDaysBefore = warnDays;
             s.persist();
+            return s.id;
+        });
+    }
+
+    private SecretEntity reload(Long id) {
+        return QuarkusTransaction.requiringNew().call(() -> SecretEntity.<SecretEntity>findById(id));
+    }
+
+    private void rotate(Long id, Instant newExpiresOn) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            SecretEntity s = SecretEntity.findById(id);
+            s.encryptedValue = encryptionService.encrypt("rotated-value");
+            s.expiresOn = newExpiresOn;
+            s.expiryWarningSentOn = null;
+            s.expiredEventSentOn = null;
         });
     }
 
@@ -117,5 +137,49 @@ class SecretExpiryCheckerTest {
         checker.check(NOW.plusSeconds(60));
         List<String> types = events("SECT_OLD").stream().map(e -> e.type).toList();
         assertEquals(List.of("secret.expired"), types);
+    }
+
+    @Test
+    void rotationAfterSnapshotIsNotOverwrittenAndEmitsNothing() {
+        Long id = secret("SECT_ROT", NOW.plus(Duration.ofDays(3)), null);
+        SecretExpiryChecker.Snapshot stale = checker.snapshots().stream()
+                .filter(s -> s.id().equals(id)).findFirst().orElseThrow();
+        Instant rotatedExpiry = NOW.plus(Duration.ofDays(365));
+        rotate(id, rotatedExpiry);
+
+        int emitted = checker.checkOne(stale, NOW);
+
+        assertEquals(0, emitted);
+        assertEquals(0, events("SECT_ROT").size());
+        SecretEntity after = reload(id);
+        assertEquals(rotatedExpiry, after.expiresOn);
+        assertEquals("rotated-value", encryptionService.decrypt(after.encryptedValue));
+        assertNull(after.expiryWarningSentOn);
+        assertNull(after.expiredEventSentOn);
+    }
+
+    @Test
+    void claimWithChangedExpiryAffectsNoRows() {
+        Instant expiresOn = NOW.minus(Duration.ofDays(1));
+        Long id = secret("SECT_CLAIM", expiresOn, null);
+        Instant other = expiresOn.plusSeconds(1);
+        assertEquals(0, QuarkusTransaction.requiringNew().call(() -> checker.claimExpired(id, other, NOW)));
+        assertEquals(0, QuarkusTransaction.requiringNew().call(() -> checker.claimWarning(id, other, NOW)));
+        assertNull(reload(id).expiredEventSentOn);
+        assertEquals(1, QuarkusTransaction.requiringNew().call(() -> checker.claimExpired(id, expiresOn, NOW)));
+        assertEquals(0, QuarkusTransaction.requiringNew().call(() -> checker.claimExpired(id, expiresOn, NOW)));
+        SecretEntity after = reload(id);
+        assertEquals(NOW, after.expiredEventSentOn);
+        assertEquals(NOW, after.expiryWarningSentOn);
+    }
+
+    @Test
+    void checkerSseIsSentAfterClaimCommits() {
+        Long id = secret("SECT_SSE", NOW.plus(Duration.ofDays(3)), null);
+        sseRecorder.clear();
+        assertEquals(1, checker.check(NOW));
+        List<SecretSseRecorder.Recorded> sent = sseRecorder.forSecret(id);
+        assertEquals(1, sent.size());
+        assertTrue(sent.get(0).warningSentVisible(), "SSE must be sent only after the claim committed");
     }
 }
