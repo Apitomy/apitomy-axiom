@@ -5,6 +5,7 @@ import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.ExpiredSecretException;
 import io.apitomy.axiom.core.services.MissingSecretException;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
@@ -13,6 +14,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -113,5 +116,38 @@ class SecretInjectionTest {
     void resolvingAMissingSecretThrows() {
         assertThrows(MissingSecretException.class, () -> QuarkusTransaction.requiringNew().call(() ->
                 environmentResolver.resolve("{\"X\": \"prefix-${secret:SIT_NOPE}\"}")));
+    }
+
+    private void setExpiry(String name, Instant expiresOn) {
+        QuarkusTransaction.requiringNew().run(() -> {
+            SecretEntity secret = SecretEntity.find("name", name).firstResult();
+            secret.expiresOn = expiresOn;
+        });
+    }
+
+    @Test
+    void resolvingAnExpiredSecretThrows() {
+        Instant expired = Instant.parse("2026-01-02T03:04:05Z");
+        setExpiry("SIT_ALPHA", expired);
+        ExpiredSecretException e = assertThrows(ExpiredSecretException.class,
+                () -> QuarkusTransaction.requiringNew().call(() ->
+                        environmentResolver.resolve("{\"X\": \"${secret:SIT_ALPHA}\"}")));
+        assertEquals("Secret 'SIT_ALPHA' expired on 2026-01-02T03:04:05Z. Update it on the Secrets page.",
+                e.getMessage());
+    }
+
+    @Test
+    void anExpiredSecretIsAlsoAMissingSecretForExistingHandlers() {
+        setExpiry("SIT_ALPHA", Instant.now().minusSeconds(60));
+        assertThrows(MissingSecretException.class, () -> QuarkusTransaction.requiringNew().call(() ->
+                environmentResolver.resolve("{\"X\": \"${secret:SIT_ALPHA}\"}")));
+    }
+
+    @Test
+    void aSecretThatExpiresLaterStillResolves() {
+        setExpiry("SIT_ALPHA", Instant.now().plus(Duration.ofDays(1)));
+        Map<String, String> env = QuarkusTransaction.requiringNew().call(() ->
+                environmentResolver.resolve("{\"X\": \"${secret:SIT_ALPHA}\"}"));
+        assertEquals(Map.of("X", "sit_alpha-value"), env);
     }
 }
