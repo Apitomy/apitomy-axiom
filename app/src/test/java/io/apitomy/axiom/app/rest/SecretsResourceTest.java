@@ -1,26 +1,34 @@
 package io.apitomy.axiom.app.rest;
 
+import io.apitomy.axiom.app.SecretSseRecorder;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * REST tests for secret expiration fields and validation.
  */
 @QuarkusTest
 class SecretsResourceTest {
+
+    @Inject
+    SecretSseRecorder sseRecorder;
 
     @AfterEach
     void cleanup() {
@@ -127,5 +135,15 @@ class SecretsResourceTest {
     void systemConfigExposesWarningDays() {
         given().get("/api/v1/system/config").then().statusCode(200)
                 .body("secretExpiryWarningDays", equalTo(7));
+    }
+
+    @Test
+    void secretExpirySseIsSentAfterCreateCommits() {
+        sseRecorder.clear();
+        long id = create("SRT_SSE", null, null);
+        List<SecretSseRecorder.Recorded> sent = sseRecorder.forSecret(id);
+        assertEquals(1, sent.size());
+        assertTrue(sent.get(0).secretVisible(), "SSE must be sent only after the insert committed");
+        assertTrue(sent.get(0).event().data().contains("\"status\":\"NONE\""));
     }
 }

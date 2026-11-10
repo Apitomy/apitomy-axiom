@@ -4,7 +4,7 @@ import io.apitomy.axiom.api.SecretsResource;
 import io.apitomy.axiom.api.beans.NewSecret;
 import io.apitomy.axiom.api.beans.Secret;
 import io.apitomy.axiom.core.entities.SecretEntity;
-import io.apitomy.axiom.core.events.SseEvent;
+import io.apitomy.axiom.core.events.SecretExpiryChanged;
 import io.apitomy.axiom.core.services.EncryptionService;
 import io.apitomy.axiom.core.services.SecretExpiry;
 import io.smallrye.common.annotation.RunOnVirtualThread;
@@ -35,7 +35,7 @@ public class SecretsResourceImpl implements SecretsResource {
     EncryptionService encryptionService;
 
     @Inject
-    Event<SseEvent> sseEvents;
+    Event<SecretExpiryChanged> expiryChanges;
 
     @ConfigProperty(name = "axiom.secrets.expiry-warning-days", defaultValue = "7")
     int defaultWarnDays;
@@ -62,7 +62,7 @@ public class SecretsResourceImpl implements SecretsResource {
         apply(entity, data);
         entity.persist();
         Secret bean = toBean(entity, now);
-        sseEvents.fire(SseEvent.secretExpiry(entity.id, bean.getExpiryStatus().toString()));
+        expiryChanges.fire(new SecretExpiryChanged(entity.id, bean.getExpiryStatus().toString()));
         return bean;
     }
 
@@ -77,7 +77,7 @@ public class SecretsResourceImpl implements SecretsResource {
         validateExpiry(data, now);
         apply(entity, data);
         Secret bean = toBean(entity, now);
-        sseEvents.fire(SseEvent.secretExpiry(entity.id, bean.getExpiryStatus().toString()));
+        expiryChanges.fire(new SecretExpiryChanged(entity.id, bean.getExpiryStatus().toString()));
         return bean;
     }
 
@@ -89,7 +89,7 @@ public class SecretsResourceImpl implements SecretsResource {
     public void deleteSecret(long secretId) {
         SecretEntity entity = findOrThrow(secretId);
         entity.delete();
-        sseEvents.fire(SseEvent.secretExpiry(secretId, null));
+        expiryChanges.fire(new SecretExpiryChanged(secretId, null));
     }
 
     /**
