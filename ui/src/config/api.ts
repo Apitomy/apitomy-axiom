@@ -955,8 +955,7 @@ export async function createSecret(secret: NewSecret): Promise<Secret> {
         body: JSON.stringify(secret),
     });
     if (!response.ok) {
-        const detail = response.status === 400 ? await response.text() : "";
-        throw new Error(detail || `Failed to create secret: ${response.status}`);
+        throw new Error(await extractErrorMessage(response, "Failed to create secret"));
     }
     return response.json();
 }
@@ -968,8 +967,7 @@ export async function updateSecret(id: number, secret: NewSecret): Promise<Secre
         body: JSON.stringify(secret),
     });
     if (!response.ok) {
-        const detail = response.status === 400 ? await response.text() : "";
-        throw new Error(detail || `Failed to update secret: ${response.status}`);
+        throw new Error(await extractErrorMessage(response, "Failed to update secret"));
     }
     return response.json();
 }

@@ -73,14 +73,16 @@ class SecretsResourceTest {
     void pastExpiryIsRejectedOnCreate() {
         String past = Instant.now().minus(Duration.ofDays(1)).truncatedTo(ChronoUnit.SECONDS).toString();
         given().contentType(ContentType.JSON).body(body("SRT_PAST", past, null))
-                .post("/api/v1/secrets").then().statusCode(400);
+                .post("/api/v1/secrets").then().statusCode(400)
+                .body("message", equalTo("expiresOn must be in the future"));
     }
 
     @Test
     void negativeWarnDaysIsRejected() {
         String expires = Instant.now().plus(Duration.ofDays(30)).truncatedTo(ChronoUnit.SECONDS).toString();
         given().contentType(ContentType.JSON).body(body("SRT_NEG", expires, -1))
-                .post("/api/v1/secrets").then().statusCode(400);
+                .post("/api/v1/secrets").then().statusCode(400)
+                .body("message", equalTo("warnDaysBefore must not be negative"));
     }
 
     @Test
@@ -88,7 +90,8 @@ class SecretsResourceTest {
         long id = create("SRT_UPD", null, null);
         String past = Instant.now().minus(Duration.ofDays(1)).truncatedTo(ChronoUnit.SECONDS).toString();
         given().contentType(ContentType.JSON).body(body("SRT_UPD", past, null))
-                .put("/api/v1/secrets/" + id).then().statusCode(400);
+                .put("/api/v1/secrets/" + id).then().statusCode(400)
+                .body("message", equalTo("expiresOn must be in the future"));
     }
 
     @Test

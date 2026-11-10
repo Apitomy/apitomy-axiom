@@ -13,11 +13,14 @@ import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Implementation of the Secrets REST API. Provides CRUD operations
@@ -103,12 +106,25 @@ public class SecretsResourceImpl implements SecretsResource {
         entity.expiredEventSentOn = null;
     }
 
+    /**
+     * Builds a 400 Bad Request exception carrying a JSON body of the form {@code {"message": "..."}}.
+     *
+     * @param message the human-readable validation message
+     * @return the exception to throw
+     */
+    private static WebApplicationException badRequest(String message) {
+        return new WebApplicationException(Response.status(Response.Status.BAD_REQUEST)
+                .type(MediaType.APPLICATION_JSON)
+                .entity(Map.of("message", message))
+                .build());
+    }
+
     private static void validateExpiry(NewSecret data, Instant now) {
         if (data.getExpiresOn() != null && !data.getExpiresOn().toInstant().isAfter(now)) {
-            throw new WebApplicationException("expiresOn must be in the future", 400);
+            throw badRequest("expiresOn must be in the future");
         }
         if (data.getWarnDaysBefore() != null && data.getWarnDaysBefore() < 0) {
-            throw new WebApplicationException("warnDaysBefore must not be negative", 400);
+            throw badRequest("warnDaysBefore must not be negative");
         }
     }
 
