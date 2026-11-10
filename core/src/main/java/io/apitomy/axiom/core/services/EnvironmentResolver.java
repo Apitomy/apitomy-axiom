@@ -84,9 +84,14 @@ public class EnvironmentResolver {
 
     /**
      * Resolves a single value, replacing any {@code ${secret:NAME}} references
-     * with the decrypted secret values.
+     * with the decrypted secret values. Values without references are returned unchanged.
+     *
+     * @param value the value to resolve, may be {@code null} (resolved to an empty string)
+     * @return the resolved value
+     * @throws MissingSecretException when a referenced secret does not exist, has expired, or cannot be
+     *                                decrypted
      */
-    private String resolveValue(String value) {
+    public String resolveValue(String value) {
         if (value == null) return "";
 
         Matcher matcher = SECRET_REF.matcher(value);

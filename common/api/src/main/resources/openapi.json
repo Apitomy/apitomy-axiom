@@ -11562,7 +11562,7 @@
           "configuration": {
             "type": "object",
             "additionalProperties": {},
-            "description": "Source-specific config. GitHub: {repositories: [...]}, Jira: {projects: [...]}"
+            "description": "Source-specific config. GitHub: {repositories: [...]}, Jira: {projects: [...], email?: string, extraFields?: [...]}. The Jira email is a plain address or a ${secret:NAME} reference and is combined with the API token from the authentication secret."
           },
           "createdOn": {
             "format": "date-time",
@@ -11621,7 +11621,7 @@
           "configuration": {
             "type": "object",
             "additionalProperties": {},
-            "description": "Source-specific config. GitHub: {repositories: [...]}, Jira: {projects: [...]}"
+            "description": "Source-specific config. GitHub: {repositories: [...]}, Jira: {projects: [...], email?: string, extraFields?: [...]}. The Jira email is a plain address or a ${secret:NAME} reference and is combined with the API token from the authentication secret."
           }
         }
       },

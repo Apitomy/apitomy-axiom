@@ -39,6 +39,7 @@ import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
+import { JiraEmailField, isValidJiraEmail } from "../components/JiraEmailField";
 import {
     type EventSourceConfig,
     type NewEventSource,
@@ -65,6 +66,7 @@ export function EventSourceDetailPage() {
     const [form, setForm] = useState<Partial<EventSourceConfig>>({});
     const [reposText, setReposText] = useState("");
     const [projectsText, setProjectsText] = useState("");
+    const [jiraEmail, setJiraEmail] = useState("");
     const [secrets, setSecrets] = useState<Secret[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -102,6 +104,7 @@ export function EventSourceDetailPage() {
                 } else {
                     setProjectsText("");
                 }
+                setJiraEmail(es.sourceType === "jira" && typeof config?.email === "string" ? config.email : "");
                 setSecrets(secs);
                 setDirty(false);
             })
@@ -133,6 +136,12 @@ export function EventSourceDetailPage() {
                 .split("\n")
                 .map((l) => l.trim())
                 .filter(Boolean);
+            const email = jiraEmail.trim();
+            if (email) {
+                config.email = email;
+            } else {
+                delete config.email;
+            }
         }
 
         const data: NewEventSource = {
@@ -183,7 +192,8 @@ export function EventSourceDetailPage() {
                 </FlexItem>
                 <FlexItem>
                     <Button variant="primary" icon={<SaveIcon />} onClick={handleSave}
-                        isDisabled={!dirty || !form.name || saving} isLoading={saving}>
+                        isDisabled={!dirty || !form.name || saving
+                            || (form.sourceType === "jira" && !isValidJiraEmail(jiraEmail))} isLoading={saving}>
                         {saving ? "Saving..." : "Save Changes"}
                     </Button>
                 </FlexItem>
@@ -200,6 +210,8 @@ export function EventSourceDetailPage() {
                             setReposText={(v) => { setReposText(v); setDirty(true); }}
                             projectsText={projectsText}
                             setProjectsText={(v) => { setProjectsText(v); setDirty(true); }}
+                            jiraEmail={jiraEmail}
+                            setJiraEmail={(v) => { setJiraEmail(v); setDirty(true); }}
                             secrets={secrets}
                         />
                     </TabContent>
@@ -221,13 +233,16 @@ export function EventSourceDetailPage() {
     );
 }
 
-function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setProjectsText, secrets }: {
+function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setProjectsText, jiraEmail,
+    setJiraEmail, secrets }: {
     form: Partial<EventSourceConfig>;
     updateForm: (updates: Partial<EventSourceConfig>) => void;
     reposText: string;
     setReposText: (v: string) => void;
     projectsText: string;
     setProjectsText: (v: string) => void;
+    jiraEmail: string;
+    setJiraEmail: (v: string) => void;
     secrets: Secret[];
 }) {
     return (
@@ -274,6 +289,12 @@ function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setP
                     <HelperText><HelperTextItem>One Jira project key per line.</HelperTextItem></HelperText>
                 </FormGroup>
             )}
+            {form.sourceType === "jira" && (
+                <FormGroup label="Jira Email" fieldId="jiraEmail">
+                    <JiraEmailField value={jiraEmail} secrets={secrets.map((s) => s.name)}
+                        onChange={setJiraEmail} />
+                </FormGroup>
+            )}
             <FormGroup fieldId="enabled">
                 <Switch id="enabled" label="Enabled — actively poll for events"
                     isChecked={form.enabled || false}
@@ -294,7 +315,10 @@ function InfoTab({ form, updateForm, reposText, setReposText, projectsText, setP
                         <FormSelectOption key={s.name} value={s.name} label={s.name} />
                     ))}
                 </FormSelect>
-                <HelperText><HelperTextItem>Select a secret for API authentication. Falls back to the default provider secret if not set.</HelperTextItem></HelperText>
+                <HelperText><HelperTextItem>{form.sourceType === "jira"
+                    ? "Secret holding the Jira API token. Falls back to the JIRA_API_TOKEN secret if not set."
+                    : "Select a secret for API authentication. Falls back to the default provider secret if not set."}
+                </HelperTextItem></HelperText>
             </FormGroup>
         </Form>
     );

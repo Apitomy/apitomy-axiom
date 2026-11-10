@@ -319,11 +319,17 @@ An Event Source is an authenticated link to an external system. Each event sourc
 | **Base URL** | The human-readable URL of the system (e.g. `https://github.com`) |
 | **Repositories / Jira projects** | Which GitHub repositories or Jira projects to watch |
 | **Poll interval** | How often to check for new activity |
-| **Authentication secret** | Which secret to use for API access, or fall back to a default provider secret or environment variable |
+| **Authentication secret** | Which secret to use for API access, or fall back to a default provider secret or environment variable. For Jira, the secret holds the API token |
+| **Jira email** | Jira only: the Atlassian account email that goes with the API token. Type it as plain text or choose an existing secret |
 | **Enabled** | Whether polling is active |
 
 You can create multiple event sources of the same type — for example, one for `github.com` and another for
 a GitHub Enterprise instance.
+
+Jira authenticates with the account email and an API token. Before each poll Axiom checks them with Jira;
+if Jira rejects them, the poll is logged as an error ("Jira authentication failed") and no events are
+missed: the next successful poll picks up from the last checkpoint. Older Jira event sources that store
+`email:api_token` in the authentication secret and have no Jira email keep working.
 
 ### Event Stream
 

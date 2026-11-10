@@ -8,6 +8,8 @@ import io.apitomy.axiom.core.entities.EventSourceEntity;
 import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.events.model.NormalizedEvent;
 import io.apitomy.axiom.core.services.EncryptionService;
+import io.apitomy.axiom.core.services.EnvironmentResolver;
+import io.apitomy.axiom.core.services.MissingSecretException;
 import io.apitomy.axiom.events.core.ApiResult;
 import io.apitomy.axiom.events.core.BaseUrls;
 import io.apitomy.axiom.events.core.EventStreamService;
@@ -49,6 +51,9 @@ public class JiraEventSourcePoller {
 
     @Inject
     EncryptionService encryptionService;
+
+    @Inject
+    EnvironmentResolver environmentResolver;
 
     /** Default safety cap on the number of search pages fetched in one poll window. */
     static final int DEFAULT_MAX_SEARCH_PAGES = 200;
@@ -134,11 +139,11 @@ public class JiraEventSourcePoller {
             return;
         }
 
-        String credentials = resolveCredentials(eventSource);
         List<String> projects;
         List<String> extraFieldNames;
+        JsonNode config;
         try {
-            JsonNode config = objectMapper.readTree(eventSource.configuration);
+            config = objectMapper.readTree(eventSource.configuration);
             JsonNode projectsNode = config.path("projects");
             if (!projectsNode.isArray() || projectsNode.isEmpty()) {
                 LOG.warnf("Event source %s has no projects configured", eventSource.id);
@@ -173,6 +178,25 @@ public class JiraEventSourcePoller {
         recordAttempt(eventSource.id, windowStart);
 
         String baseUrl = BaseUrls.normalize(eventSource.baseUrl);
+
+        // Credential problems fail the poll (checkpoint unchanged) instead of polling anonymously.
+        String credentials;
+        try {
+            credentials = JiraCredentials.combine(resolveEmail(config), resolveToken(eventSource));
+        } catch (JiraCredentials.JiraCredentialsException | MissingSecretException e) {
+            LOG.warnf("Invalid Jira credentials for event source %s: %s", eventSource.id, e.getMessage());
+            recordPollLog(eventSource.id, "error", "Invalid Jira credentials",
+                    e.getMessage(), 0, System.currentTimeMillis() - startMs);
+            return;
+        }
+        String authError = checkAuthentication(baseUrl, credentials);
+        if (authError != null) {
+            LOG.warnf("Jira authentication failed for event source %s: %s", eventSource.id, authError);
+            recordPollLog(eventSource.id, "error", "Jira authentication failed",
+                    authError, 0, System.currentTimeMillis() - startMs);
+            return;
+        }
+
         // Status and field lookups are built once per poll and shared by every issue in the window.
         JiraNormalizationContext context = buildContext(baseUrl, credentials, extraFieldNames);
         IngestTally tally = new IngestTally();
@@ -462,14 +486,14 @@ public class JiraEventSourcePoller {
     }
 
     /**
-     * Resolves Jira credentials in {@code email:api_token} form, in this order: the secret named by the
-     * event source's {@code secretName}, the {@code JIRA_API_TOKEN} secret, then the
-     * {@code JIRA_API_TOKEN} environment variable.
+     * Resolves the Jira API token, in this order: the secret named by the event source's
+     * {@code secretName}, the {@code JIRA_API_TOKEN} secret, then the {@code JIRA_API_TOKEN}
+     * environment variable. Legacy configurations store {@code email:api_token} in the secret.
      *
      * @param eventSource the event source
-     * @return the decrypted credentials, or null when none is configured
+     * @return the decrypted token, or null when none is configured
      */
-    private String resolveCredentials(EventSourceEntity eventSource) {
+    private String resolveToken(EventSourceEntity eventSource) {
         // Per-event-source secret
         if (eventSource.secretName != null && !eventSource.secretName.isBlank()) {
             SecretEntity secret = SecretEntity.find("name", eventSource.secretName).firstResult();
@@ -484,6 +508,45 @@ public class JiraEventSourcePoller {
         }
         // Environment variable fallback
         return System.getenv("JIRA_API_TOKEN");
+    }
+
+    /**
+     * Resolves the Jira account email from {@code configuration.email}, which holds either a plain address
+     * or a {@code ${secret:NAME}} reference.
+     *
+     * @param config the parsed event source configuration
+     * @return the trimmed email, or {@code null} when not configured
+     * @throws MissingSecretException when the referenced secret does not exist, has expired, or cannot be
+     *                                decrypted
+     */
+    String resolveEmail(JsonNode config) {
+        JsonNode emailNode = config.path("email");
+        if (!emailNode.isTextual() || emailNode.asText().isBlank()) {
+            return null;
+        }
+        String resolved = environmentResolver.resolveValue(emailNode.asText().trim());
+        return resolved == null || resolved.isBlank() ? null : resolved.trim();
+    }
+
+    /**
+     * Verifies the credentials with {@code GET /rest/api/3/myself}. Jira Cloud answers searches with invalid
+     * credentials as an anonymous user (an empty result), so without this check a wrong token looks like a
+     * healthy event source that finds no issues.
+     *
+     * @param baseUrl     Jira base URL
+     * @param credentials {@code email:api_token} credentials
+     * @return {@code null} when authenticated, otherwise an error message for the poll log
+     */
+    String checkAuthentication(String baseUrl, String credentials) {
+        ApiResult result = apiClient.fetchMyself(baseUrl, credentials);
+        if (result != null && result.success()) {
+            return null;
+        }
+        if (result != null && (result.statusCode() == 401 || result.statusCode() == 403)) {
+            return "Jira rejected the credentials (HTTP " + result.statusCode() + "): check the Jira email "
+                    + "and the API token in the authentication secret";
+        }
+        return "Could not verify Jira credentials: " + (result != null ? result.errorMessage() : "no response");
     }
 
     @Transactional

@@ -47,6 +47,7 @@ public class ConfigItemValidationService {
     private static final Pattern JIRA_PROJECT_KEY = Pattern.compile("^[A-Z][A-Z0-9_]+$");
     private static final Pattern HTTP_BASE_URL = Pattern.compile("^https?://\\S+$");
     private static final Pattern SECRET_REFERENCE = Pattern.compile("\\$\\{secret:([^}]+)}");
+    private static final Pattern EMAIL = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final Pattern FILTER_EVENT_TYPE = Pattern.compile(
             "event\\.type\\s*==\\s*['\"]([^'\"]+)['\"]");
 
@@ -290,6 +291,7 @@ public class ConfigItemValidationService {
             validateStringList(configuration.path("projects"), "configuration.projects", JIRA_PROJECT_KEY,
                     "a Jira project key matching ^[A-Z][A-Z0-9_]+$ (e.g. PROJ)", problems);
             validateExtraFields(configuration.path("extraFields"), problems);
+            validateJiraEmail(configuration.path("email"), context, problems);
         }
 
         String baseUrl = item.path("baseUrl").asText("");
@@ -309,6 +311,45 @@ public class ConfigItemValidationService {
         if (!secretName.isBlank() && context.secretNames() != null && !context.secretNames().contains(secretName)) {
             problems.add(ConfigProblem.warning("secretName", "UNKNOWN_SECRET", "Secret '" + secretName
                     + "' does not exist. Create it before enabling this event source."));
+        }
+    }
+
+    /**
+     * Validates a Jira event source's {@code configuration.email}: a plain address or a single
+     * {@code ${secret:NAME}} reference. A missing email is only a warning, since legacy authentication secrets
+     * hold {@code email:api_token}. Unknown or expired secrets are warnings, like an unknown {@code secretName}.
+     *
+     * @param email    the {@code configuration.email} node
+     * @param context  the validation context
+     * @param problems the problem list to add to
+     */
+    private static void validateJiraEmail(JsonNode email, ValidationContext context, List<ConfigProblem> problems) {
+        String path = "configuration.email";
+        if (email.isMissingNode() || email.isNull() || (email.isTextual() && email.asText().isBlank())) {
+            problems.add(ConfigProblem.warning(path, "MISSING_JIRA_EMAIL", "No Jira email is configured. "
+                    + "Set it (plain text or a secret) unless the authentication secret holds 'email:api_token'."));
+            return;
+        }
+        if (!email.isTextual()) {
+            problems.add(ConfigProblem.error(path, "INVALID_EMAIL",
+                    "'configuration.email' must be a string: an email address or ${secret:NAME}."));
+            return;
+        }
+        String value = email.asText().trim();
+        java.util.regex.Matcher ref = SECRET_REFERENCE.matcher(value);
+        if (ref.matches()) {
+            String name = ref.group(1);
+            if (context.secretNames() != null && !context.secretNames().contains(name)) {
+                problems.add(ConfigProblem.warning(path, "UNKNOWN_SECRET", "Secret '" + name
+                        + "' does not exist. Create it before enabling this event source."));
+            } else if (context.secretStatuses() != null
+                    && context.secretStatuses().get(name) == SecretExpiry.Status.EXPIRED) {
+                problems.add(ConfigProblem.warning(path, "EXPIRED_SECRET", "Secret '" + name
+                        + "' has expired. Update it on the Secrets page."));
+            }
+        } else if (!EMAIL.matcher(value).matches()) {
+            problems.add(ConfigProblem.error(path, "INVALID_EMAIL", "'configuration.email' must be an email "
+                    + "address or ${secret:NAME}, got: '" + value + "'."));
         }
     }
 
