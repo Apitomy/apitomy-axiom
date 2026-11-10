@@ -492,6 +492,51 @@ class ConfigItemValidationServiceTest {
     }
 
     @Test
+    void jiraEmailMayBePlainAddressOrSecretReference() throws Exception {
+        assertEquals(List.of(), errorPaths(jira("https://x.atlassian.net",
+                "{\"projects\": [\"PROJ\"], \"email\": \"user@example.com\"}")));
+        assertEquals(List.of(), errorPaths(jira("https://x.atlassian.net",
+                "{\"projects\": [\"PROJ\"], \"email\": \"${secret:JIRA_EMAIL}\"}")));
+    }
+
+    @Test
+    void jiraEmailMustLookLikeAnAddress() throws Exception {
+        List<ConfigProblem> problems = jira("https://x.atlassian.net",
+                "{\"projects\": [\"PROJ\"], \"email\": \"not-an-email\"}");
+        assertEquals(List.of("configuration.email"), errorPaths(problems));
+        assertEquals(List.of("configuration.email"), errorPaths(jira("https://x.atlassian.net",
+                "{\"projects\": [\"PROJ\"], \"email\": 5}")));
+    }
+
+    @Test
+    void jiraEmailMissingIsAWarning() throws Exception {
+        List<ConfigProblem> problems = jira("https://x.atlassian.net", "{\"projects\": [\"PROJ\"]}");
+        assertTrue(problems.stream().anyMatch(p -> !p.isError() && p.code().equals("MISSING_JIRA_EMAIL")
+                && p.path().equals("configuration.email")), problems.toString());
+    }
+
+    @Test
+    void jiraEmailSecretMustExistAndNotBeExpired() throws Exception {
+        String item = """
+            {"id": "jira-prod", "name": "Jira", "sourceType": "jira", "baseUrl": "https://x.atlassian.net",
+             "configuration": {"projects": ["PROJ"], "email": "${secret:%s}"}}
+            """;
+        List<ConfigProblem> unknown = service.validate(ConfigItemType.EVENT_SOURCE,
+                json(item.formatted("NOPE")), secrets("JIRA_EMAIL"));
+        assertTrue(unknown.stream().anyMatch(p -> p.code().equals("UNKNOWN_SECRET")
+                && p.path().equals("configuration.email")), unknown.toString());
+
+        List<ConfigProblem> expired = service.validate(ConfigItemType.EVENT_SOURCE,
+                json(item.formatted("OLD")), secretsWithStatus(Map.of("OLD", SecretExpiry.Status.EXPIRED)));
+        assertTrue(expired.stream().anyMatch(p -> p.code().equals("EXPIRED_SECRET")
+                && p.path().equals("configuration.email")), expired.toString());
+
+        List<ConfigProblem> ok = service.validate(ConfigItemType.EVENT_SOURCE,
+                json(item.formatted("JIRA_EMAIL")), secrets("JIRA_EMAIL"));
+        assertTrue(ok.stream().noneMatch(p -> p.path().equals("configuration.email")), ok.toString());
+    }
+
+    @Test
     void baseUrlMustStartWithHttpOrHttps() throws Exception {
         List<ConfigProblem> jiraProblems = jira("x.atlassian.net", "{\"projects\": [\"PROJ\"]}");
         assertTrue(jiraProblems.stream().anyMatch(p -> p.isError() && p.code().equals("INVALID_BASE_URL")

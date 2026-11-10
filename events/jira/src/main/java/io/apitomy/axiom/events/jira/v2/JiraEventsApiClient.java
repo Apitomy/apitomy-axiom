@@ -116,6 +116,19 @@ public class JiraEventsApiClient {
     }
 
     /**
+     * Fetches the authenticated user ({@code GET /rest/api/3/myself}). Used to verify the credentials before
+     * searching: Jira Cloud answers searches with invalid or missing credentials as an anonymous user (an
+     * empty result, not an error), whereas this endpoint returns 401.
+     *
+     * @param baseUrl     Jira Cloud base URL
+     * @param credentials email:api_token for Basic auth
+     * @return API result whose data is the current user
+     */
+    public ApiResult fetchMyself(String baseUrl, String credentials) {
+        return doGet(baseUrl + "/rest/api/3/myself", credentials);
+    }
+
+    /**
      * Fetches all statuses visible to the user ({@code GET /rest/api/3/status}), used to map status IDs to
      * status categories.
      *

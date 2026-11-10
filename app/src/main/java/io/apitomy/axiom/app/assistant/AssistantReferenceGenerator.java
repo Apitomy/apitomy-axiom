@@ -430,7 +430,8 @@ public class AssistantReferenceGenerator {
                 .append("(`https://api.github.com`, `https://github.example.com/api/v3`) or a repository page URL ")
                 .append("also work; repositories always come from `configuration.repositories`.\n")
                 .append("- `jira`: `configuration.projects` — array of project keys; `baseUrl` is the Jira site ")
-                .append("URL.\n\n");
+                .append("URL. `configuration.email` is the Atlassian account email, either a plain address or ")
+                .append("`${secret:NAME}`; the authentication secret (`secretName`) holds only the API token.\n\n");
     }
 
     private static void appendSubscriptions(StringBuilder sb) {

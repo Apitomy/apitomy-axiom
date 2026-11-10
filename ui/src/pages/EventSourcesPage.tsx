@@ -39,6 +39,7 @@ import {
 } from "@apitomy/common-ui-components";
 import { BooleanStatusIcon } from "../components/BooleanStatusIcon";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { JiraEmailField, isValidJiraEmail } from "../components/JiraEmailField";
 import {
     type EventSourceConfig,
     type NewEventSource,
@@ -73,6 +74,7 @@ export function EventSourcesPage() {
     // Configuration text areas
     const [reposText, setReposText] = useState("");
     const [projectsText, setProjectsText] = useState("");
+    const [jiraEmail, setJiraEmail] = useState("");
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
     const [page, setPage] = useState(1);
@@ -130,6 +132,7 @@ export function EventSourcesPage() {
         setForm({ id: "", name: "", sourceType: "github", enabled: true, baseUrl: "" });
         setReposText("");
         setProjectsText("");
+        setJiraEmail("");
         setIsModalOpen(true);
     };
 
@@ -137,7 +140,9 @@ export function EventSourcesPage() {
         if (form.sourceType === "github") {
             return { repositories: reposText.split("\n").map((l) => l.trim()).filter(Boolean) };
         } else if (form.sourceType === "jira") {
-            return { projects: projectsText.split("\n").map((l) => l.trim()).filter(Boolean) };
+            const projects = projectsText.split("\n").map((l) => l.trim()).filter(Boolean);
+            const email = jiraEmail.trim();
+            return email ? { projects, email } : { projects };
         }
         return {};
     };
@@ -164,6 +169,7 @@ export function EventSourcesPage() {
         setForm({ ...form, sourceType: newType, baseUrl: "" });
         setReposText("");
         setProjectsText("");
+        setJiraEmail("");
     };
 
     const isSlugValid = (slug: string): boolean => {
@@ -173,6 +179,7 @@ export function EventSourcesPage() {
     const isFormValid = (): boolean => {
         if (!form.id || !form.name || !form.sourceType || !form.baseUrl) return false;
         if (!isSlugValid(form.id)) return false;
+        if (form.sourceType === "jira" && !isValidJiraEmail(jiraEmail)) return false;
         return true;
     };
 
@@ -352,6 +359,13 @@ export function EventSourcesPage() {
                             </FormGroup>
                         )}
 
+                        {form.sourceType === "jira" && (
+                            <FormGroup label="Jira Email" fieldId="jiraEmail">
+                                <JiraEmailField value={jiraEmail} secrets={secrets.map((s) => s.name)}
+                                    onChange={setJiraEmail} />
+                            </FormGroup>
+                        )}
+
                         <FormGroup label="Authentication Secret" fieldId="secretName">
                             <FormSelect id="secretName"
                                 value={form.secretName || ""}
@@ -361,6 +375,9 @@ export function EventSourcesPage() {
                                     <FormSelectOption key={s.name} value={s.name} label={s.name} />
                                 ))}
                             </FormSelect>
+                            {form.sourceType === "jira" && (
+                                <HelperText><HelperTextItem>Secret holding the Jira API token</HelperTextItem></HelperText>
+                            )}
                         </FormGroup>
                         <FormGroup fieldId="enabled">
                             <Switch id="enabled" label="Enabled"

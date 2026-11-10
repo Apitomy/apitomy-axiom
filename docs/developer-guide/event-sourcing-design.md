@@ -46,7 +46,15 @@ stream. No filtering — every detectable event gets recorded.
 - ADF-to-plain-text conversion for description and comment bodies
 - Configuration: `baseUrl` (e.g., `https://myorg.atlassian.net`; must start with `http://` or `https://`,
   a trailing `/` is removed when saved), `secretName`, `projects` (list of project keys matching
-  `^[A-Z][A-Z0-9_]+$`), optional `extraFields` (list of Jira field names), `pollInterval`
+  `^[A-Z][A-Z0-9_]+$`), optional `extraFields` (list of Jira field names), optional `email` (the
+  account email: a plain address or a `${secret:NAME}` reference), `pollInterval`
+- Credentials: Basic auth with `email:api_token`. The token comes from the authentication secret (fallback
+  below); the email from `configuration.email`. Without an email, a token that already has the
+  `email:api_token` form is used as is (legacy); otherwise the poll fails with "Invalid Jira credentials".
+- Before searching, each poll calls `GET /rest/api/3/myself`. Jira Cloud answers searches with bad
+  credentials as an anonymous user (an empty result, not a 401), so without this check a wrong token looks
+  like a healthy source that finds no issues. A rejected check logs "Jira authentication failed" and leaves
+  the checkpoint unchanged.
 
 **Authentication:** Three-tier fallback for both types: per-event-source secret (by name
 from the secrets store), default provider secret (`GH_TOKEN`/`GITHUB_TOKEN` for GitHub,

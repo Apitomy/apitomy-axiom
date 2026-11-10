@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -54,6 +55,7 @@ class JiraEventSourcePollerTest {
         poller.apiClient = api;
         poller.normalizer = new ValidatingJiraNormalizer(MAPPER);
         poller.eventStreamService = stream;
+        poller.environmentResolver = new StubResolver(Map.of());
     }
 
     @Test
@@ -376,6 +378,90 @@ class JiraEventSourcePollerTest {
         assertFalse(stream.ids.contains("IPT-1001-comment-3002"));
     }
 
+    @Test
+    void authCheck_succeeds_returnsNull() {
+        assertNull(poller.checkAuthentication(BASE_URL, "a:b"));
+        assertEquals(List.of("a:b"), api.myselfCredentials);
+    }
+
+    @Test
+    void authCheck_unauthorized_returnsError() {
+        api.myself = ApiResult.httpError(401, "GET", "myself", null, "Unauthorized");
+
+        String error = poller.checkAuthentication(BASE_URL, "a:b");
+
+        assertNotNull(error);
+        assertTrue(error.contains("401"), error);
+        assertTrue(error.contains("email"), error);
+    }
+
+    @Test
+    void authCheck_networkError_returnsError() {
+        api.myself = ApiResult.exception(new java.io.IOException("refused"), "GET", "myself", null);
+
+        String error = poller.checkAuthentication(BASE_URL, "a:b");
+
+        assertNotNull(error);
+        assertTrue(error.contains("refused"), error);
+    }
+
+    @Test
+    void email_plainValue_isUsedAsIs() {
+        assertEquals("user@example.com", poller.resolveEmail(config("{\"email\":\" user@example.com \"}")));
+    }
+
+    @Test
+    void email_secretReference_isResolved() {
+        poller.environmentResolver = new StubResolver(Map.of("JIRA_EMAIL", "secret@example.com"));
+
+        assertEquals("secret@example.com", poller.resolveEmail(config("{\"email\":\"${secret:JIRA_EMAIL}\"}")));
+    }
+
+    @Test
+    void email_missingSecret_throws() {
+        poller.environmentResolver = new StubResolver(Map.of());
+
+        assertThrows(io.apitomy.axiom.core.services.MissingSecretException.class,
+                () -> poller.resolveEmail(config("{\"email\":\"${secret:NOPE}\"}")));
+    }
+
+    @Test
+    void email_absent_returnsNull() {
+        assertNull(poller.resolveEmail(config("{\"projects\":[\"P\"]}")));
+        assertNull(poller.resolveEmail(config("{\"email\":\"\"}")));
+    }
+
+    private static JsonNode config(String json) {
+        try {
+            return MAPPER.readTree(json);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e);
+        }
+    }
+
+    /** Environment resolver stub that resolves {@code ${secret:NAME}} from an in-memory map. */
+    static class StubResolver extends io.apitomy.axiom.core.services.EnvironmentResolver {
+        private final Map<String, String> secrets;
+
+        StubResolver(Map<String, String> secrets) {
+            this.secrets = secrets;
+        }
+
+        @Override
+        public String resolveValue(String value) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\$\\{secret:([^}]+)}").matcher(value);
+            if (!m.matches()) {
+                return value;
+            }
+            String v = secrets.get(m.group(1));
+            if (v == null) {
+                throw new io.apitomy.axiom.core.services.MissingSecretException(
+                        "Secret '" + m.group(1) + "' does not exist");
+            }
+            return v;
+        }
+    }
+
     private JiraEventSourcePoller.WindowResult ingest() {
         return poller.ingestWindow(SOURCE_ID, BASE_URL, List.of("P"), SINCE, "a:b", WINDOW_START);
     }
@@ -449,6 +535,14 @@ class JiraEventSourcePollerTest {
         ApiResult statuses = ApiResult.ok(MAPPER.createArrayNode(), "GET", "status", null, null);
         ApiResult fields = ApiResult.ok(MAPPER.createArrayNode(), "GET", "field", null, null);
         int fieldCalls;
+        ApiResult myself = ApiResult.ok(MAPPER.createObjectNode().put("active", true), "GET", "myself", null, null);
+        final List<String> myselfCredentials = new ArrayList<>();
+
+        @Override
+        public ApiResult fetchMyself(String baseUrl, String credentials) {
+            myselfCredentials.add(credentials);
+            return myself;
+        }
 
         @Override
         public ApiResult fetchIssueComments(String baseUrl, String issueKey, String credentials) {
