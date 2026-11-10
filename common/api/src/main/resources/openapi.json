@@ -9241,7 +9241,7 @@
             "type": "string"
           },
           "expiresOn": {
-            "description": "When the secret expires; absent if it never expires",
+            "description": "When the secret expires; absent if it never expires. Format: yyyy-MM-ddTHH:mm:ssZ in UTC, without fractional seconds (e.g. 2026-12-31T23:59:59Z).",
             "format": "date-time",
             "type": "string",
             "nullable": true
@@ -9282,7 +9282,7 @@
             "type": "string"
           },
           "expiresOn": {
-            "description": "When the secret expires; must be in the future. Omit to never expire.",
+            "description": "When the secret expires; must be in the future. Omit to never expire. Format: yyyy-MM-ddTHH:mm:ssZ in UTC, without fractional seconds (e.g. 2026-12-31T23:59:59Z).",
             "format": "date-time",
             "type": "string",
             "nullable": true
