@@ -1,5 +1,7 @@
 package io.apitomy.axiom.app.validation;
 
+import io.apitomy.axiom.core.services.SecretExpiry;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -14,13 +16,40 @@ import java.util.Set;
  * part of the shadowing check.
  *
  * <p>{@code mcpServerNames} are user-defined MCP server names; null disables MCP server reference checks.
+ *
+ * <p>{@code secretStatuses} maps secret name to expiry status; null disables expiry checks.
  */
 public record ValidationContext(Set<String> toolNames, Set<String> toolsetNames, Set<String> actionTypeNames,
                                 Set<String> workflowDefinitionNames, Set<Long> workflowDefinitionIds,
                                 Set<String> eventSourceIds, Set<String> secretNames,
                                 Map<String, Map<String, Boolean>> actionTypeInputs,
                                 Map<String, Set<String>> actionTypeOutputs,
-                                Set<String> mcpServerNames) {
+                                Set<String> mcpServerNames,
+                                Map<String, SecretExpiry.Status> secretStatuses) {
+
+    /**
+     * Creates a context without secret expiry statuses (expiry checks disabled).
+     *
+     * @param toolNames               tool names
+     * @param toolsetNames            toolset names
+     * @param actionTypeNames         action type names
+     * @param workflowDefinitionNames workflow definition names
+     * @param workflowDefinitionIds   workflow definition ids
+     * @param eventSourceIds          event source ids
+     * @param secretNames             secret names
+     * @param actionTypeInputs        action type declared inputs
+     * @param actionTypeOutputs       action type declared outputs
+     * @param mcpServerNames          MCP server names
+     */
+    public ValidationContext(Set<String> toolNames, Set<String> toolsetNames, Set<String> actionTypeNames,
+                             Set<String> workflowDefinitionNames, Set<Long> workflowDefinitionIds,
+                             Set<String> eventSourceIds, Set<String> secretNames,
+                             Map<String, Map<String, Boolean>> actionTypeInputs,
+                             Map<String, Set<String>> actionTypeOutputs,
+                             Set<String> mcpServerNames) {
+        this(toolNames, toolsetNames, actionTypeNames, workflowDefinitionNames, workflowDefinitionIds,
+                eventSourceIds, secretNames, actionTypeInputs, actionTypeOutputs, mcpServerNames, null);
+    }
 
     /**
      * Creates a context without MCP server names (MCP server reference checks disabled).
@@ -67,6 +96,6 @@ public record ValidationContext(Set<String> toolNames, Set<String> toolsetNames,
 
     /** @return a context that disables all existence checks (for unit tests without a database) */
     public static ValidationContext unchecked() {
-        return new ValidationContext(null, null, null, null, null, null, null, null, null, null);
+        return new ValidationContext(null, null, null, null, null, null, null, null, null, null, null);
     }
 }

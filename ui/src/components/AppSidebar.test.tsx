@@ -12,6 +12,7 @@ function LocationProbe() {
 
 vi.mock("../config/api", () => ({
     fetchInboxCount: vi.fn().mockResolvedValue({ count: 0 }),
+    fetchSecrets: vi.fn().mockResolvedValue([]),
 }));
 vi.mock("../config/sse", () => ({
     sseClient: { subscribe: vi.fn(() => () => {}) },

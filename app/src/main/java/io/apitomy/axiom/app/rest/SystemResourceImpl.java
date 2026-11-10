@@ -52,6 +52,9 @@ public class SystemResourceImpl implements SystemResource {
     @ConfigProperty(name = "quarkus.application.version", defaultValue = "1.0.0-SNAPSHOT")
     String applicationVersion;
 
+    @ConfigProperty(name = "axiom.secrets.expiry-warning-days", defaultValue = "7")
+    int secretExpiryWarningDays;
+
     @Inject
     AgentRegistry agentRegistry;
 
@@ -180,6 +183,7 @@ public class SystemResourceImpl implements SystemResource {
         String defaultType = resolveDefaultEngineType();
         config.setDefaultEngine(defaultType);
         config.setFeatures(new Features());
+        config.setSecretExpiryWarningDays(secretExpiryWarningDays);
 
         // Build per-engine info
         List<EngineInfo> engineInfos = new ArrayList<>();

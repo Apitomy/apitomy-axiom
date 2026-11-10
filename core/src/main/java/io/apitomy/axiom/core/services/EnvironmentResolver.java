@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.jboss.logging.Logger;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -18,8 +19,8 @@ import java.util.regex.Pattern;
  * looking up the named secret and decrypting its value.
  *
  * <p>Secrets are never injected automatically: a process gets only the variables its environment
- * declares. A reference to a secret that does not exist, or cannot be decrypted, throws
- * {@link MissingSecretException} so the process does not start with a wrong value.</p>
+ * declares. A reference to a secret that does not exist, has expired, or cannot be decrypted, throws
+ * {@link MissingSecretException} (or its subclass {@link ExpiredSecretException}) so the process does not start with a wrong value.</p>
  */
 @ApplicationScoped
 public class EnvironmentResolver {
@@ -105,6 +106,9 @@ public class EnvironmentResolver {
         SecretEntity secret = SecretEntity.find("name", secretName).firstResult();
         if (secret == null) {
             throw new MissingSecretException("Secret '" + secretName + "' does not exist");
+        }
+        if (secret.expiresOn != null && !Instant.now().isBefore(secret.expiresOn)) {
+            throw new ExpiredSecretException(secretName, secret.expiresOn);
         }
         try {
             return encryptionService.decrypt(secret.encryptedValue);

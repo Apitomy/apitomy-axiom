@@ -3,13 +3,10 @@ package io.apitomy.axiom.app;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.SdkFunctionRegistry;
 import io.apitomy.axiom.core.entities.SubjectEntity;
-import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.ThreadEntryEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
-import io.apitomy.axiom.core.events.StreamEventPersisted;
 import io.quarkus.panache.common.Sort;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Event;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.WebApplicationException;
 import org.jboss.logging.Logger;
@@ -36,7 +33,7 @@ public class SdkCallService {
     ObjectMapper objectMapper;
 
     @Inject
-    Event<StreamEventPersisted> persistedEvents;
+    SystemEventPublisher systemEventPublisher;
 
     /** Lazy: the workflow engine itself calls this service for {@code sdk:} nodes. */
     @Inject
@@ -168,23 +165,11 @@ public class SdkCallService {
         if (eventType == null) return SdkCallResult.error("eventType is required");
         if (payload == null) payload = "{}";
 
-        StreamEventEntity event = new StreamEventEntity();
-        event.id = java.util.UUID.randomUUID();
-        event.sourceEventId = "sdk-" + event.id;
-        event.source = source;
-        event.eventSourceId = "sdk";
-        event.type = eventType;
-        event.ref = toString(params.getOrDefault("ref", ""));
-        event.timestamp = Instant.now();
-        event.actor = "{\"login\":\"workflow\"}";
-        event.payload = payload;
-        event.createdOn = Instant.now();
-        event.persist();
-        persistedEvents.fire(new StreamEventPersisted(
-                event.id.toString(), event.type, event.eventSourceId));
+        java.util.UUID eventId = systemEventPublisher.publish("sdk", source, eventType,
+                toString(params.getOrDefault("ref", "")), "{\"login\":\"workflow\"}", payload, Instant.now());
 
         return SdkCallResult.ok("Event fired: " + eventType,
-                Map.of("eventId", event.id.toString()));
+                Map.of("eventId", eventId.toString()));
     }
 
     private SdkCallResult listSubjects(Map<String, Object> params) {
