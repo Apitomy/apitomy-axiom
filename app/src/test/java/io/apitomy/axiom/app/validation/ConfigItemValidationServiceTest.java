@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
+import io.apitomy.axiom.core.services.SecretExpiry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +35,44 @@ class ConfigItemValidationServiceTest {
 
     private JsonNode json(String s) throws Exception {
         return mapper.readTree(s);
+    }
+
+    private static ValidationContext secretsWithStatus(Map<String, SecretExpiry.Status> statuses) {
+        return new ValidationContext(Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), Set.of(),
+                statuses.keySet(), null, null, null, statuses);
+    }
+
+    @Test
+    void referencingAnExpiredSecretIsAnError() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.TOOL, json("""
+            {"name": "t", "description": "d", "parameters": [], "scriptTemplate": "echo hi",
+             "environment": {"TOKEN": "${secret:OLD}"}}
+            """), secretsWithStatus(Map.of("OLD", SecretExpiry.Status.EXPIRED)));
+        List<ConfigProblem> expired = problems.stream().filter(p -> p.code().equals("EXPIRED_SECRET")).toList();
+        assertEquals(1, expired.size(), problems.toString());
+        assertTrue(expired.get(0).isError());
+        assertEquals("environment.TOKEN", expired.get(0).path());
+    }
+
+    @Test
+    void referencingAnExpiringSecretIsAWarning() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.TOOL, json("""
+            {"name": "t", "description": "d", "parameters": [], "scriptTemplate": "echo hi",
+             "environment": {"TOKEN": "${secret:SOON}"}}
+            """), secretsWithStatus(Map.of("SOON", SecretExpiry.Status.EXPIRING)));
+        List<ConfigProblem> expiring = problems.stream().filter(p -> p.code().equals("EXPIRING_SECRET")).toList();
+        assertEquals(1, expiring.size(), problems.toString());
+        assertFalse(expiring.get(0).isError());
+    }
+
+    @Test
+    void referencingAValidSecretReportsNothingAboutExpiry() throws Exception {
+        List<ConfigProblem> problems = service.validate(ConfigItemType.TOOL, json("""
+            {"name": "t", "description": "d", "parameters": [], "scriptTemplate": "echo hi",
+             "environment": {"TOKEN": "${secret:OK}"}}
+            """), secretsWithStatus(Map.of("OK", SecretExpiry.Status.VALID)));
+        assertTrue(problems.stream().noneMatch(p -> p.code().endsWith("_SECRET")
+                && !p.code().equals("UNDECLARED_SECRET")), problems.toString());
     }
 
     private static ValidationContext names(Set<String> tools, Set<String> toolsets) {

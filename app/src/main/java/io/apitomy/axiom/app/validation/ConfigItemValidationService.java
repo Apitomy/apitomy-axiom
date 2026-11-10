@@ -12,6 +12,7 @@ import io.apitomy.axiom.events.github.v2.GitHubUrls;
 import io.apitomy.axiom.core.events.model.RoutingRule;
 import io.apitomy.axiom.core.filters.SubscriptionFilterEvaluator;
 import io.apitomy.axiom.core.services.ActionTypeValidator;
+import io.apitomy.axiom.core.services.SecretExpiry;
 import io.apitomy.axiom.core.services.ToolValidator;
 import io.apitomy.flow.model.NodeType;
 import io.apitomy.flow.model.Workflow;
@@ -122,7 +123,9 @@ public class ConfigItemValidationService {
     }
 
     /**
-     * Reports {@code ${secret:NAME}} references in an item's {@code environment} that name no existing secret.
+     * Reports {@code ${secret:NAME}} references in an item's {@code environment} that name no existing secret
+     * (error), an expired secret (error) or a secret that expires soon (warning). Expiry checks are skipped
+     * when the context carries no secret statuses.
      *
      * @param item     the item JSON
      * @param context  the validation context (secret names must be known)
@@ -133,9 +136,20 @@ public class ConfigItemValidationService {
         item.path("environment").fields().forEachRemaining(entry -> {
             java.util.regex.Matcher m = SECRET_REFERENCE.matcher(entry.getValue().asText(""));
             while (m.find()) {
-                if (!context.secretNames().contains(m.group(1))) {
-                    problems.add(ConfigProblem.error("environment." + entry.getKey(), "UNKNOWN_SECRET",
-                            "References secret '" + m.group(1) + "', which does not exist."));
+                String name = m.group(1);
+                String path = "environment." + entry.getKey();
+                if (!context.secretNames().contains(name)) {
+                    problems.add(ConfigProblem.error(path, "UNKNOWN_SECRET",
+                            "References secret '" + name + "', which does not exist."));
+                } else if (context.secretStatuses() != null) {
+                    SecretExpiry.Status status = context.secretStatuses().get(name);
+                    if (status == SecretExpiry.Status.EXPIRED) {
+                        problems.add(ConfigProblem.error(path, "EXPIRED_SECRET", "References secret '" + name
+                                + "', which has expired. Update it on the Secrets page."));
+                    } else if (status == SecretExpiry.Status.EXPIRING) {
+                        problems.add(ConfigProblem.warning(path, "EXPIRING_SECRET", "References secret '"
+                                + name + "', which expires soon."));
+                    }
                 }
             }
         });

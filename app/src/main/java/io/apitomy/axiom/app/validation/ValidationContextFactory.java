@@ -9,16 +9,19 @@ import io.apitomy.axiom.core.entities.SecretEntity;
 import io.apitomy.axiom.core.entities.ToolDefinitionEntity;
 import io.apitomy.axiom.core.entities.ToolsetEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
+import io.apitomy.axiom.core.services.SecretExpiry;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +45,9 @@ public class ValidationContextFactory {
     @Inject
     ObjectMapper objectMapper;
 
+    @ConfigProperty(name = "axiom.secrets.expiry-warning-days", defaultValue = "7")
+    int defaultWarnDays;
+
     /**
      * Reads the names of all existing referenceable entities from the database.
      *
@@ -57,6 +63,11 @@ public class ValidationContextFactory {
         try {
             List<WorkflowDefinitionEntity> workflows = WorkflowDefinitionEntity.listAll();
             List<ActionTypeEntity> actionTypes = ActionTypeEntity.listAll();
+            List<SecretEntity> secrets = SecretEntity.listAll();
+            Instant now = Instant.now();
+            Map<String, SecretExpiry.Status> secretStatuses = secrets.stream().collect(Collectors.toMap(
+                    s -> s.name,
+                    s -> SecretExpiry.status(s.expiresOn, s.warnDaysBefore, defaultWarnDays, now)));
             return new ValidationContext(
                     collect(ToolDefinitionEntity.<ToolDefinitionEntity>listAll(), t -> t.name),
                     collect(ToolsetEntity.<ToolsetEntity>listAll(), t -> t.name),
@@ -64,10 +75,11 @@ public class ValidationContextFactory {
                     collect(workflows, w -> w.name),
                     workflows.stream().map(w -> w.id).collect(Collectors.toCollection(HashSet::new)),
                     collect(EventSourceEntity.<EventSourceEntity>listAll(), e -> e.id),
-                    collect(SecretEntity.<SecretEntity>listAll(), s -> s.name),
+                    collect(secrets, s -> s.name),
                     actionTypeInputs(actionTypes),
                     actionTypeOutputs(actionTypes),
-                    collect(McpServerEntity.<McpServerEntity>listAll(), m -> m.name));
+                    collect(McpServerEntity.<McpServerEntity>listAll(), m -> m.name),
+                    secretStatuses);
         } finally {
             if (activated) {
                 requestContext.deactivate();
@@ -94,7 +106,8 @@ public class ValidationContextFactory {
                 overlay(db.actionTypeInputs(), pendingInputs(pack != null ? pack.path("actionTypes") : null)),
                 overlayOutputs(db.actionTypeOutputs(),
                         pendingOutputs(pack != null ? pack.path("actionTypes") : null)),
-                union(db.mcpServerNames(), packNames(pack, "mcpServers", "name")));
+                union(db.mcpServerNames(), packNames(pack, "mcpServers", "name")),
+                db.secretStatuses());
     }
 
     /**
@@ -117,7 +130,8 @@ public class ValidationContextFactory {
                 db.secretNames(),
                 overlay(db.actionTypeInputs(), pendingInputs(actionTypes)),
                 overlayOutputs(db.actionTypeOutputs(), pendingOutputs(actionTypes)),
-                db.mcpServerNames());
+                db.mcpServerNames(),
+                db.secretStatuses());
     }
 
     private static Set<String> itemNames(Map<ConfigItemType, List<JsonNode>> items, ConfigItemType type) {
@@ -152,7 +166,8 @@ public class ValidationContextFactory {
                         .map(DirectoryFile::content).filter(c -> c != null).toList())),
                 overlayOutputs(db.actionTypeOutputs(), pendingOutputs(actionTypes.stream()
                         .map(DirectoryFile::content).filter(c -> c != null).toList())),
-                db.mcpServerNames());
+                db.mcpServerNames(),
+                db.secretStatuses());
     }
 
     /**
