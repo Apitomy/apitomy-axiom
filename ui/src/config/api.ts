@@ -81,6 +81,7 @@ export interface EngineInfo {
 
 export interface SystemConfig {
     version: string;
+    secretExpiryWarningDays?: number;
     defaultEngine?: string;
     engines?: EngineInfo[];
     features: Record<string, boolean>;
@@ -922,16 +923,23 @@ export async function deleteToolset(id: number): Promise<void> {
 
 // ── Secrets ──────────────────────────────────────────────────────
 
+export type SecretExpiryStatus = "NONE" | "VALID" | "EXPIRING" | "EXPIRED";
+
 export interface Secret {
     id: number;
     name: string;
     description?: string;
+    expiresOn?: string | null;
+    warnDaysBefore?: number | null;
+    expiryStatus: SecretExpiryStatus;
 }
 
 export interface NewSecret {
     name: string;
     description?: string;
     value: string;
+    expiresOn?: string | null;
+    warnDaysBefore?: number | null;
 }
 
 export async function fetchSecrets(): Promise<Secret[]> {
@@ -946,7 +954,10 @@ export async function createSecret(secret: NewSecret): Promise<Secret> {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(secret),
     });
-    if (!response.ok) throw new Error(`Failed to create secret: ${response.status}`);
+    if (!response.ok) {
+        const detail = response.status === 400 ? await response.text() : "";
+        throw new Error(detail || `Failed to create secret: ${response.status}`);
+    }
     return response.json();
 }
 
@@ -956,7 +967,10 @@ export async function updateSecret(id: number, secret: NewSecret): Promise<Secre
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(secret),
     });
-    if (!response.ok) throw new Error(`Failed to update secret: ${response.status}`);
+    if (!response.ok) {
+        const detail = response.status === 400 ? await response.text() : "";
+        throw new Error(detail || `Failed to update secret: ${response.status}`);
+    }
     return response.json();
 }
 

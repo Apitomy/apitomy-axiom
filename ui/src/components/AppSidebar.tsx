@@ -11,6 +11,7 @@ import {
 } from "@patternfly/react-core";
 import { fetchInboxCount } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
+import { useSecretExpiryCounts } from "../config/secretExpiry";
 
 const COMPONENT_PATHS = [
     "/components/workflows", "/action-types", "/agents", "/session-templates", "/mcp-servers", "/secrets",
@@ -23,6 +24,7 @@ export function AppSidebar() {
     const navigate = useNavigate();
     const location = useLocation();
     const [inboxCount, setInboxCount] = useState(0);
+    const secretCounts = useSecretExpiryCounts();
 
     useEffect(() => {
         fetchInboxCount()
@@ -119,7 +121,10 @@ export function AppSidebar() {
                                 MCP Servers
                             </NavItem>
                             <NavItem isActive={location.pathname === "/secrets"} onClick={() => navigate("/secrets")}>
-                                Secrets
+                                Secrets{" "}
+                                {secretCounts.expiring + secretCounts.expired > 0 && (
+                                    <Badge isRead={false}>{secretCounts.expiring + secretCounts.expired}</Badge>
+                                )}
                             </NavItem>
                             <NavItem isActive={location.pathname.startsWith("/tools") && !location.pathname.startsWith("/toolsets")} onClick={() => navigate("/tools")}>
                                 Tools

@@ -28,6 +28,7 @@ import { ToolsetDetailPage } from "./pages/ToolsetDetailPage";
 import { SecretsPage } from "./pages/SecretsPage";
 import { AppMasthead } from "./components/AppMasthead";
 import { AppSidebar } from "./components/AppSidebar";
+import { SecretExpiryBanner } from "./components/SecretExpiryBanner";
 import { ConfigurationWarning } from "./components/ConfigurationWarning";
 import { ConfigurationPacksPage } from "./pages/ConfigurationPacksPage";
 import { DataRetentionPage } from "./pages/DataRetentionPage";
@@ -120,52 +121,55 @@ export function App() {
                 {hasCheckErrors ? (
                     <ConfigurationWarning checks={startupChecks || []} />
                 ) : (
-                    <Routes>
-                        <Route path="/" element={<Navigate to="/runs" replace />} />
-                        <Route path="/dashboards" element={<DashboardHomePage />} />
-                        <Route path="/dashboards/all" element={<DashboardsPage />} />
-                        <Route path="/dashboards/:dashboardId" element={<DashboardViewPage />} />
-                        <Route path="/inbox" element={<InboxPage />} />
-                        <Route path="/subjects" element={<SubjectsPage />} />
-                        <Route path="/subjects/:subjectId" element={<SubjectDetailPage />} />
-                        <Route path="/engine" element={<EngineSettingsPage />} />
-                        <Route path="/agents" element={<AgentsPage />} />
-                        <Route path="/agents/:agentId" element={<AgentDetailPage />} />
-                        <Route path="/action-types" element={<ActionTypesPage />} />
-                        <Route path="/action-types/:actionTypeId" element={<ActionTypeDetailPage />} />
-                        <Route path="/tools" element={<ToolsPage />} />
-                        <Route path="/tools/:toolId" element={<ToolDetailPage />} />
-                        <Route path="/toolsets" element={<ToolsetsPage />} />
-                        <Route path="/toolsets/:toolsetId" element={<ToolsetDetailPage />} />
-                        <Route path="/mcp-servers" element={<McpServersPage />} />
-                        <Route path="/mcp-servers/:mcpServerId" element={<McpServerDetailPage />} />
-                        <Route path="/logs/activity" element={<ActivityLogPage />} />
-                        <Route path="/events/stream" element={<EventStreamPage />} />
-                        <Route path="/events/stream/:eventId" element={<EventDetailPage />} />
-                        <Route path="/logs/tasks" element={<TasksPage />} />
-                        <Route path="/logs/traces" element={<TracesPage />} />
-                        <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
-                        <Route path="/runs" element={<WorkflowRunsPage />} />
-                        <Route path="/runs/:runId" element={<WorkflowRunDetailPage />} />
-                        <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
-                        <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
-                        <Route path="/events/sources" element={<EventSourcesPage />} />
-                        <Route path="/events/sources/:eventSourceId" element={<EventSourceDetailPage />} />
-                        <Route path="/events/subscriptions" element={<SubscriptionsPage />} />
-                        <Route path="/events/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
-                        <Route path="/secrets" element={<SecretsPage />} />
-                        <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
-                        <Route path="/data-retention" element={<DataRetentionPage />} />
-                        <Route path="/session-templates" element={<SessionTemplatesPage />} />
-                        <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
-                        <Route path="/components/workflows" element={<WorkflowDefinitionsPage />} />
-                        <Route path="/components/workflows/:workflowDefinitionId" element={<WorkflowDefinitionDetailPage />} />
-                        <Route path="/workbench" element={<WorkbenchListPage />} />
-                        <Route path="/workbench/:compositionId" element={<WorkbenchPage />} />
-                        <Route path="/assistant" element={<AssistantPage />} />
-                        <Route path="/assistant/:sessionId" element={<AssistantSessionPage />} />
-                        <Route path="*" element={<NotFoundPage />} />
-                    </Routes>
+                    <>
+                        {!hideChrome && <SecretExpiryBanner />}
+                        <Routes>
+                            <Route path="/" element={<Navigate to="/runs" replace />} />
+                            <Route path="/dashboards" element={<DashboardHomePage />} />
+                            <Route path="/dashboards/all" element={<DashboardsPage />} />
+                            <Route path="/dashboards/:dashboardId" element={<DashboardViewPage />} />
+                            <Route path="/inbox" element={<InboxPage />} />
+                            <Route path="/subjects" element={<SubjectsPage />} />
+                            <Route path="/subjects/:subjectId" element={<SubjectDetailPage />} />
+                            <Route path="/engine" element={<EngineSettingsPage />} />
+                            <Route path="/agents" element={<AgentsPage />} />
+                            <Route path="/agents/:agentId" element={<AgentDetailPage />} />
+                            <Route path="/action-types" element={<ActionTypesPage />} />
+                            <Route path="/action-types/:actionTypeId" element={<ActionTypeDetailPage />} />
+                            <Route path="/tools" element={<ToolsPage />} />
+                            <Route path="/tools/:toolId" element={<ToolDetailPage />} />
+                            <Route path="/toolsets" element={<ToolsetsPage />} />
+                            <Route path="/toolsets/:toolsetId" element={<ToolsetDetailPage />} />
+                            <Route path="/mcp-servers" element={<McpServersPage />} />
+                            <Route path="/mcp-servers/:mcpServerId" element={<McpServerDetailPage />} />
+                            <Route path="/logs/activity" element={<ActivityLogPage />} />
+                            <Route path="/events/stream" element={<EventStreamPage />} />
+                            <Route path="/events/stream/:eventId" element={<EventDetailPage />} />
+                            <Route path="/logs/tasks" element={<TasksPage />} />
+                            <Route path="/logs/traces" element={<TracesPage />} />
+                            <Route path="/logs/traces/:traceId" element={<TraceDetailPage />} />
+                            <Route path="/runs" element={<WorkflowRunsPage />} />
+                            <Route path="/runs/:runId" element={<WorkflowRunDetailPage />} />
+                            <Route path="/metrics/ai-usage" element={<AiUsagePage />} />
+                            <Route path="/metrics/disk-usage" element={<DiskUsagePage />} />
+                            <Route path="/events/sources" element={<EventSourcesPage />} />
+                            <Route path="/events/sources/:eventSourceId" element={<EventSourceDetailPage />} />
+                            <Route path="/events/subscriptions" element={<SubscriptionsPage />} />
+                            <Route path="/events/subscriptions/:subscriptionId" element={<SubscriptionDetailPage />} />
+                            <Route path="/secrets" element={<SecretsPage />} />
+                            <Route path="/configuration-packs" element={<ConfigurationPacksPage />} />
+                            <Route path="/data-retention" element={<DataRetentionPage />} />
+                            <Route path="/session-templates" element={<SessionTemplatesPage />} />
+                            <Route path="/session-templates/:templateId" element={<SessionTemplateDetailPage />} />
+                            <Route path="/components/workflows" element={<WorkflowDefinitionsPage />} />
+                            <Route path="/components/workflows/:workflowDefinitionId" element={<WorkflowDefinitionDetailPage />} />
+                            <Route path="/workbench" element={<WorkbenchListPage />} />
+                            <Route path="/workbench/:compositionId" element={<WorkbenchPage />} />
+                            <Route path="/assistant" element={<AssistantPage />} />
+                            <Route path="/assistant/:sessionId" element={<AssistantSessionPage />} />
+                            <Route path="*" element={<NotFoundPage />} />
+                        </Routes>
+                    </>
                 )}
             </Page>
         </EffectiveThemeContext.Provider>
