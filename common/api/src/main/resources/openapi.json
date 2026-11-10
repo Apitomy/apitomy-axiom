@@ -2005,6 +2005,9 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid expiration settings"
           }
         }
       }
@@ -2038,6 +2041,9 @@
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
+          },
+          "400": {
+            "description": "Invalid expiration settings"
           }
         }
       },
@@ -7937,6 +7943,11 @@
             "items": {
               "$ref": "#/components/schemas/StartupCheck"
             }
+          },
+          "secretExpiryWarningDays": {
+            "description": "Global default warning window for expiring secrets, in days",
+            "format": "int32",
+            "type": "integer"
           }
         }
       },
@@ -9214,7 +9225,8 @@
       "Secret": {
         "required": [
           "id",
-          "name"
+          "name",
+          "expiryStatus"
         ],
         "type": "object",
         "properties": {
@@ -9226,6 +9238,28 @@
             "type": "string"
           },
           "description": {
+            "type": "string"
+          },
+          "expiresOn": {
+            "description": "When the secret expires; absent if it never expires",
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "warnDaysBefore": {
+            "description": "Per-secret warning window in days; absent uses the global default",
+            "format": "int32",
+            "type": "integer",
+            "nullable": true
+          },
+          "expiryStatus": {
+            "description": "Expiry status computed by the server",
+            "enum": [
+              "NONE",
+              "VALID",
+              "EXPIRING",
+              "EXPIRED"
+            ],
             "type": "string"
           }
         }
@@ -9246,6 +9280,19 @@
           "value": {
             "description": "The secret value (write-only, never returned in responses)",
             "type": "string"
+          },
+          "expiresOn": {
+            "description": "When the secret expires; must be in the future. Omit to never expire.",
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          },
+          "warnDaysBefore": {
+            "description": "Days before expiry to start warning; omit for the global default",
+            "format": "int32",
+            "minimum": 0,
+            "type": "integer",
+            "nullable": true
           }
         }
       },

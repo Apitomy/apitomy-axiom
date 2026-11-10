@@ -94,6 +94,20 @@ public record SseEvent(
     }
 
     /**
+     * Creates a secret-expiry event, fired when a secret's expiry state may have changed.
+     *
+     * @param secretId the secret, or null when several changed
+     * @param status   the new expiry status name, or null
+     * @return a new SSE event
+     */
+    public static SseEvent secretExpiry(Long secretId, String status) {
+        return new SseEvent("secret-expiry",
+                "{\"secretId\":" + secretId
+                        + ",\"status\":" + (status == null ? "null" : "\"" + escapeJson(status) + "\"")
+                        + "}");
+    }
+
+    /**
      * Creates an inbox-updated event when a task enters or leaves AwaitingInput.
      *
      * @param taskId the task that changed
