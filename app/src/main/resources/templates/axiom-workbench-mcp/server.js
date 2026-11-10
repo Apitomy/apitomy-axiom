@@ -700,7 +700,7 @@ async function main() {
         compositionId: AXIOM_COMPOSITION_ID || null,
     });
 
-    const server = new Server({ name: "workbench", version: "3.0.5" }, {
+    const server = new Server({ name: "workbench", version: "3.0.6-SNAPSHOT" }, {
         capabilities: { tools: {} }
     });
 
