@@ -31,7 +31,7 @@ import {
     deleteSecret,
     fetchSystemConfig,
 } from "../config/api";
-import { expiryLabel, toApiInstant } from "../config/secretExpiry";
+import { expiryLabel, isValidLocalDateTime, toApiInstant } from "../config/secretExpiry";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
@@ -95,7 +95,10 @@ export function SecretsPage() {
         setIsModalOpen(true);
     };
 
-    const expiresOnInPast = formExpiresOn !== "" && new Date(formExpiresOn).getTime() <= Date.now();
+    const expiresOnInvalid = formExpiresOn !== "" && !isValidLocalDateTime(formExpiresOn);
+    const expiresOnInPast = !expiresOnInvalid && formExpiresOn !== ""
+        && new Date(formExpiresOn).getTime() <= Date.now();
+    const expiresOnError = expiresOnInvalid || expiresOnInPast;
 
     const sorted = [...secrets].sort((a, b) =>
         STATUS_ORDER[a.expiryStatus] - STATUS_ORDER[b.expiryStatus]
@@ -103,17 +106,22 @@ export function SecretsPage() {
         || a.name.localeCompare(b.name));
 
     const handleSave = () => {
-        const data = {
-            name: formName,
-            description: formDescription || undefined,
-            value: formValue,
-            expiresOn: formExpiresOn ? toApiInstant(formExpiresOn) : null,
-            warnDaysBefore: formWarnDays === "" ? null : Number(formWarnDays),
-        };
-        const promise = editing ? updateSecret(editing.id, data) : createSecret(data);
-        promise
-            .then(() => { setIsModalOpen(false); load(); })
-            .catch((e: Error) => setSaveError(e.message));
+        setSaveError(null);
+        try {
+            const data = {
+                name: formName,
+                description: formDescription || undefined,
+                value: formValue,
+                expiresOn: formExpiresOn ? toApiInstant(formExpiresOn) : null,
+                warnDaysBefore: !formExpiresOn || formWarnDays === "" ? null : Number(formWarnDays),
+            };
+            const promise = editing ? updateSecret(editing.id, data) : createSecret(data);
+            promise
+                .then(() => { setIsModalOpen(false); load(); })
+                .catch((e: unknown) => setSaveError(e instanceof Error ? e.message : String(e)));
+        } catch (e: unknown) {
+            setSaveError(e instanceof Error ? e.message : String(e));
+        }
     };
 
     const handleDelete = (e: React.MouseEvent, id: number) => {
@@ -231,17 +239,19 @@ export function SecretsPage() {
                                 placeholder={editing ? "Enter new value" : "Enter secret value"} />
                         </FormGroup>
                         <FormGroup label="Expires on" fieldId="expiresOn">
-                            <HelperText><HelperTextItem variant={expiresOnInPast ? "error" : "default"}>
-                                {expiresOnInPast
+                            <HelperText><HelperTextItem variant={expiresOnError ? "error" : "default"}>
+                                {expiresOnInvalid
+                                    ? "Enter a valid date and time."
+                                    : expiresOnInPast
                                     ? "This date has passed. Enter a new expiration or clear it."
                                     : "Optional. Expired secrets are not given to agents, tools, or MCP servers."}
                             </HelperTextItem></HelperText>
                             <Flex>
                                 <TextInput id="expiresOn" type="datetime-local" value={formExpiresOn}
-                                    validated={expiresOnInPast ? "error" : "default"}
+                                    validated={expiresOnError ? "error" : "default"}
                                     onChange={(_e, v) => setFormExpiresOn(v)} />
                                 {formExpiresOn && (
-                                    <Button variant="link" onClick={() => setFormExpiresOn("")}>Clear</Button>
+                                    <Button variant="link" onClick={() => { setFormExpiresOn(""); setFormWarnDays(""); }}>Clear</Button>
                                 )}
                             </Flex>
                         </FormGroup>
@@ -256,7 +266,7 @@ export function SecretsPage() {
                 </ModalBody>
                 <ModalFooter>
                     <Button variant="primary" onClick={handleSave}
-                        isDisabled={!formName.trim() || !formValue.trim() || expiresOnInPast || Number(formWarnDays) < 0}>
+                        isDisabled={!formName.trim() || !formValue.trim() || expiresOnError || Number(formWarnDays) < 0}>
                         {editing ? "Update" : "Create"}
                     </Button>
                     <Button variant="link" onClick={() => setIsModalOpen(false)}>Cancel</Button>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countExpiry, expiryLabel, toApiInstant } from "./secretExpiry";
+import { countExpiry, expiryLabel, isValidLocalDateTime, toApiInstant } from "./secretExpiry";
 import type { Secret } from "./api";
 
 const NOW = new Date("2026-11-10T12:00:00Z");
@@ -38,5 +38,22 @@ describe("toApiInstant", () => {
         const result = toApiInstant(local);
         expect(result).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
         expect(new Date(result).getTime()).toBe(new Date(local).getTime());
+    });
+});
+
+describe("expiryLabel with stale status", () => {
+    it("is Expired when expiresOn has passed even if status says EXPIRING", () => {
+        expect(expiryLabel(s({ expiryStatus: "EXPIRING", expiresOn: "2026-11-10T11:00:00Z" }), NOW))
+            .toBe("Expired");
+    });
+});
+
+describe("isValidLocalDateTime", () => {
+    it("accepts a parseable datetime-local value", () => {
+        expect(isValidLocalDateTime("2026-12-31T00:39")).toBe(true);
+    });
+    it("rejects unparseable values", () => {
+        expect(isValidLocalDateTime("202610-12-31T00:39")).toBe(false);
+        expect(isValidLocalDateTime("")).toBe(false);
     });
 });

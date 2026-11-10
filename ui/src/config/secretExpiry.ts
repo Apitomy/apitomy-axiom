@@ -5,8 +5,8 @@ import { sseClient, type AxiomSseEvent } from "./sse";
 /** Human label for a secret's expiry, e.g. "Expires in 5d". */
 export function expiryLabel(secret: Secret, now: Date = new Date()): string {
     if (secret.expiryStatus === "NONE" || !secret.expiresOn) return "Never";
-    if (secret.expiryStatus === "EXPIRED") return "Expired";
     const ms = new Date(secret.expiresOn).getTime() - now.getTime();
+    if (secret.expiryStatus === "EXPIRED" || ms <= 0) return "Expired";
     const days = Math.floor(ms / 86_400_000);
     if (days >= 1) return `Expires in ${days}d`;
     return `Expires in ${Math.max(1, Math.floor(ms / 3_600_000))}h`;
@@ -20,9 +20,15 @@ export function countExpiry(secrets: Secret[]): { expiring: number; expired: num
     };
 }
 
+/** Whether a datetime-local input value is non-empty and parseable as a date. */
+export function isValidLocalDateTime(value: string): boolean {
+    return value !== "" && !Number.isNaN(new Date(value).getTime());
+}
+
 /**
  * Converts a local datetime-input value ("YYYY-MM-DDTHH:mm") to the UTC instant format the API accepts
- * ("yyyy-MM-ddTHH:mm:ssZ", no fractional seconds).
+ * ("yyyy-MM-ddTHH:mm:ssZ", no fractional seconds). Throws a RangeError for unparseable input; check
+ * with {@link isValidLocalDateTime} first.
  */
 export function toApiInstant(localValue: string): string {
     return new Date(localValue).toISOString().replace(/\.\d{3}Z$/, "Z");
