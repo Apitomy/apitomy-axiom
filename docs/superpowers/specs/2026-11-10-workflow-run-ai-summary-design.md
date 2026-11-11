@@ -133,7 +133,7 @@ The insert happens in the run's transaction, so a rollback enqueues nothing.
 A lean digest, budgeted to about 3,000 characters:
 
 - run ID, workflow name, run title, status, duration, failure reason (first lines);
-- the ordered steps, each with node ID, task status, and a one-line output preview (about 150 chars);
+- the ordered steps, each with task ID, node ID, task status, and a one-line output preview (about 150 chars);
 - the total AI cost of the run.
 
 Instructions given to the agent:
@@ -155,9 +155,9 @@ per-request config file).
 
 | tool | purpose |
 |---|---|
-| `get_run(runId)` | inputs, status, timings, labels, failure reason, task list (node ID, task ID, status) |
-| `get_task(runId, nodeId)` | full task input and output for the run's task at that node |
-| `get_task_log(runId, nodeId, offset, limit)` | paginated execution log for that task |
+| `get_run(runId)` | inputs, status, timings, labels, failure reason, task list (task ID, node ID, status) |
+| `get_task(runId, taskId)` | full task input and output (the task must belong to the run) |
+| `get_task_log(runId, taskId, offset, limit)` | paginated execution log for that task |
 | `get_trace(runId)` | the run's trace nodes, failed nodes first |
 
 **Scoping trade-off (accepted):** the tools can read any workflow run on this Axiom instance, not only the run
@@ -252,7 +252,7 @@ bound to `summarizeRuns` and unchecked by default.
   - Bean mapping: `aiSummary` on run detail and list items; `summarizeRuns` on definitions; summary settings on
     system config.
   - `MigrationSchemaValidationTest` passes with V12.
-- **MCP server (`node:test`):** only GET calls, task lookup by node, log pagination, tool list is exactly the
+- **MCP server (`node:test`):** only GET calls, task-belongs-to-run check, log pagination, tool list is exactly the
   four tools.
 - **UI (vitest):** summary card states, headline rendering in the runs list, settings card, opt-in checkbox.
 - **Manual live check:** an isolated instance
