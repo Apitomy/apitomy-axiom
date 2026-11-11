@@ -30,8 +30,15 @@ update after commit.
 
 ### Workflow definition
 
-New optional boolean property `summarize` (default `false`) on workflow definitions. When `true`, runs ending in
-`completed` or `failed` are summarized automatically.
+New optional boolean property `summarize` on workflow definitions. Summary generation is **off by default for
+every workflow**:
+
+- An absent or `null` value means `false`, and existing workflows are not migrated to `true`.
+- The editor checkbox starts unchecked for new workflows.
+- Only workflows explicitly set to `summarize: true` get automatic summaries for runs ending in `completed` or
+  `failed`.
+- The global settings do not enable summaries for all workflows. `axiom.run-summary.enabled` can only turn
+  the feature off.
 
 ### Table `workflow_run_summary` (Flyway `V12__workflow_run_summary.sql`)
 
@@ -49,8 +56,18 @@ New optional boolean property `summarize` (default `false`) on workflow definiti
 | `created_on` | timestamp | |
 | `completed_on` | timestamp | nullable |
 
-The run retention cleanup must delete summary rows too. Use the FK cascade, or delete them explicitly if the
-cleanup uses bulk JPQL deletes that skip cascades.
+Deleting a run must delete its summary automatically, at the database level. Runs are removed with bulk JPQL
+deletes (`HistoryCleanup`, `SubjectDeletionService`, and workflow definition deletion), and these bypass JPA
+cascades. The summary row is therefore protected in two places:
+
+- **Flyway:** the migration declares
+  `foreign key (run_id) references workflow_run on delete cascade`, following the `workflow_run_label`
+  precedent in `V6`.
+- **Entity:** `WorkflowRunSummaryEntity` maps `run_id` as `@OneToOne @MapsId` to `WorkflowRunEntity`, annotated
+  `@OnDelete(action = OnDeleteAction.CASCADE)`. The dev profile's Hibernate `drop-and-create` schema then gets
+  the same cascade.
+
+No application code deletes summaries explicitly.
 
 ### System config
 
@@ -189,7 +206,9 @@ A "Generate AI summary for completed/failed runs" checkbox bound to `summarize`.
 - **Unit (JUnit 5):**
   - `RunSummaryPromptBuilder`: digest contents, budget, and truncation.
   - The lenient JSON parser.
-  - `enqueueIfEnabled` rules: opt-in, terminal status filter, no duplicates.
+  - `enqueueIfEnabled` rules: opt-in (absent or `false` means no row), terminal status filter, no duplicates.
+- **Cascade:** deleting runs through each bulk path (`HistoryCleanup`, `SubjectDeletionService`, and workflow
+  definition deletion) leaves no orphaned `workflow_run_summary` rows.
 - **`@QuarkusTest` with a stub `Agent`:**
   - POST endpoint: 202, 404, and 409 cases.
   - Poller: claiming, recovery after restart, and the retry → `failed` path.
