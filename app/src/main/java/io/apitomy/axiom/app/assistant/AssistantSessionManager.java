@@ -12,6 +12,7 @@ import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.app.ImportExportService;
 import io.apitomy.axiom.app.McpConfigGenerator;
+import io.apitomy.axiom.app.McpServerInstaller;
 import io.apitomy.axiom.app.assistant.AssistantEventParser.SseEvent;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriver;
 import io.apitomy.axiom.app.assistant.runtime.InteractiveSessionDriverFactory;
@@ -131,7 +132,7 @@ public class AssistantSessionManager {
     InteractiveSessionDriverFactory interactiveSessionDriverFactory;
 
     @Inject
-    io.apitomy.axiom.app.McpServerInstaller mcpServerInstaller;
+    McpServerInstaller mcpServerInstaller;
 
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, HistoryJournal> journals = new ConcurrentHashMap<>();

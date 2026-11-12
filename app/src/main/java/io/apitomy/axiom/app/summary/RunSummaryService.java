@@ -30,8 +30,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** Queues, requests, and generates AI summaries of workflow runs. */
 @ApplicationScoped
@@ -56,6 +58,9 @@ public class RunSummaryService {
 
     @ConfigProperty(name = "axiom.run-summary.timeout-seconds", defaultValue = "300")
     int timeoutSeconds;
+
+    /** Extra seconds to wait beyond the agent timeout before cancelling; package-visible for tests. */
+    long waitGraceSeconds = 30L;
 
     @Inject
     Event<RunSummaryChanged> changes;
@@ -183,22 +188,39 @@ public class RunSummaryService {
      * @param runId a run whose summary row is {@code generating}
      */
     public void generate(long runId) {
-        Prepared prepared = QuarkusTransaction.requiringNew().call(() -> prepare(runId));
+        Prepared prepared;
+        try {
+            prepared = QuarkusTransaction.requiringNew().call(() -> prepare(runId));
+        } catch (RuntimeException e) {
+            // Reading the run is deterministic: count it as an attempt so a broken run ends up failed.
+            LOG.warnf(e, "Failed to prepare the summary of run %d", runId);
+            QuarkusTransaction.requiringNew().run(() -> storeFailure(runId, describe(e)));
+            return;
+        }
         if (prepared == null) {
             return;
         }
-        AgentLease lease = agentPool.tryLease(null, prepared.engine(), null, INVOCATION_TYPE, runId).orElse(null);
+        AgentLease lease;
+        try {
+            lease = agentPool.tryLease(null, prepared.engine(), null, INVOCATION_TYPE, runId).orElse(null);
+        } catch (RuntimeException e) {
+            // Leasing problems are transient (pool/database), not the run's fault: retry without an attempt.
+            LOG.warnf(e, "Failed to lease an agent for the summary of run %d", runId);
+            lease = null;
+        }
         if (lease == null) {
-            QuarkusTransaction.requiringNew().run(() -> WorkflowRunSummaryEntity.update(
-                    "status = ?1 where runId = ?2 and status = ?3",
-                    WorkflowRunSummaryEntity.PENDING, runId, WorkflowRunSummaryEntity.GENERATING));
+            resetToPending(runId);
             return;
         }
         String agentType = lease.agent().getType();
         boolean openCode = "opencode".equals(agentType);
+        String executionId = INVOCATION_TYPE + "-" + runId;
         long startedAt = System.currentTimeMillis();
+        boolean interrupted = false;
+        CompletableFuture<AgentResult> future = null;
         try {
             AgentRequest.Builder builder = AgentRequest.builder()
+                    .executionId(executionId)
                     .prompt(prepared.prompt())
                     .model(prepared.model())
                     .allowedTools(RunSummaryMcp.ALLOWED_TOOLS)
@@ -211,21 +233,30 @@ public class RunSummaryService {
             } else {
                 builder.mcpConfigFile(runSummaryMcp.writeConfigFile(runId));
             }
-            AgentResult result = lease.agent().execute(builder.build())
-                    .get(timeoutSeconds + 30L, TimeUnit.SECONDS);
+            future = lease.agent().execute(builder.build());
+            AgentResult result = future.get(timeoutSeconds + waitGraceSeconds, TimeUnit.SECONDS);
             if (!result.success()) {
                 throw new IllegalStateException(result.errorMessage() != null
                         ? result.errorMessage() : "The agent failed");
             }
             RunSummaryResponseParser.ParsedSummary parsed = RunSummaryResponseParser.parse(result.output());
             long durationMs = System.currentTimeMillis() - startedAt;
-            QuarkusTransaction.requiringNew().run(() -> storeReady(runId, parsed, result, prepared, lease, durationMs));
+            AgentLease leased = lease;
+            QuarkusTransaction.requiringNew().run(() -> storeReady(runId, parsed, result, prepared, leased, durationMs));
+        } catch (InterruptedException e) {
+            // Shutdown: stop the agent and re-queue without counting an attempt. The interrupt flag is restored
+            // after the database work below, which would otherwise fail on an interrupted thread.
+            interrupted = true;
+            cancel(lease, executionId, future, runId);
+            LOG.infof("Run summary generation for run %d interrupted; re-queued", runId);
+            resetToPending(runId);
+        } catch (TimeoutException e) {
+            cancel(lease, executionId, future, runId);
+            String message = "The agent did not finish within " + timeoutSeconds + " seconds";
+            LOG.warnf("Run summary generation failed for run %d: %s", runId, message);
+            QuarkusTransaction.requiringNew().run(() -> storeFailure(runId, message));
         } catch (Exception e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
-            Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
-            String message = cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
+            String message = describe(e);
             LOG.warnf("Run summary generation failed for run %d: %s", runId, message);
             QuarkusTransaction.requiringNew().run(() -> storeFailure(runId, message));
         } finally {
@@ -238,7 +269,32 @@ public class RunSummaryService {
                 }
             }
             runSummaryMcp.cleanup(runId);
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
+    }
+
+    private void cancel(AgentLease lease, String executionId, CompletableFuture<AgentResult> future, long runId) {
+        try {
+            lease.agent().cancel(executionId);
+        } catch (RuntimeException e) {
+            LOG.debugf("Failed to cancel the summary agent for run %d: %s", runId, e.getMessage());
+        }
+        if (future != null) {
+            future.cancel(true);
+        }
+    }
+
+    private void resetToPending(long runId) {
+        QuarkusTransaction.requiringNew().run(() -> WorkflowRunSummaryEntity.update(
+                "status = ?1 where runId = ?2 and status = ?3",
+                WorkflowRunSummaryEntity.PENDING, runId, WorkflowRunSummaryEntity.GENERATING));
+    }
+
+    private static String describe(Exception e) {
+        Throwable cause = e instanceof ExecutionException && e.getCause() != null ? e.getCause() : e;
+        return cause.getMessage() != null ? cause.getMessage() : cause.getClass().getSimpleName();
     }
 
     /**

@@ -8,6 +8,7 @@ import io.apitomy.axiom.app.AgentPool;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunSummaryEntity;
+import io.quarkus.arc.ClientProxy;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.junit.QuarkusTest;
@@ -23,8 +24,10 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -143,5 +146,68 @@ class RunSummaryGenerationTest {
         assertEquals(WorkflowRunSummaryEntity.GENERATING, row(id).status);
         assertTrue(service.recoverInterrupted() >= 1);
         assertEquals(WorkflowRunSummaryEntity.PENDING, row(id).status);
+    }
+
+    private RunSummaryService target() {
+        return ClientProxy.unwrap(service);
+    }
+
+    @Test
+    void timeoutCancelsTheAgentAndCountsAnAttempt() {
+        when(agent.execute(any())).thenReturn(new CompletableFuture<>());
+        RunSummaryService target = target();
+        int timeout = target.timeoutSeconds;
+        long grace = target.waitGraceSeconds;
+        target.timeoutSeconds = 0;
+        target.waitGraceSeconds = 1;
+        try {
+            long id = pendingRun();
+            claimAndGenerate(id);
+            ArgumentCaptor<AgentRequest> req = ArgumentCaptor.forClass(AgentRequest.class);
+            Mockito.verify(agent).execute(req.capture());
+            assertEquals("run-summary-" + id, req.getValue().getExecutionId());
+            Mockito.verify(agent).cancel("run-summary-" + id);
+            WorkflowRunSummaryEntity s = row(id);
+            assertEquals(WorkflowRunSummaryEntity.PENDING, s.status);
+            assertEquals(1, s.attempts);
+            Mockito.verify(agentPool).release(any());
+        } finally {
+            target.timeoutSeconds = timeout;
+            target.waitGraceSeconds = grace;
+        }
+    }
+
+    @Test
+    void interruptionCancelsTheAgentAndDoesNotCountAnAttempt() throws Exception {
+        CompletableFuture<AgentResult> never = new CompletableFuture<>();
+        when(agent.execute(any())).thenReturn(never);
+        long id = pendingRun();
+        assertTrue(service.claimPending(50).contains(id));
+        AtomicReference<Boolean> flagAfter = new AtomicReference<>();
+        Thread worker = new Thread(() -> {
+            service.generate(id);
+            flagAfter.set(Thread.currentThread().isInterrupted());
+        });
+        worker.start();
+        Mockito.verify(agent, Mockito.timeout(10_000)).execute(any());
+        worker.interrupt();
+        worker.join(10_000);
+        assertFalse(worker.isAlive());
+        Mockito.verify(agent).cancel("run-summary-" + id);
+        assertTrue(never.isCancelled());
+        assertTrue(flagAfter.get());
+        WorkflowRunSummaryEntity s = row(id);
+        assertEquals(WorkflowRunSummaryEntity.PENDING, s.status);
+        assertEquals(0, s.attempts);
+    }
+
+    @Test
+    void leaseErrorResetsToPendingWithoutAnAttempt() {
+        when(agentPool.tryLease(any(), any(), any(), any(), any())).thenThrow(new IllegalStateException("db down"));
+        long id = pendingRun();
+        claimAndGenerate(id);
+        WorkflowRunSummaryEntity s = row(id);
+        assertEquals(WorkflowRunSummaryEntity.PENDING, s.status);
+        assertEquals(0, s.attempts);
     }
 }
