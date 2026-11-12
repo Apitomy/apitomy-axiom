@@ -23,6 +23,12 @@ class RunSummaryResponseParserTest {
     }
 
     @Test
+    void skipsJsonObjectsWithoutHeadline() {
+        String out = "Calling get_run with {\"runId\":42} ... {\"headline\":\"H\",\"body\":\"- a\"}";
+        assertEquals("H", RunSummaryResponseParser.parse(out).headline());
+    }
+
+    @Test
     void bodyIsOptional() {
         assertNull(RunSummaryResponseParser.parse("{\"headline\":\"Only\"}").body());
     }

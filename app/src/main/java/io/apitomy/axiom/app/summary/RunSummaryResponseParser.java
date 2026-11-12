@@ -11,13 +11,19 @@ public final class RunSummaryResponseParser {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    /** A parsed summary. @param headline the one-line headline @param body the markdown body, or null */
+    /**
+     * A parsed summary.
+     *
+     * @param headline the one-line headline
+     * @param body the markdown body, or null
+     */
     public record ParsedSummary(String headline, String body) { }
 
     private RunSummaryResponseParser() { }
 
     /**
-     * Parses the first JSON object containing a headline from the agent output.
+     * Parses the first JSON object with a non-blank headline from the agent output, skipping other
+     * JSON objects (e.g. echoed tool-call arguments).
      *
      * @param agentOutput the raw output
      * @return the parsed summary
@@ -27,6 +33,7 @@ public final class RunSummaryResponseParser {
         if (agentOutput == null || agentOutput.isBlank()) {
             throw new IllegalArgumentException("The agent returned no output");
         }
+        boolean sawJsonObject = false;
         for (int start = agentOutput.indexOf('{'); start >= 0; start = agentOutput.indexOf('{', start + 1)) {
             int end = matchingBrace(agentOutput, start);
             if (end < 0) {
@@ -34,9 +41,10 @@ public final class RunSummaryResponseParser {
             }
             JsonNode node = tryRead(agentOutput.substring(start, end + 1));
             if (node != null && node.isObject()) {
+                sawJsonObject = true;
                 String headline = node.path("headline").asText("").trim();
                 if (headline.isEmpty()) {
-                    throw new IllegalArgumentException("The agent's JSON has no headline");
+                    continue;
                 }
                 if (headline.length() > MAX_HEADLINE) {
                     headline = headline.substring(0, MAX_HEADLINE);
@@ -44,6 +52,9 @@ public final class RunSummaryResponseParser {
                 String body = node.hasNonNull("body") ? node.get("body").asText().trim() : null;
                 return new ParsedSummary(headline, body == null || body.isEmpty() ? null : body);
             }
+        }
+        if (sawJsonObject) {
+            throw new IllegalArgumentException("The agent's JSON has no headline");
         }
         throw new IllegalArgumentException("The agent did not return a JSON summary");
     }
