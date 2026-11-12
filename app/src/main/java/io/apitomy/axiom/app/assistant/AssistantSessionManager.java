@@ -39,10 +39,8 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -132,11 +130,12 @@ public class AssistantSessionManager {
     @Inject
     InteractiveSessionDriverFactory interactiveSessionDriverFactory;
 
+    @Inject
+    io.apitomy.axiom.app.McpServerInstaller mcpServerInstaller;
+
     private final Map<String, AssistantSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, HistoryJournal> journals = new ConcurrentHashMap<>();
     private final AtomicInteger sessionCount = new AtomicInteger();
-
-    private final Map<String, Path> installedMcpServers = new ConcurrentHashMap<>();
 
     /**
      * Creates and starts a new assistant session.
@@ -1232,65 +1231,14 @@ public class AssistantSessionManager {
     }
 
     /**
-     * Ensures a built-in Node.js MCP server is installed at {@code ${axiom.home}/<dirName>/}: copies its
-     * {@code package.json} and {@code server.js} from the classpath and runs {@code npm install} once.
+     * Ensures a built-in Node.js MCP server is installed at {@code ${axiom.home}/<dirName>/}.
      *
      * @param dirName the install directory name under the Axiom home
      * @param resourceDir the classpath directory holding the server files (with trailing slash)
      * @return the install directory
      */
     private Path ensureMcpServerInstalled(String dirName, String resourceDir) throws IOException {
-        Path installed = installedMcpServers.get(dirName);
-        if (installed != null && Files.exists(installed.resolve("node_modules"))) {
-            return installed;
-        }
-
-        synchronized (this) {
-            installed = installedMcpServers.get(dirName);
-            if (installed != null && Files.exists(installed.resolve("node_modules"))) {
-                return installed;
-            }
-
-            Path serverDir = AxiomHome.path().resolve(dirName);
-            Files.createDirectories(serverDir);
-
-            for (String fileName : MCP_TEMPLATE_FILES) {
-                String resourcePath = resourceDir + fileName;
-                try (InputStream is = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
-                    if (is == null) {
-                        throw new IOException("Template resource not found: " + resourcePath);
-                    }
-                    Files.copy(is, serverDir.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
-                }
-            }
-            LOG.infof("Copied MCP server template %s to %s", resourceDir, serverDir);
-
-            LOG.infof("Running npm install for MCP server %s...", dirName);
-            ProcessBuilder pb = new ProcessBuilder("npm", "install", "--production")
-                    .directory(serverDir.toFile())
-                    .redirectErrorStream(true);
-            BoundedProcessRunner.Result result;
-            try {
-                result = BoundedProcessRunner.run(pb, McpConfigGenerator.NPM_INSTALL_TIMEOUT);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("npm install interrupted", e);
-            }
-            String output = result.stdout();
-            if (result.timedOut()) {
-                throw new IOException("npm install timed out after " + McpConfigGenerator.NPM_INSTALL_TIMEOUT.toMinutes()
-                        + " minutes: " + output);
-            }
-            int exitCode = result.exitCode();
-
-            if (exitCode != 0) {
-                throw new IOException("npm install failed (exit code " + exitCode + "): " + output);
-            }
-            LOG.infof("npm install completed for MCP server in %s", serverDir);
-
-            installedMcpServers.put(dirName, serverDir);
-            return serverDir;
-        }
+        return mcpServerInstaller.ensureInstalled(dirName, resourceDir, MCP_TEMPLATE_FILES);
     }
 
     /**
