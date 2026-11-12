@@ -3,6 +3,7 @@ package io.apitomy.axiom.app;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.WorkflowContent;
+import io.apitomy.axiom.api.beans.WorkflowRunAiSummary;
 import io.apitomy.axiom.api.beans.WorkflowRunSearchResults;
 import io.apitomy.axiom.api.beans.WorkflowRunResume;
 import io.apitomy.axiom.api.beans.WorkflowRunSummary;
@@ -12,6 +13,7 @@ import io.apitomy.axiom.core.entities.WorkflowDefinitionEntity;
 import io.apitomy.axiom.core.entities.WorkflowDefinitionVersionEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunResumeEntity;
+import io.apitomy.axiom.core.entities.WorkflowRunSummaryEntity;
 import io.apitomy.flow.model.Workflow;
 import io.apitomy.flow.model.WorkflowInstance;
 import io.quarkus.panache.common.Page;
@@ -70,6 +72,10 @@ public class WorkflowRunBeanMapper {
         bean.setStartedOn(Date.from(entity.startedOn));
         if (entity.completedOn != null) {
             bean.setCompletedOn(Date.from(entity.completedOn));
+        }
+        WorkflowRunSummaryEntity aiSummary = WorkflowRunSummaryEntity.findById(entity.id);
+        if (aiSummary != null) {
+            bean.setAiSummary(toAiSummaryBean(aiSummary, true));
         }
 
         WorkflowDefinitionEntity definition =
@@ -315,10 +321,11 @@ public class WorkflowRunBeanMapper {
 
         Map<Long, String> subjectNames = resolveSubjectNames(runs);
         Map<Long, String> definitionNames = resolveDefinitionNames(runs);
+        Map<Long, WorkflowRunSummaryEntity> aiSummaries = resolveAiSummaries(runs);
 
         WorkflowRunSearchResults results = new WorkflowRunSearchResults();
         results.setItems(runs.stream()
-                .map(r -> toSummary(r, subjectNames, definitionNames))
+                .map(r -> toSummary(r, subjectNames, definitionNames, aiSummaries))
                 .toList());
         results.setTotalCount(totalCount);
         results.setPage(pageNum);
@@ -335,7 +342,43 @@ public class WorkflowRunBeanMapper {
     public List<WorkflowRunSummary> toSummaries(List<WorkflowRunEntity> runs) {
         Map<Long, String> subjectNames = resolveSubjectNames(runs);
         Map<Long, String> definitionNames = resolveDefinitionNames(runs);
-        return runs.stream().map(r -> toSummary(r, subjectNames, definitionNames)).toList();
+        Map<Long, WorkflowRunSummaryEntity> aiSummaries = resolveAiSummaries(runs);
+        return runs.stream().map(r -> toSummary(r, subjectNames, definitionNames, aiSummaries)).toList();
+    }
+
+    /**
+     * Maps a summary entity to its REST bean.
+     *
+     * @param entity the summary row
+     * @param full true for the run detail (all fields), false for list items (status and headline only)
+     * @return the bean
+     */
+    public WorkflowRunAiSummary toAiSummaryBean(WorkflowRunSummaryEntity entity, boolean full) {
+        WorkflowRunAiSummary bean = new WorkflowRunAiSummary();
+        bean.setStatus(WorkflowRunAiSummary.Status.fromValue(entity.status));
+        bean.setHeadline(entity.headline);
+        if (full) {
+            bean.setBody(entity.body);
+            bean.setError(entity.error);
+            bean.setEngine(entity.engine);
+            bean.setModel(entity.model);
+            if (entity.triggerType != null) {
+                bean.setTrigger(WorkflowRunAiSummary.Trigger.fromValue(entity.triggerType));
+            }
+            if (entity.completedOn != null) {
+                bean.setCompletedOn(Date.from(entity.completedOn));
+            }
+        }
+        return bean;
+    }
+
+    private Map<Long, WorkflowRunSummaryEntity> resolveAiSummaries(List<WorkflowRunEntity> runs) {
+        List<Long> runIds = runs.stream().map(r -> r.id).toList();
+        if (runIds.isEmpty()) {
+            return Map.of();
+        }
+        return WorkflowRunSummaryEntity.<WorkflowRunSummaryEntity>list("runId in ?1", runIds).stream()
+                .collect(Collectors.toMap(s -> s.runId, s -> s));
     }
 
     private Map<Long, String> resolveSubjectNames(List<WorkflowRunEntity> runs) {
@@ -358,8 +401,13 @@ public class WorkflowRunBeanMapper {
     }
 
     private WorkflowRunSummary toSummary(WorkflowRunEntity run, Map<Long, String> subjectNames,
-                                         Map<Long, String> definitionNames) {
+                                         Map<Long, String> definitionNames,
+                                         Map<Long, WorkflowRunSummaryEntity> aiSummaries) {
         WorkflowRunSummary summary = new WorkflowRunSummary();
+        WorkflowRunSummaryEntity aiSummary = aiSummaries.get(run.id);
+        if (aiSummary != null) {
+            summary.setAiSummary(toAiSummaryBean(aiSummary, false));
+        }
         summary.setRunId(run.id);
         summary.setSubjectId(run.subjectId);
         summary.setSubjectName(subjectNames.getOrDefault(run.subjectId, "Unknown"));

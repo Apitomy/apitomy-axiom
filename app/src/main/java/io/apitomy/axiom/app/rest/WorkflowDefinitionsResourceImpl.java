@@ -77,6 +77,18 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     // ── List ────────────────────────────────────────────────────────
 
     /**
+     * Queues generation of the AI summary of a finished run. Temporary stub until the summary
+     * service is implemented.
+     *
+     * @param runId the workflow run ID
+     * @return never returns normally
+     */
+    @Override
+    public Response generateWorkflowRunAiSummary(long runId) {
+        throw new WebApplicationException(501);
+    }
+
+    /**
      * {@inheritDoc}
      */
     @Override
@@ -118,6 +130,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
         entity.name = data.getName();
         entity.description = data.getDescription();
+        entity.summarizeRuns = Boolean.TRUE.equals(data.getSummarizeRuns());
         entity.content = createEmptyWorkflowContent(data.getName());
         entity.createdOn = Instant.now();
         entity.updatedOn = Instant.now();
@@ -153,6 +166,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         }
         if (data.getDescription() != null) {
             entity.description = data.getDescription();
+        }
+        if (data.getSummarizeRuns() != null) {
+            entity.summarizeRuns = data.getSummarizeRuns();
         }
         entity.updatedOn = Instant.now();
 
@@ -394,6 +410,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         WorkflowDefinition bean = new WorkflowDefinition();
         bean.setId(entity.id);
         bean.setName(entity.name);
+        bean.setSummarizeRuns(entity.summarizeRuns);
         bean.setDescription(entity.description);
         if (entity.content != null) {
             try {
