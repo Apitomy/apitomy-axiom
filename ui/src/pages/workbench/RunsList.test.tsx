@@ -34,6 +34,12 @@ describe("RunsList", () => {
         expect(onOpenRun).toHaveBeenCalledWith(8);
     });
 
+    it("shows the AI summary headline of a run", () => {
+        const summarized = [{ ...runs[1], aiSummary: { status: "ready", headline: "Triaged 14 issues" } }] as WorkflowRunSummary[];
+        render(<RunsList runs={summarized} published onOpenRun={vi.fn()} onAskAi={vi.fn()} />);
+        expect(screen.getByText("Triaged 14 issues")).toBeTruthy();
+    });
+
     it("shows empty and error states", () => {
         const { rerender } = render(<RunsList runs={[]} published={false} onOpenRun={vi.fn()} onAskAi={vi.fn()} />);
         expect(screen.getByText("Publish the workflow to see its runs here.")).toBeTruthy();

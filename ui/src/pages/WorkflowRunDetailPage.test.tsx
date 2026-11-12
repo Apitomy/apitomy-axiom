@@ -15,6 +15,7 @@ vi.mock("../config/api", () => ({
     fetchSubjectTasks: vi.fn().mockResolvedValue([]),
     cancelWorkflowRun: vi.fn(),
     setWorkflowRunLabels: vi.fn(),
+    generateWorkflowRunAiSummary: vi.fn(),
 }));
 vi.mock("../config/sse", () => ({ sseClient: { subscribe: vi.fn(() => () => {}) } }));
 vi.mock("@apitomy/flow-ui", () => ({ WorkflowViewer: () => <div data-testid="workflow-viewer" /> }));
@@ -46,6 +47,19 @@ describe("WorkflowRunDetailPage", () => {
         const form = container.querySelector("form") as HTMLElement;
         expect(within(form).getByText("Run seven")).toBeInTheDocument();
         expect(within(form).getByText(/version 4/)).toBeInTheDocument();
+    });
+
+    it("shows the AI summary of a finished run", async () => {
+        vi.mocked(api.getWorkflowRun).mockResolvedValueOnce({
+            runId: 10, subjectId: 3, subjectName: "Subj", status: "completed", definitionId: 1,
+            definitionName: "Flow", definitionVersion: 2, startedOn: "2026-10-01T00:00:00Z",
+            labels: [], inputs: {}, workflowContent: null,
+            aiSummary: { status: "ready", headline: "Triaged 14 issues", engine: "claude-code" },
+        } as never);
+        renderWithRouter(
+            <Routes><Route path="/runs/:runId" element={<WorkflowRunDetailPage />} /></Routes>,
+            "/runs/10");
+        expect(await screen.findByText("Triaged 14 issues")).toBeInTheDocument();
     });
 
     it("names an untitled run after its subject and workflow, and omits the title field", async () => {

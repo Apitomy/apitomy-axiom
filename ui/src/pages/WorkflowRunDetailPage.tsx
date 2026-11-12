@@ -15,6 +15,7 @@ import { WorkflowStepTimeline } from "../components/WorkflowStepTimeline";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { LabelDisplay } from "../components/LabelDisplay";
 import { EditLabelsModal } from "../components/EditLabelsModal";
+import { RunAiSummaryCard } from "../components/RunAiSummaryCard";
 import {
     cancelWorkflowRun, fetchSubjectTasks, getWorkflowRun, setWorkflowRunLabels,
     type Task, type WorkflowInstanceInfo,
@@ -130,6 +131,8 @@ export function WorkflowRunDetailPage() {
                     </Button>
                 </FlexItem>
             </Flex>
+
+            <RunAiSummaryCard runId={numericRunId} runStatus={run.status} summary={run.aiSummary} onRequested={load} />
 
             <Tabs activeKey={activeTab} onSelect={(_e, k) => setActiveTab(k as number)}>
                 <Tab eventKey={1} title={<TabTitleText>Diagram</TabTitleText>} />

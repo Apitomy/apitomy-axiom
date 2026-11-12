@@ -34,6 +34,7 @@ import {
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { STATUS_COLORS } from "../components/workflowRun";
 import { ColoredLabel } from "../components/ColoredLabel";
+import { RunAiSummaryHeadline } from "../components/RunAiSummaryCard";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "status", label: "Status", testId: "runs-filter-status" },
@@ -307,6 +308,7 @@ export function WorkflowRunsPage() {
                                     {run.title && (
                                         <Content component="small" className="axiom-run-title">{run.title}</Content>
                                     )}
+                                    <RunAiSummaryHeadline summary={run.aiSummary} />
                                 </Td>
                                 <Td style={{ whiteSpace: "nowrap" }}>
                                     <Button variant="link" isInline aria-label={`Filter by workflow: ${describeRunWorkflow(run)}`}

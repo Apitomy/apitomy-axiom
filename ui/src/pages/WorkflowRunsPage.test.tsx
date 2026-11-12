@@ -89,6 +89,15 @@ describe("WorkflowRunsPage", () => {
         await waitFor(() => expect(lastFilters().labels).toEqual(["urgent"]));
     });
 
+    it("shows the AI summary headline of a run", async () => {
+        vi.mocked(api.fetchWorkflowRuns).mockResolvedValue({
+            items: [{ ...run(1, "Run A"), aiSummary: { status: "ready", headline: "Triaged 14 issues" } }],
+            totalCount: 1, page: 1, limit: 20,
+        } as never);
+        renderWithRouter(<WorkflowRunsPage />);
+        expect(await screen.findByText("Triaged 14 issues")).toBeInTheDocument();
+    });
+
     it("adds a workflow chip when the workflow cell is clicked, without opening the run", async () => {
         renderWithRouter(<WorkflowRunsPage />);
         await screen.findByText("Run A");
