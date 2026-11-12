@@ -35,6 +35,7 @@ import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
+import io.apitomy.axiom.app.summary.RunSummaryService;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
@@ -60,6 +61,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     ObjectMapper objectMapper;
 
     @Inject
+    RunSummaryService runSummaryService;
+
+    @Inject
     WorkflowRunBeanMapper runBeanMapper;
 
     @Inject
@@ -77,15 +81,15 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     // ── List ────────────────────────────────────────────────────────
 
     /**
-     * Queues generation of the AI summary of a finished run. Temporary stub until the summary
-     * service is implemented.
+     * Queues generation of the AI summary of a finished run.
      *
      * @param runId the workflow run ID
-     * @return never returns normally
+     * @return 202 Accepted
      */
     @Override
     public Response generateWorkflowRunAiSummary(long runId) {
-        throw new WebApplicationException(501);
+        runSummaryService.request(runId);
+        return Response.accepted().build();
     }
 
     /**

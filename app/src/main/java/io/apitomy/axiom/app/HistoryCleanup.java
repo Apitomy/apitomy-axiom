@@ -46,7 +46,7 @@ public class HistoryCleanup {
      * Statuses of workflow runs that have finished (lower-case names of the flow engine's
      * {@code InstanceStatus}). Runs in any other status, including statuses added later, are kept.
      */
-    static final List<String> FINISHED_WORKFLOW_RUN_STATUSES =
+    public static final List<String> FINISHED_WORKFLOW_RUN_STATUSES =
             List.of("completed", "failed", "cancelled");
 
     private volatile boolean shuttingDown = false;
