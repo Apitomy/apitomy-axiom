@@ -1,0 +1,11 @@
+{
+    "name": "axiom-run-summary-mcp",
+    "version": "3.0.6-SNAPSHOT",
+    "description": "Axiom read-only MCP server used to investigate a workflow run while summarizing it",
+    "private": true,
+    "type": "commonjs",
+    "main": "server.js",
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.32.2"
+    }
+}
