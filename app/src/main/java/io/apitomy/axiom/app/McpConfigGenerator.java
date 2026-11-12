@@ -12,6 +12,7 @@ import io.apitomy.axiom.app.mcp.ClaudeMcpConfigWriter;
 import io.apitomy.axiom.app.mcp.McpEnvironmentIsolation;
 import io.apitomy.axiom.app.mcp.McpServerDefinition;
 import io.apitomy.axiom.app.mcp.McpServerResolver;
+import io.apitomy.axiom.app.summary.RunSummaryMcp;
 import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
@@ -91,6 +92,9 @@ public class McpConfigGenerator {
 
     @Inject
     CopilotMcpManager copilotMcpManager;
+
+    @Inject
+    RunSummaryMcp runSummaryMcp;
 
     /** Lazily resolved path to the installed MCP server subject directory. */
     private volatile Path mcpServerDir;
@@ -429,6 +433,16 @@ public class McpConfigGenerator {
             }
         }
 
+        // Read-only run summary server, only for agents restricted to its tools
+        if (hasRestrictions && allowedTools.stream()
+                .anyMatch(a -> a.startsWith("mcp__" + RunSummaryMcp.SERVER_NAME + "__"))) {
+            try {
+                servers.put(RunSummaryMcp.SERVER_NAME, runSummaryMcp.serverDefinition());
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to prepare the run summary MCP server");
+            }
+        }
+
         // External MCP servers
         mcpServerResolver.resolveForAllowedTools(allowedTools).forEach(servers::putIfAbsent);
 
@@ -455,7 +469,7 @@ public class McpConfigGenerator {
      *
      * @param file the file
      */
-    private static void restrictToOwner(Path file) {
+    public static void restrictToOwner(Path file) {
         try {
             Files.setPosixFilePermissions(file, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
         } catch (UnsupportedOperationException | IOException e) {

@@ -88,6 +88,13 @@ class OpenCodeMcpManagerSyncTest {
     }
 
     @Test
+    void runSummaryServerIsBuiltInAndNeverDisconnected() {
+        manager.sync(server, registrar, List.of(local("axiom-run-summary", "node", "server.js")), Set.of());
+        manager.sync(server, registrar, List.of(), Set.of());
+        assertEquals(List.of("add axiom-run-summary [node, server.js]"), calls);
+    }
+
+    @Test
     void newOpenCodeServerInstanceGetsEverythingRegisteredAgain() {
         manager.sync(server, registrar, List.of(local("gh", "npx")), Set.of("gh"));
         manager.sync(new Object(), registrar, List.of(local("gh", "npx")), Set.of("gh"));

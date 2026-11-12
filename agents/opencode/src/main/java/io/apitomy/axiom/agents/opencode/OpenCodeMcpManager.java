@@ -39,7 +39,7 @@ public class OpenCodeMcpManager implements AgentMcpManager {
     OpenCodeAgent agent;
 
     /** Built-in Axiom servers: registered once per OpenCode process, never disconnected. */
-    private static final Set<String> BUILT_IN_SERVERS = Set.of("axiom-tools", "axiom-sdk");
+    private static final Set<String> BUILT_IN_SERVERS = Set.of("axiom-tools", "axiom-sdk", "axiom-run-summary");
 
     /** Registered server name to config fingerprint, for the current OpenCode server instance. */
     private final Map<String, Integer> registeredServers = new HashMap<>();
