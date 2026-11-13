@@ -36,6 +36,15 @@ public class RunSummaryMcp {
             "mcp__axiom-run-summary__get_task_log",
             "mcp__axiom-run-summary__get_trace");
 
+    /**
+     * Built-in tools denied to OpenCode summary agents. OpenCode treats the allowed tools as extra permissions
+     * rather than an exclusive list, so its built-in tools must be denied explicitly to keep the agent read-only
+     * and limited to the run summary server. (Claude Code restricts built-ins through {@code --tools}.)
+     */
+    public static final List<String> OPENCODE_DENIED_TOOLS = List.of(
+            "Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "TodoWrite",
+            "TodoRead", "list", "patch", "skill", "lsp", "codesearch", "external_directory");
+
     private static final String INSTALL_DIR = "run-summary-mcp-server";
     private static final String RESOURCE_DIR = "templates/axiom-run-summary-mcp/";
 

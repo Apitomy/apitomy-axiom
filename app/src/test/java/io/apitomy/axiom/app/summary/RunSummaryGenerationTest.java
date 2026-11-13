@@ -1,6 +1,9 @@
 package io.apitomy.axiom.app.summary;
 
 import io.apitomy.axiom.agents.spi.Agent;
+import io.apitomy.axiom.agents.spi.AgentMcpManager;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
+import io.quarkus.test.junit.QuarkusMock;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.app.AgentLease;
@@ -114,6 +117,27 @@ class RunSummaryGenerationTest {
         assertEquals(RunSummaryMcp.ALLOWED_TOOLS, req.getValue().getAllowedTools());
         assertEquals(10, req.getValue().getMaxSteps());
         Mockito.verify(runSummaryMcp).cleanup(id);
+    }
+
+    @Test
+    void openCodeSummaryDeniesBuiltInTools() {
+        when(agent.getType()).thenReturn("opencode");
+        AgentMcpManager mcpManager = Mockito.mock(AgentMcpManager.class);
+        AgentRegistry agentRegistry = Mockito.mock(AgentRegistry.class);
+        when(agentRegistry.getMcpManager("opencode")).thenReturn(mcpManager);
+        QuarkusMock.installMockForType(agentRegistry, AgentRegistry.class);
+        when(agent.execute(any())).thenReturn(CompletableFuture.completedFuture(
+                AgentResult.success("{\"headline\":\"Done it\",\"body\":\"- a\"}")));
+        long id = pendingRun();
+        claimAndGenerate(id);
+        ArgumentCaptor<AgentRequest> req = ArgumentCaptor.forClass(AgentRequest.class);
+        Mockito.verify(agent).execute(req.capture());
+        List<String> denied = req.getValue().getDisallowedTools();
+        for (String tool : List.of("Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch",
+                "Task", "list", "patch", "skill")) {
+            assertTrue(denied != null && denied.contains(tool), "should deny " + tool + ": " + denied);
+        }
+        Mockito.verify(mcpManager).configureMcpServers(id, java.util.Map.of(), RunSummaryMcp.ALLOWED_TOOLS);
     }
 
     @Test

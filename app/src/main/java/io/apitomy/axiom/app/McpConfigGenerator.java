@@ -17,6 +17,7 @@ import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
 import jakarta.annotation.PostConstruct;
+import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -52,8 +53,10 @@ import java.util.Map;
  * for the Claude Code and Copilot engines, via the {@link io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager}
  * / {@link io.apitomy.axiom.agents.copilot.CopilotMcpManager} delegate pattern. On
  * initialization, it registers itself as the MCP config delegate for both engines
- * (both consume the same {@code mcpServers} JSON config format).</p>
+ * (both consume the same {@code mcpServers} JSON config format). The bean is created at startup so the
+ * delegates are in place before anything other than a workflow task (e.g. run summaries) uses an engine.</p>
  */
+@Startup
 @ApplicationScoped
 public class McpConfigGenerator {
 
