@@ -30,8 +30,21 @@ function pageText(text, offset, limit) {
     return { text: text.slice(start, end), start, end, total };
 }
 
+/**
+ * Validates that a value is a positive safe integer (number or digit-only string) and returns it as a number.
+ * Prevents path traversal via ids such as "." or "..".
+ */
+function requireId(value, name) {
+    const n = typeof value === "number" ? value
+        : (typeof value === "string" && /^[0-9]+$/.test(value.trim()) ? Number(value.trim()) : NaN);
+    if (!Number.isSafeInteger(n) || n <= 0) {
+        throw new Error(`${name} must be a positive integer`);
+    }
+    return n;
+}
+
 async function loadRun(runId) {
-    return JSON.parse(await get(`/workflow/runs/${encodeURIComponent(runId)}`));
+    return JSON.parse(await get(`/workflow/runs/${requireId(runId, "runId")}`));
 }
 
 function runTask(run, taskId) {
@@ -55,11 +68,12 @@ const TOOLS = [
             { name: "taskId", type: "number", description: "The task id from get_run", required: true },
         ],
         handler: async (args) => {
+            const taskId = requireId(args.taskId, "taskId");
             const run = await loadRun(args.runId);
             if (!runTask(run, args.taskId)) {
                 return `Task ${args.taskId} is not part of run ${args.runId}.`;
             }
-            const task = JSON.parse(await get(`/subjects/${encodeURIComponent(run.subjectId)}/tasks/${encodeURIComponent(args.taskId)}`));
+            const task = JSON.parse(await get(`/subjects/${encodeURIComponent(run.subjectId)}/tasks/${taskId}`));
             return clip(JSON.stringify({ id: task.id, status: task.status, input: task.input, output: task.output }, null, 2));
         },
     },
@@ -73,13 +87,14 @@ const TOOLS = [
             { name: "limit", type: "number", description: "Characters to read (default 8000)", required: false },
         ],
         handler: async (args) => {
+            const taskId = requireId(args.taskId, "taskId");
             const run = await loadRun(args.runId);
             if (!runTask(run, args.taskId)) {
                 return `Task ${args.taskId} is not part of run ${args.runId}.`;
             }
             let log;
             try {
-                log = await get(`/subjects/${encodeURIComponent(run.subjectId)}/tasks/${encodeURIComponent(args.taskId)}/log`, "text/plain");
+                log = await get(`/subjects/${encodeURIComponent(run.subjectId)}/tasks/${taskId}/log`, "text/plain");
             } catch (e) {
                 return `No execution log is available for task ${args.taskId}.`;
             }
@@ -135,7 +150,7 @@ async function main() {
     await server.connect(new StdioServerTransport());
 }
 
-module.exports = { TOOLS, setFetch, pageText };
+module.exports = { TOOLS, setFetch, pageText, requireId };
 
 if (require.main === module) {
     main().catch((e) => { console.error(e); process.exit(1); });

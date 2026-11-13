@@ -59,7 +59,7 @@ export function RunAiSummaryCard({ runId, runStatus, summary, onRequested }: Run
                     <>
                         <Content component="p"><strong>{summary.headline}</strong></Content>
                         {summary.body && (
-                            <div className="axiom-markdown"><Content><Markdown remarkPlugins={[remarkGfm]}>{summary.body}</Markdown></Content></div>
+                            <div className="axiom-markdown"><Content><Markdown remarkPlugins={[remarkGfm]} disallowedElements={["img"]} unwrapDisallowed>{summary.body}</Markdown></Content></div>
                         )}
                     </>
                 )}

@@ -280,8 +280,9 @@ and its trace); it cannot change anything. Shell, file-editing and web tools are
 > **OpenCode limitation:** with OpenCode as the summary engine, the summary agent can still use OpenCode's
 > file `read` tool, so it can read local files on the Axiom host (OpenCode stops responding when that tool
 > is disabled; tracked in [#681](https://github.com/Apitomy/apitomy-axiom/issues/681)). Tools of other MCP
-> servers registered with the shared OpenCode server are not disabled either. Claude Code is recommended
-> as the summary engine.
+> servers registered with the shared OpenCode server are not disabled either. Conversely, the read-only
+> `axiom-run-summary` tools stay registered on the shared OpenCode server, so they are visible to other
+> OpenCode tasks (they are read-only; see #681). Claude Code is recommended as the summary engine.
 
 A failed attempt is retried once before the summary is marked
 `failed`. The cost of each summary is recorded as AI usage with the invocation type `run-summary`.

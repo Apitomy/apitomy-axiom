@@ -42,7 +42,7 @@ public final class RunSummaryResponseParser {
             JsonNode node = tryRead(agentOutput.substring(start, end + 1));
             if (node != null && node.isObject()) {
                 sawJsonObject = true;
-                String headline = node.path("headline").asText("").trim();
+                String headline = node.path("headline").asText("").replaceAll("\\s+", " ").trim();
                 if (headline.isEmpty()) {
                     continue;
                 }

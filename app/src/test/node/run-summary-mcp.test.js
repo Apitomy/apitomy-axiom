@@ -37,6 +37,9 @@ test("get_task_log pages the log", async () => {
 });
 
 test("only GET requests are made", async () => {
+    calls.length = 0;
+    await tool("get_task").handler({ runId: 5, taskId: 11 });
+    await tool("get_task_log").handler({ runId: 5, taskId: 11 });
     await tool("get_run").handler({ runId: 5 });
     await tool("get_trace").handler({ runId: 5 });
     assert.ok(calls.length > 0);
@@ -45,4 +48,22 @@ test("only GET requests are made", async () => {
 
 test("pageText clamps bounds", () => {
     assert.deepStrictEqual(server.pageText("abc", 5, 10), { text: "", start: 3, end: 3, total: 3 });
+});
+
+for (const bad of ["..", ".", "summary", "-1", "1.5"]) {
+    test(`rejects runId ${JSON.stringify(bad)} without fetching`, async () => {
+        for (const name of ["get_run", "get_task", "get_task_log", "get_trace"]) {
+            calls.length = 0;
+            await assert.rejects(tool(name).handler({ runId: bad, taskId: 11 }), /runId must be a positive integer/);
+            assert.strictEqual(calls.length, 0);
+        }
+    });
+}
+
+test("rejects taskId \"..\" without fetching", async () => {
+    for (const name of ["get_task", "get_task_log"]) {
+        calls.length = 0;
+        await assert.rejects(tool(name).handler({ runId: 5, taskId: ".." }), /taskId must be a positive integer/);
+        assert.strictEqual(calls.length, 0);
+    }
 });

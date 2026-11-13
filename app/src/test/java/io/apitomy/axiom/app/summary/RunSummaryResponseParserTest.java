@@ -45,4 +45,10 @@ class RunSummaryResponseParserTest {
         assertThrows(IllegalArgumentException.class, () -> RunSummaryResponseParser.parse("no json here"));
         assertThrows(IllegalArgumentException.class, () -> RunSummaryResponseParser.parse(null));
     }
+
+    @Test
+    void flattensMultiLineHeadline() {
+        String out = "{\"headline\":\"  Line one\\n\\n  line\\ttwo  \",\"body\":\"b\"}";
+        assertEquals("Line one line two", RunSummaryResponseParser.parse(out).headline());
+    }
 }
