@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Button,
@@ -25,7 +25,9 @@ import {
     FilterChips,
 } from "@apitomy/common-ui-components";
 import {
+    type EventSourceConfig,
     type StreamEvent,
+    fetchEventSources,
     fetchStreamEvents,
 } from "../config/api";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
@@ -35,12 +37,36 @@ const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
     jira: "green",
 };
 
-const FILTER_TYPES: ChipFilterType[] = [
-    { value: "type", label: "Event Type", testId: "stream-filter-type" },
-    { value: "eventSourceId", label: "Event Source", testId: "stream-filter-event-source" },
-    { value: "ref", label: "Ref", testId: "stream-filter-ref" },
-    { value: "actor", label: "Actor", testId: "stream-filter-actor" },
-];
+/** Page size used when loading all event sources for the Event Source filter. */
+const EVENT_SOURCE_PAGE_SIZE = 100;
+
+/**
+ * Builds the filter types for the stream. When event sources are known, the Event Source filter
+ * offers them as a select (value = id, label = name); otherwise it falls back to free text.
+ */
+function buildFilterTypes(eventSources: EventSourceConfig[] | null): ChipFilterType[] {
+    return [
+        { value: "type", label: "Event Type", testId: "stream-filter-type" },
+        {
+            value: "eventSourceId", label: "Event Source", testId: "stream-filter-event-source",
+            options: eventSources?.map((es) => ({ value: es.id, label: es.name || es.id })),
+        },
+        { value: "ref", label: "Ref", testId: "stream-filter-ref" },
+        { value: "actor", label: "Actor", testId: "stream-filter-actor" },
+    ];
+}
+
+/** Loads every event source defined in Axiom, following pagination. */
+async function fetchAllEventSources(): Promise<EventSourceConfig[]> {
+    const all: EventSourceConfig[] = [];
+    for (let page = 1; ; page++) {
+        const results = await fetchEventSources(page, EVENT_SOURCE_PAGE_SIZE);
+        all.push(...results.items);
+        if (results.items.length < EVENT_SOURCE_PAGE_SIZE || all.length >= results.totalCount) {
+            return all;
+        }
+    }
+}
 
 /**
  * Extracts a readable short label from a full ref URL.
@@ -78,6 +104,16 @@ export function EventStreamPage() {
     const [loading, setLoading] = useState(true);
 
     const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const [eventSources, setEventSources] = useState<EventSourceConfig[] | null>(null);
+    const filterTypes = useMemo(() => buildFilterTypes(eventSources), [eventSources]);
+
+    useEffect(() => {
+        let cancelled = false;
+        fetchAllEventSources()
+            .then((items) => { if (!cancelled) setEventSources(items); })
+            .catch((err) => { console.error(err); });
+        return () => { cancelled = true; };
+    }, []);
 
     const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
     const filterEventSourceId = filters.find((f) => f.filterBy.value === "eventSourceId")?.filterValue;
@@ -149,7 +185,7 @@ export function EventStreamPage() {
                 <ToolbarContent>
                     <ToolbarItem>
                         <ChipFilterInput
-                            filterTypes={FILTER_TYPES}
+                            filterTypes={filterTypes}
                             onAddCriteria={onAddFilterCriteria} />
                     </ToolbarItem>
                     <ToolbarItem>
@@ -224,8 +260,13 @@ export function EventStreamPage() {
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                const typeFilter = FILTER_TYPES.find((t) => t.value === "eventSourceId")!;
-                                                onAddFilterCriteria({ filterBy: typeFilter, filterValue: event.eventSourceId });
+                                                const typeFilter = filterTypes.find((t) => t.value === "eventSourceId")!;
+                                                const name = eventSources?.find((es) => es.id === event.eventSourceId)?.name;
+                                                onAddFilterCriteria({
+                                                    filterBy: typeFilter,
+                                                    filterValue: event.eventSourceId,
+                                                    filterLabel: name,
+                                                });
                                             }}>
                                             {event.source}
                                         </Label>
@@ -236,7 +277,7 @@ export function EventStreamPage() {
                                             style={{ cursor: "pointer" }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                const typeFilter = FILTER_TYPES.find((t) => t.value === "type")!;
+                                                const typeFilter = filterTypes.find((t) => t.value === "type")!;
                                                 onAddFilterCriteria({ filterBy: typeFilter, filterValue: event.type });
                                             }}>
                                             {event.type}
@@ -249,7 +290,7 @@ export function EventStreamPage() {
                                         {event.actor?.login ? (
                                             <Label isCompact variant="outline" onClick={(e) => {
                                                 e.stopPropagation();
-                                                const actorFilter = FILTER_TYPES.find((t) => t.value === "actor")!;
+                                                const actorFilter = filterTypes.find((t) => t.value === "actor")!;
                                                 onAddFilterCriteria({ filterBy: actorFilter,
                                                     filterValue: event.actor?.login as string });
                                             }}>

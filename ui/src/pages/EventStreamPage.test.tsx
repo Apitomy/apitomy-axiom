@@ -6,7 +6,7 @@ import { renderWithRouter } from "../test/renderWithRouter";
 import * as api from "../config/api";
 import type { StreamEvent, StreamEventProcessingStates } from "../config/api";
 
-vi.mock("../config/api", () => ({ fetchStreamEvents: vi.fn() }));
+vi.mock("../config/api", () => ({ fetchStreamEvents: vi.fn(), fetchEventSources: vi.fn() }));
 vi.mock("../config/sse", () => ({ sseClient: { subscribe: vi.fn(() => () => {}) } }));
 
 const event = {
@@ -16,11 +16,19 @@ const event = {
 
 beforeEach(() => {
     vi.mocked(api.fetchStreamEvents).mockReset().mockResolvedValue({ items: [event], totalCount: 1 } as never);
+    vi.mocked(api.fetchEventSources).mockReset().mockResolvedValue({
+        items: [{ id: "gh", name: "GitHub Main" }, { id: "jira", name: "Corporate Jira" }], totalCount: 2,
+    } as never);
 });
 
 function lastActorFilter(): unknown {
     const calls = vi.mocked(api.fetchStreamEvents).mock.calls;
     return calls[calls.length - 1][5];
+}
+
+function lastEventSourceFilter(): unknown {
+    const calls = vi.mocked(api.fetchStreamEvents).mock.calls;
+    return calls[calls.length - 1][3];
 }
 
 describe("EventStreamPage", () => {
@@ -39,6 +47,39 @@ describe("EventStreamPage", () => {
         await screen.findByText("jsenko");
         await userEvent.click(screen.getByRole("button", { name: "Event Type" }));
         expect(await screen.findByRole("option", { name: "Actor" })).toBeInTheDocument();
+    });
+
+    it("filters by event source chosen from a select of all event sources", async () => {
+        renderWithRouter(<EventStreamPage />);
+        await screen.findByText("jsenko");
+        await waitFor(() => expect(api.fetchEventSources).toHaveBeenCalled());
+        await userEvent.click(screen.getByRole("button", { name: "Event Type" }));
+        await userEvent.click(await screen.findByRole("option", { name: "Event Source" }));
+        expect(screen.queryByLabelText("search input")).not.toBeInTheDocument();
+        await userEvent.click(screen.getByRole("button", { name: "Select Event Source" }));
+        await userEvent.click(await screen.findByRole("option", { name: "Corporate Jira" }));
+        await waitFor(() => expect(lastEventSourceFilter()).toBe("jira"));
+        const chips = document.querySelector(".pf-v6-c-label-group") as HTMLElement;
+        expect(chips.textContent).toContain("Event Source: Corporate Jira");
+    });
+
+    it("labels the event source chip by name when the source label is clicked", async () => {
+        renderWithRouter(<EventStreamPage />);
+        await waitFor(() => expect(api.fetchEventSources).toHaveBeenCalled());
+        await userEvent.click(await screen.findByText("github"));
+        await waitFor(() => expect(lastEventSourceFilter()).toBe("gh"));
+        const chips = document.querySelector(".pf-v6-c-label-group") as HTMLElement;
+        expect(chips.textContent).toContain("Event Source: GitHub Main");
+    });
+
+    it("falls back to a text input when event sources cannot be loaded", async () => {
+        vi.mocked(api.fetchEventSources).mockRejectedValue(new Error("boom"));
+        vi.spyOn(console, "error").mockImplementation(() => {});
+        renderWithRouter(<EventStreamPage />);
+        await screen.findByText("jsenko");
+        await userEvent.click(screen.getByRole("button", { name: "Event Type" }));
+        await userEvent.click(await screen.findByRole("option", { name: "Event Source" }));
+        expect(screen.getByLabelText("search input")).toBeInTheDocument();
     });
 
     it("flags failed matches in the match indicator", async () => {
