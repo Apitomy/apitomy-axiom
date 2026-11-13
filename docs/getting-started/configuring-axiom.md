@@ -130,6 +130,11 @@ not greater than zero, or `retry-max-delay` is less than `retry-initial-delay` (
 |----------|---------|--------------|
 | `axiom.workflow.schedule-poll-interval` | `30s` | How often to check for due workflow schedule triggers. Schedule triggers fire on a single node only; running several Axiom nodes against one database is not supported for schedule triggers. |
 | `axiom.workflow.wait-poll-interval` | `10s` | How often to resume workflow runs whose `wait` node has elapsed |
+| `axiom.run-summary.enabled` | `true` | Global switch for AI run summaries (automatic and on demand); see [AI Run Summaries](../user-guide/workflows.md#ai-run-summaries). The engine and model are chosen in **Settings → AI Engine** |
+| `axiom.run-summary.poll-interval` | `5s` | How often pending run summaries are picked up for generation |
+| `axiom.run-summary.batch-size` | `2` | Maximum number of run summaries generated at the same time |
+| `axiom.run-summary.max-steps` | `10` | Maximum agent steps for one run summary |
+| `axiom.run-summary.timeout-seconds` | `300` | Time limit, in seconds, for generating one run summary; the agent is stopped when it is exceeded and the attempt counts as failed |
 
 ### Scripts
 

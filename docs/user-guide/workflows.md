@@ -251,6 +251,36 @@ Cancellation is per run: use **Cancel run** on the run detail page of a `running
 task the run created, and removes any pending wait or event-subscription state associated with it. A
 cancelled run cannot be resumed. Other runs on the same subject are unaffected.
 
+### AI Run Summaries
+
+Axiom can ask an AI agent to write a short summary of a finished run: a one-line headline and a few
+Markdown bullet points explaining what the run did and, for a failed run, why it failed.
+
+- **Opt in per workflow** — check **Generate AI summaries for completed and failed runs** in the workflow's
+  **Edit Workflow Definition** dialog (REST: `summarizeRuns: true` on the workflow definition). It is off
+  by default. Runs of an opted-in workflow are summarized automatically when they end `completed` or
+  `failed`; cancelled runs are not.
+- **On demand** — the **AI summary** card above the tabs of any finished run's detail page has a
+  **Summarize this run** button (and **Regenerate** / **Retry** once a summary exists or has failed),
+  whether or not the workflow opted in (REST: `POST /api/v1/workflow/runs/{runId}/ai-summary`, which
+  returns `202`; `409` while the run is still active or a summary is being generated, `404` for an unknown
+  run, `503` when run summaries are turned off).
+- **Where it shows** — run lists show the headline (or *Summarizing…* while it is generated) under the run
+  title; the run detail card shows the full summary and which engine and model produced it. The summary is
+  also returned as `aiSummary` on `GET /api/v1/workflow/runs/{runId}` and in run lists, with a `status` of
+  `pending`, `generating`, `ready`, or `failed`.
+- **Engine and model** — choose them under **Settings → AI Engine → Run summaries** (REST: `summaryEngine`
+  and `summaryModel` on `/api/v1/system/config`). They default to the system default engine and that
+  engine's default model; a small, cheap model is usually enough.
+
+Summaries are generated in the background, a few at a time, by an agent from the agent pool. The agent
+can only read the run through the read-only `axiom-run-summary` MCP server (the run, its tasks, task logs,
+and its trace); it cannot change anything. A failed attempt is retried once before the summary is marked
+`failed`. The cost of each summary is recorded as AI usage with the invocation type `run-summary`.
+Summaries are deleted with their run. The `axiom.run-summary.*` properties
+([Configuring Axiom](../getting-started/configuring-axiom.md#workflows)) tune the background generation or
+turn it off.
+
 ## Axiom SDK Functions
 
 The **Axiom SDK** is a set of functions for reading and updating Axiom data. They are available in two ways:
