@@ -275,7 +275,15 @@ Markdown bullet points explaining what the run did and, for a failed run, why it
 
 Summaries are generated in the background, a few at a time, by an agent from the agent pool. The agent
 can only read the run through the read-only `axiom-run-summary` MCP server (the run, its tasks, task logs,
-and its trace); it cannot change anything. A failed attempt is retried once before the summary is marked
+and its trace); it cannot change anything. Shell, file-editing and web tools are denied to it.
+
+> **OpenCode limitation:** with OpenCode as the summary engine, the summary agent can still use OpenCode's
+> file `read` tool, so it can read local files on the Axiom host (OpenCode stops responding when that tool
+> is disabled; tracked in [#681](https://github.com/Apitomy/apitomy-axiom/issues/681)). Tools of other MCP
+> servers registered with the shared OpenCode server are not disabled either. Claude Code is recommended
+> as the summary engine.
+
+A failed attempt is retried once before the summary is marked
 `failed`. The cost of each summary is recorded as AI usage with the invocation type `run-summary`.
 Summaries are deleted with their run. The `axiom.run-summary.*` properties
 ([Configuring Axiom](../getting-started/configuring-axiom.md#workflows)) tune the background generation or
