@@ -230,7 +230,9 @@ public class RunSummaryService {
                     .actionType(INVOCATION_TYPE);
             if (openCode) {
                 builder.disallowedTools(RunSummaryMcp.OPENCODE_DENIED_TOOLS);
-                agentRegistry.getMcpManager(agentType).configureMcpServers(runId, Map.of(), RunSummaryMcp.ALLOWED_TOOLS);
+                // Registration reads tool and MCP server definitions, which needs a transaction.
+                QuarkusTransaction.requiringNew().run(() -> agentRegistry.getMcpManager(agentType)
+                        .configureMcpServers(runId, Map.of(), RunSummaryMcp.ALLOWED_TOOLS));
             } else {
                 builder.mcpConfigFile(runSummaryMcp.writeConfigFile(runId));
             }

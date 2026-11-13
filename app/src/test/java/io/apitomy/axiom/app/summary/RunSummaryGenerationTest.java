@@ -125,6 +125,12 @@ class RunSummaryGenerationTest {
         AgentMcpManager mcpManager = Mockito.mock(AgentMcpManager.class);
         AgentRegistry agentRegistry = Mockito.mock(AgentRegistry.class);
         when(agentRegistry.getMcpManager("opencode")).thenReturn(mcpManager);
+        // OpenCode MCP registration reads tool and server definitions from the database.
+        AtomicReference<Boolean> inTransaction = new AtomicReference<>();
+        when(mcpManager.configureMcpServers(any(), any(), any())).thenAnswer(inv -> {
+            inTransaction.set(QuarkusTransaction.isActive());
+            return null;
+        });
         QuarkusMock.installMockForType(agentRegistry, AgentRegistry.class);
         when(agent.execute(any())).thenReturn(CompletableFuture.completedFuture(
                 AgentResult.success("{\"headline\":\"Done it\",\"body\":\"- a\"}")));
@@ -138,6 +144,7 @@ class RunSummaryGenerationTest {
             assertTrue(denied != null && denied.contains(tool), "should deny " + tool + ": " + denied);
         }
         Mockito.verify(mcpManager).configureMcpServers(id, java.util.Map.of(), RunSummaryMcp.ALLOWED_TOOLS);
+        assertEquals(Boolean.TRUE, inTransaction.get(), "MCP registration must run in a transaction");
     }
 
     @Test
