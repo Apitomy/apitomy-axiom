@@ -40,9 +40,10 @@ public class RunSummaryMcp {
      * Built-in tools denied to OpenCode summary agents. OpenCode treats the allowed tools as extra permissions
      * rather than an exclusive list, so its built-in tools must be denied explicitly to keep the agent read-only
      * and limited to the run summary server. (Claude Code restricts built-ins through {@code --tools}.)
+     * {@code Read} is not denied: OpenCode 1.18 never answers a prompt whose tools disable {@code read}.
      */
     public static final List<String> OPENCODE_DENIED_TOOLS = List.of(
-            "Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "TodoWrite",
+            "Bash", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "TodoWrite",
             "TodoRead", "list", "patch", "skill", "lsp", "codesearch", "external_directory");
 
     private static final String INSTALL_DIR = "run-summary-mcp-server";

@@ -139,10 +139,12 @@ class RunSummaryGenerationTest {
         ArgumentCaptor<AgentRequest> req = ArgumentCaptor.forClass(AgentRequest.class);
         Mockito.verify(agent).execute(req.capture());
         List<String> denied = req.getValue().getDisallowedTools();
-        for (String tool : List.of("Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch",
+        for (String tool : List.of("Bash", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch",
                 "Task", "list", "patch", "skill")) {
             assertTrue(denied != null && denied.contains(tool), "should deny " + tool + ": " + denied);
         }
+        // OpenCode 1.18 never answers a prompt whose tools disable "read".
+        assertFalse(denied.contains("Read"), "denying Read hangs OpenCode");
         Mockito.verify(mcpManager).configureMcpServers(id, java.util.Map.of(), RunSummaryMcp.ALLOWED_TOOLS);
         assertEquals(Boolean.TRUE, inTransaction.get(), "MCP registration must run in a transaction");
     }
