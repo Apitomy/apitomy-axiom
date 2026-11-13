@@ -37,14 +37,23 @@ public class RunSummaryMcp {
             "mcp__axiom-run-summary__get_trace");
 
     /**
-     * Built-in tools denied to OpenCode summary agents. OpenCode treats the allowed tools as extra permissions
-     * rather than an exclusive list, so its built-in tools must be denied explicitly to keep the agent read-only
-     * and limited to the run summary server. (Claude Code restricts built-ins through {@code --tools}.)
-     * {@code Read} is not denied: OpenCode 1.18 never answers a prompt whose tools disable {@code read}.
+     * Built-in tools denied to OpenCode summary agents, as raw OpenCode tool names (the permission mapper passes
+     * lowercase names through unchanged). OpenCode treats the allowed tools as extra permissions rather than an
+     * exclusive list, so its built-ins must be denied explicitly (see #681). {@code read} is not denied:
+     * OpenCode 1.18 never answers a prompt whose tools disable it, so OpenCode summary agents can read local
+     * files (documented). Tools of other MCP servers registered on the shared OpenCode server are not denied
+     * either; OpenCode's per-prompt {@code tools} map is not known to support wildcards.
      */
     public static final List<String> OPENCODE_DENIED_TOOLS = List.of(
-            "Bash", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch", "Task", "TodoWrite",
-            "TodoRead", "list", "patch", "skill", "lsp", "codesearch", "external_directory");
+            "bash", "write", "edit", "multiedit", "apply_patch", "patch", "webfetch", "websearch", "task",
+            "todowrite", "todoread", "glob", "grep", "list", "skill", "lsp", "codesearch");
+
+    /**
+     * Copilot CLI tools denied to summary agents. The CLI always runs with {@code --allow-all-tools} in
+     * non-interactive mode; {@code --deny-tool} rules take precedence over it. {@code shell}, {@code write} and
+     * {@code url} cover shell commands, file modification and web access.
+     */
+    public static final List<String> COPILOT_DENIED_TOOLS = List.of("shell", "write", "url");
 
     private static final String INSTALL_DIR = "run-summary-mcp-server";
     private static final String RESOURCE_DIR = "templates/axiom-run-summary-mcp/";

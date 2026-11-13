@@ -59,6 +59,15 @@ class McpConfigGeneratorTest {
 
     // ── Unrestricted config (both servers) ───────────────────────────
 
+    /** OpenCode registration may run outside a transaction (run summaries); DB reads open their own. */
+    @Test
+    void openCodeServersCanBeComputedOutsideATransaction() {
+        assertFalse(io.quarkus.narayana.jta.QuarkusTransaction.isActive());
+        List<io.apitomy.axiom.agents.opencode.OpenCodeMcpManager.McpServerConfig> configs =
+                generator.getMcpServersForOpenCode(9002L, Map.of(), List.of("mcp__axiom-tools__no-such-tool"));
+        assertNotNull(configs);
+    }
+
     @Test
     void testUnrestrictedConfigHasBothServers() throws Exception {
         Path configFile = generator.generateMcpConfig(9001L, Map.of(), null);

@@ -1,11 +1,12 @@
 package io.apitomy.axiom.app.summary;
 
+import io.apitomy.axiom.agents.spi.AgentMcpManager;
+import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.app.AgentLease;
 import io.apitomy.axiom.app.AgentPool;
 import io.apitomy.axiom.app.HistoryCleanup;
-import io.apitomy.axiom.agents.spi.AgentRegistry;
 import io.apitomy.axiom.core.entities.AiUsageEntity;
 import io.apitomy.axiom.core.entities.SystemConfigEntity;
 import io.apitomy.axiom.core.entities.TaskEntity;
@@ -230,10 +231,18 @@ public class RunSummaryService {
                     .actionType(INVOCATION_TYPE);
             if (openCode) {
                 builder.disallowedTools(RunSummaryMcp.OPENCODE_DENIED_TOOLS);
-                // Registration reads tool and MCP server definitions, which needs a transaction.
-                QuarkusTransaction.requiringNew().run(() -> agentRegistry.getMcpManager(agentType)
-                        .configureMcpServers(runId, Map.of(), RunSummaryMcp.ALLOWED_TOOLS));
+                // Runs outside any transaction (it may install the server and call OpenCode); the database
+                // reads open their own short transactions.
+                AgentMcpManager mcpManager = agentRegistry.getMcpManager(agentType);
+                mcpManager.configureMcpServers(runId, Map.of(), RunSummaryMcp.ALLOWED_TOOLS);
+                if (!mcpManager.isServerRegistered(RunSummaryMcp.SERVER_NAME)) {
+                    throw new IllegalStateException("The " + RunSummaryMcp.SERVER_NAME
+                            + " MCP server could not be registered with OpenCode");
+                }
             } else {
+                if ("copilot".equals(agentType)) {
+                    builder.disallowedTools(RunSummaryMcp.COPILOT_DENIED_TOOLS);
+                }
                 builder.mcpConfigFile(runSummaryMcp.writeConfigFile(runId));
             }
             future = lease.agent().execute(builder.build());

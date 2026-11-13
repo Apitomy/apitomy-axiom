@@ -1,9 +1,10 @@
 package io.apitomy.axiom.app.summary;
 
+import io.apitomy.axiom.agents.opencode.OpenCodeClient;
+import io.apitomy.axiom.agents.opencode.OpenCodePermissionMapper;
 import io.apitomy.axiom.agents.spi.Agent;
 import io.apitomy.axiom.agents.spi.AgentMcpManager;
 import io.apitomy.axiom.agents.spi.AgentRegistry;
-import io.quarkus.test.junit.QuarkusMock;
 import io.apitomy.axiom.agents.spi.AgentRequest;
 import io.apitomy.axiom.agents.spi.AgentResult;
 import io.apitomy.axiom.app.AgentLease;
@@ -14,6 +15,7 @@ import io.apitomy.axiom.core.entities.WorkflowRunSummaryEntity;
 import io.quarkus.arc.ClientProxy;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 import io.quarkus.test.InjectMock;
+import io.quarkus.test.junit.QuarkusMock;
 import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
@@ -122,31 +125,64 @@ class RunSummaryGenerationTest {
     @Test
     void openCodeSummaryDeniesBuiltInTools() {
         when(agent.getType()).thenReturn("opencode");
-        AgentMcpManager mcpManager = Mockito.mock(AgentMcpManager.class);
-        AgentRegistry agentRegistry = Mockito.mock(AgentRegistry.class);
-        when(agentRegistry.getMcpManager("opencode")).thenReturn(mcpManager);
-        // OpenCode MCP registration reads tool and server definitions from the database.
-        AtomicReference<Boolean> inTransaction = new AtomicReference<>();
-        when(mcpManager.configureMcpServers(any(), any(), any())).thenAnswer(inv -> {
-            inTransaction.set(QuarkusTransaction.isActive());
-            return null;
-        });
-        QuarkusMock.installMockForType(agentRegistry, AgentRegistry.class);
+        AgentMcpManager mcpManager = installMcpManager("opencode", true);
         when(agent.execute(any())).thenReturn(CompletableFuture.completedFuture(
                 AgentResult.success("{\"headline\":\"Done it\",\"body\":\"- a\"}")));
         long id = pendingRun();
         claimAndGenerate(id);
         ArgumentCaptor<AgentRequest> req = ArgumentCaptor.forClass(AgentRequest.class);
         Mockito.verify(agent).execute(req.capture());
-        List<String> denied = req.getValue().getDisallowedTools();
-        for (String tool : List.of("Bash", "Write", "Edit", "Glob", "Grep", "WebFetch", "WebSearch",
-                "Task", "list", "patch", "skill")) {
-            assertTrue(denied != null && denied.contains(tool), "should deny " + tool + ": " + denied);
+        Mockito.verify(mcpManager).configureMcpServers(id, Map.of(), RunSummaryMcp.ALLOWED_TOOLS);
+        // The tools map OpenCode actually receives for this request
+        Map<String, Boolean> tools = OpenCodeClient.toToolsMap(OpenCodePermissionMapper.mapPermissions(
+                req.getValue().getAllowedTools(), req.getValue().getDisallowedTools()));
+        for (String tool : List.of("write", "edit", "multiedit", "apply_patch", "patch", "bash", "webfetch",
+                "websearch", "task", "todowrite")) {
+            assertEquals(Boolean.FALSE, tools.get(tool), "should deny " + tool + ": " + tools);
         }
-        // OpenCode 1.18 never answers a prompt whose tools disable "read".
-        assertFalse(denied.contains("Read"), "denying Read hangs OpenCode");
-        Mockito.verify(mcpManager).configureMcpServers(id, java.util.Map.of(), RunSummaryMcp.ALLOWED_TOOLS);
-        assertEquals(Boolean.TRUE, inTransaction.get(), "MCP registration must run in a transaction");
+        for (String tool : List.of("axiom-run-summary_get_run", "axiom-run-summary_get_task",
+                "axiom-run-summary_get_task_log", "axiom-run-summary_get_trace")) {
+            assertEquals(Boolean.TRUE, tools.get(tool), "should allow " + tool + ": " + tools);
+        }
+        // OpenCode 1.18 never answers a prompt whose tools disable "read" (accepted, see docs).
+        assertFalse(tools.containsKey("read"), "denying read hangs OpenCode");
+        assertFalse(tools.containsKey("external_directory"), "a permission, not a tool");
+        assertEquals(WorkflowRunSummaryEntity.READY, row(id).status);
+    }
+
+    @Test
+    void openCodeSummaryFailsWithoutRunningTheAgentWhenTheServerIsNotRegistered() {
+        when(agent.getType()).thenReturn("opencode");
+        installMcpManager("opencode", false);
+        long id = pendingRun();
+        claimAndGenerate(id);
+        Mockito.verify(agent, Mockito.never()).execute(any());
+        WorkflowRunSummaryEntity s = row(id);
+        assertEquals(1, s.attempts);
+        assertTrue(s.error.contains("axiom-run-summary"), s.error);
+    }
+
+    @Test
+    void copilotSummaryDeniesShellWriteAndUrlTools() {
+        when(agent.getType()).thenReturn("copilot");
+        when(agent.execute(any())).thenReturn(CompletableFuture.completedFuture(
+                AgentResult.success("{\"headline\":\"Done it\",\"body\":\"- a\"}")));
+        long id = pendingRun();
+        claimAndGenerate(id);
+        ArgumentCaptor<AgentRequest> req = ArgumentCaptor.forClass(AgentRequest.class);
+        Mockito.verify(agent).execute(req.capture());
+        assertTrue(req.getValue().getDisallowedTools().containsAll(List.of("shell", "write", "url")),
+                String.valueOf(req.getValue().getDisallowedTools()));
+        assertEquals(RunSummaryMcp.ALLOWED_TOOLS, req.getValue().getAllowedTools());
+    }
+
+    private AgentMcpManager installMcpManager(String type, boolean registered) {
+        AgentMcpManager mcpManager = Mockito.mock(AgentMcpManager.class);
+        when(mcpManager.isServerRegistered(RunSummaryMcp.SERVER_NAME)).thenReturn(registered);
+        AgentRegistry agentRegistry = Mockito.mock(AgentRegistry.class);
+        when(agentRegistry.getMcpManager(type)).thenReturn(mcpManager);
+        QuarkusMock.installMockForType(agentRegistry, AgentRegistry.class);
+        return mcpManager;
     }
 
     @Test

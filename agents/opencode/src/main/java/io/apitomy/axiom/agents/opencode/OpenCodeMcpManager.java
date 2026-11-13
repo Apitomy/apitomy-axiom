@@ -191,10 +191,21 @@ public class OpenCodeMcpManager implements AgentMcpManager {
 
         } catch (Exception e) {
             LOG.errorf(e, "Failed to register MCP servers for work item %d", workItemId);
+            // The server's state is unknown now: forget it so callers do not trust stale registrations.
+            synchronized (this) {
+                registeredServers.clear();
+                registeredOn = null;
+            }
         }
 
         // OpenCode doesn't use config files -- return null
         return null;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized boolean isServerRegistered(String serverName) {
+        return registeredServers.containsKey(serverName);
     }
 
     /** {@inheritDoc} */

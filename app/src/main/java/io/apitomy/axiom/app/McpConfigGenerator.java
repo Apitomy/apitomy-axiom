@@ -16,8 +16,8 @@ import io.apitomy.axiom.app.summary.RunSummaryMcp;
 import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
-import jakarta.annotation.PostConstruct;
 import io.quarkus.runtime.Startup;
+import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -416,11 +416,14 @@ public class McpConfigGenerator {
         }
 
         // Script tools → axiom-tools local MCP server
-        List<ToolDefinitionEntity> scriptTools = ToolDefinitionEntity.<ToolDefinitionEntity>listAll()
-                .stream()
-                .filter(t -> !hasRestrictions
-                        || allowedTools.contains(AXIOM_TOOLS_PREFIX + t.name))
-                .toList();
+        // Database reads join the caller's transaction or open a short one (run summaries register servers
+        // outside any transaction, so installs and OpenCode calls never hold one open).
+        List<ToolDefinitionEntity> scriptTools = io.quarkus.narayana.jta.QuarkusTransaction.joiningExisting()
+                .call(() -> ToolDefinitionEntity.<ToolDefinitionEntity>listAll()
+                        .stream()
+                        .filter(t -> !hasRestrictions
+                                || allowedTools.contains(AXIOM_TOOLS_PREFIX + t.name))
+                        .toList());
 
         if (!scriptTools.isEmpty()) {
             String toolsJsonContent = buildToolsJson(scriptTools);
@@ -447,7 +450,9 @@ public class McpConfigGenerator {
         }
 
         // External MCP servers
-        mcpServerResolver.resolveForAllowedTools(allowedTools).forEach(servers::putIfAbsent);
+        io.quarkus.narayana.jta.QuarkusTransaction.joiningExisting()
+                .call(() -> mcpServerResolver.resolveForAllowedTools(allowedTools))
+                .forEach(servers::putIfAbsent);
 
         List<McpServerConfig> configs = new ArrayList<>();
         environmentIsolation.isolateAll(servers).forEach((name, def) -> configs.add(toOpenCodeConfig(name, def)));
