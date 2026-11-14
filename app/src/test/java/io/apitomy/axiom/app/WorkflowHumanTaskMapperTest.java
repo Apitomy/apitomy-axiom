@@ -44,6 +44,22 @@ class WorkflowHumanTaskMapperTest {
     }
 
     @Test
+    void toHumanContextIncludesTheRenderedBody() {
+        HumanTaskInfo hti = new HumanTaskInfo("ht1", "Review", "Plain description", Map.of(), List.of(),
+                "Review", "## Order 42\nPlease **approve**.");
+        HumanContext ctx = WorkflowHumanTaskMapper.toHumanContext(hti);
+        assertEquals("## Order 42\nPlease **approve**.", ctx.getBody());
+        assertEquals("Plain description", ctx.getDescription());
+    }
+
+    @Test
+    void toHumanContextOmitsBlankBody() {
+        HumanTaskInfo hti = new HumanTaskInfo("ht1", "Review", "Plain description", Map.of(), List.of(),
+                "Review", "   ");
+        assertNull(WorkflowHumanTaskMapper.toHumanContext(hti).getBody());
+    }
+
+    @Test
     void toHumanContextFallsBackToDefaultTitle() {
         HumanTaskInfo hti = new HumanTaskInfo("ht1", "  ", null, Map.of(), List.of());
         HumanContext ctx = WorkflowHumanTaskMapper.toHumanContext(hti);

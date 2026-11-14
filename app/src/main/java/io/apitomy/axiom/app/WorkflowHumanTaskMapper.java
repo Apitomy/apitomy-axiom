@@ -41,6 +41,8 @@ public final class WorkflowHumanTaskMapper {
         String title = hti.title() != null && !hti.title().isBlank() ? hti.title() : hti.nodeName();
         ctx.setTitle(title != null && !title.isBlank() ? title : DEFAULT_TITLE);
         ctx.setDescription(hti.description());
+        // The rendered markdown body; Flow falls back to the description when the node has no body.
+        ctx.setBody(hti.body() != null && !hti.body().isBlank() ? hti.body() : null);
 
         if (hti.inputs() != null && !hti.inputs().isEmpty()) {
             List<HumanContextDetail> details = new ArrayList<>();

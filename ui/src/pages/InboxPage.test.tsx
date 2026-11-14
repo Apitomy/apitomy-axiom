@@ -69,4 +69,47 @@ describe("InboxPage task description", () => {
         expect(screen.getByRole("link", { name: "docs" })).toHaveAttribute("href", "https://example.com/docs");
         expect(dialog).not.toHaveTextContent("**approve**");
     });
+
+    it("prefers the markdown body over the description", async () => {
+        vi.mocked(api.fetchInboxItems).mockResolvedValue({ items: [], totalCount: 0 } as
+            unknown as api.SearchResults<api.InboxItem>);
+        vi.mocked(api.fetchInboxItem).mockResolvedValue({
+            id: 7, subjectId: 1, actionType: "review", status: "pending", createdOn: "",
+            humanContext: {
+                title: "Review",
+                description: "Plain description",
+                body: "## Order 42\n\nPlease **ship** it.",
+            },
+        } as api.InboxItem);
+        renderAt("/inbox?task=7");
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog.querySelector("h2")).toHaveTextContent("Order 42");
+        expect(dialog.querySelector("strong")).toHaveTextContent("ship");
+        expect(dialog).not.toHaveTextContent("Plain description");
+    });
+
+    it("falls back to the description when the body is blank", async () => {
+        vi.mocked(api.fetchInboxItems).mockResolvedValue({ items: [], totalCount: 0 } as
+            unknown as api.SearchResults<api.InboxItem>);
+        vi.mocked(api.fetchInboxItem).mockResolvedValue({
+            id: 8, subjectId: 1, actionType: "review", status: "pending", createdOn: "",
+            humanContext: { title: "Review", description: "Fallback *text*", body: "  " },
+        } as api.InboxItem);
+        renderAt("/inbox?task=8");
+        const dialog = await screen.findByRole("dialog");
+        expect(dialog.querySelector("em")).toHaveTextContent("text");
+    });
+
+    it("shows inputs in a striped table", async () => {
+        vi.mocked(api.fetchInboxItems).mockResolvedValue({ items: [], totalCount: 0 } as
+            unknown as api.SearchResults<api.InboxItem>);
+        vi.mocked(api.fetchInboxItem).mockResolvedValue({
+            id: 9, subjectId: 1, actionType: "review", status: "pending", createdOn: "",
+            humanContext: { title: "Review", details: [{ label: "url", value: "https://example.com" }] },
+        } as api.InboxItem);
+        renderAt("/inbox?task=9");
+        await screen.findByRole("dialog");
+        expect(screen.getByRole("grid", { name: "Task inputs" }).className).toContain("pf-m-striped");
+        expect(screen.getByRole("link", { name: /example\.com/ })).toHaveAttribute("target", "_blank");
+    });
 });

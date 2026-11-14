@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
     Alert,
     AlertActionCloseButton,
@@ -27,8 +25,8 @@ import {
 import { Table, Tbody, Td, Th, Thead, Tr } from "@patternfly/react-table";
 import SyncAltIcon from "@patternfly/react-icons/dist/esm/icons/sync-alt-icon";
 import ExternalLinkAltIcon from "@patternfly/react-icons/dist/esm/icons/external-link-alt-icon";
-import { markdownMermaidComponents } from "../components/MermaidBlock";
-import "../axiom-markdown.css";
+import { AxiomMarkdown } from "../components/AxiomMarkdown";
+import { InboxInputsTable } from "../components/InboxInputsTable";
 import {
     type InboxItem,
     fetchInboxItems,
@@ -176,6 +174,15 @@ export function InboxPage() {
         return item.humanContext?.title || item.actionType;
     };
 
+    /** The markdown to show for a task: the body when non-blank, otherwise the description. */
+    const getBodyMarkdown = (item: InboxItem): string | undefined => {
+        const ctx = item.humanContext;
+        if (ctx?.body?.trim()) {
+            return ctx.body;
+        }
+        return ctx?.description?.trim() ? ctx.description : undefined;
+    };
+
     return (
         <PageSection>
             <Title headingLevel="h1" size="lg" style={{ marginBottom: "16px" }}>
@@ -286,14 +293,10 @@ export function InboxPage() {
                     <ModalHeader title={getTitle(selectedItem)} />
                     <ModalBody>
                         {/* Context section */}
-                        {selectedItem.humanContext?.description && (
-                            <div className="axiom-markdown" style={{ marginBottom: "16px" }}>
-                                <Content>
-                                    <Markdown remarkPlugins={[remarkGfm]} components={markdownMermaidComponents}>
-                                        {selectedItem.humanContext.description}
-                                    </Markdown>
-                                </Content>
-                            </div>
+                        {getBodyMarkdown(selectedItem) && (
+                            <AxiomMarkdown style={{ marginBottom: "16px" }}>
+                                {getBodyMarkdown(selectedItem)!}
+                            </AxiomMarkdown>
                         )}
 
                         {/* Reference links */}
@@ -324,14 +327,7 @@ export function InboxPage() {
                         {selectedItem.humanContext?.details &&
                             selectedItem.humanContext.details.length > 0 && (
                             <div style={{ marginBottom: "16px" }}>
-                                {selectedItem.humanContext.details.map((d) => (
-                                    <div key={d.label} style={{ marginBottom: "4px" }}>
-                                        <strong>{d.label}:</strong>{" "}
-                                        {d.value?.trim()
-                                            ? d.value
-                                            : <span className="axiom-text-subtle">&mdash;</span>}
-                                    </div>
-                                ))}
+                                <InboxInputsTable details={selectedItem.humanContext.details} />
                             </div>
                         )}
 

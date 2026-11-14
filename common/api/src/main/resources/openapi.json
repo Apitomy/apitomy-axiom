@@ -10219,6 +10219,10 @@
           "description": {
             "type": "string"
           },
+          "body": {
+            "description": "The task body as raw markdown, with workflow expressions already resolved. When empty or missing, clients should display the description instead.",
+            "type": "string"
+          },
           "references": {
             "type": "array",
             "items": {
