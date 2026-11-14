@@ -1609,6 +1609,8 @@ export interface HumanContextReference {
 export interface HumanContext {
     title: string;
     description?: string;
+    /** Rendered markdown body; display it instead of the description when non-blank. */
+    body?: string;
     references?: HumanContextReference[];
     details?: { label: string; value: string }[];
 }

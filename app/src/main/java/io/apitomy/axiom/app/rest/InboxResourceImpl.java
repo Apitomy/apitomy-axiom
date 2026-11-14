@@ -269,6 +269,9 @@ public class InboxResourceImpl implements InboxResource {
         if (node.has("description")) {
             ctx.setDescription(node.get("description").asText());
         }
+        if (node.hasNonNull("body")) {
+            ctx.setBody(node.get("body").asText());
+        }
         if (node.has("references") && node.get("references").isArray()) {
             List<HumanContextReference> refs = new ArrayList<>();
             for (JsonNode refNode : node.get("references")) {

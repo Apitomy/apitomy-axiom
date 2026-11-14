@@ -258,6 +258,71 @@ class WorkflowInstanceResourceTest {
     }
 
     @Test
+    void testHumanTaskInboxItemIncludesRenderedMarkdownBody() {
+        int subjectId = createSubject("WF Human Task Body Subject");
+        int definitionId = createDefinition("Human Task Body WF");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "id": "wf-human-body",
+                        "name": "Human Body",
+                        "nodes": [
+                            {"id": "s1", "type": "start", "name": "Start",
+                             "config": {}, "position": {"x": 100, "y": 100}},
+                            {"id": "ht1", "type": "human-task", "name": "Review",
+                             "config": {"description": "Plain description",
+                                        "body": "## Score ${1 + 41}\\n\\nPlease **review**.",
+                                        "outputs": [{"name": "approved", "type": "boolean",
+                                                     "required": true, "label": "Approve?"}]},
+                             "position": {"x": 100, "y": 200}},
+                            {"id": "e1", "type": "end", "name": "End",
+                             "config": {}, "position": {"x": 100, "y": 300}}
+                        ],
+                        "edges": [
+                            {"id": "edge1", "source": "s1", "target": "ht1",
+                             "priority": 0, "isDefault": true},
+                            {"id": "edge2", "source": "ht1", "target": "e1",
+                             "priority": 0, "isDefault": true}
+                        ]
+                    }
+                    """)
+                .when()
+                    .put(WORKFLOWS_PATH + "/" + definitionId + "/content")
+                .then()
+                    .statusCode(204);
+
+        given().when().post(WORKFLOWS_PATH + "/" + definitionId + "/publish").then().statusCode(200);
+
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {"workflowDefinitionId": %d}
+                    """.formatted(definitionId))
+                .when()
+                    .post(TestRunsResource.path(subjectId))
+                .then()
+                    .statusCode(200);
+
+        Integer taskId = given()
+                .when()
+                    .get("/api/v1/inbox")
+                .then()
+                    .statusCode(200)
+                    .extract()
+                    .path("items.find { it.subjectId == " + subjectId + " }.id");
+
+        given()
+                .when()
+                    .get("/api/v1/inbox/" + taskId)
+                .then()
+                    .statusCode(200)
+                    .body("humanContext.description", equalTo("Plain description"))
+                    .body("humanContext.body", equalTo("## Score 42\n\nPlease **review**."));
+    }
+
+    @Test
     void testCancelWorkflow() {
         int subjectId = createSubject("WF Cancel Test Subject");
         int definitionId = createAndPublishActionWorkflow(
