@@ -123,7 +123,7 @@ async function main() {
     const { Server } = require("@modelcontextprotocol/sdk/server/index.js");
     const { StdioServerTransport } = require("@modelcontextprotocol/sdk/server/stdio.js");
     const { ListToolsRequestSchema, CallToolRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
-    const server = new Server({ name: "axiom-run-summary", version: "3.0.6" }, { capabilities: { tools: {} } });
+    const server = new Server({ name: "axiom-run-summary", version: "3.0.7-SNAPSHOT" }, { capabilities: { tools: {} } });
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
         tools: TOOLS.map(t => ({
             name: t.name,
