@@ -232,7 +232,7 @@ async function main() {
         axiomApiUrl: AXIOM_API_URL,
     });
 
-    const server = new Server({ name: "axiom-sdk", version: "3.0.6-SNAPSHOT" }, {
+    const server = new Server({ name: "axiom-sdk", version: "3.0.6" }, {
         capabilities: { tools: {} }
     });
 
