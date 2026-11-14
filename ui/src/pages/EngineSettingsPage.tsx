@@ -22,6 +22,9 @@ import {
     FormGroup,
     FormSelect,
     FormSelectOption,
+    FormHelperText,
+    HelperText,
+    HelperTextItem,
 } from "@patternfly/react-core";
 import CheckCircleIcon from "@patternfly/react-icons/dist/esm/icons/check-circle-icon";
 import ExclamationCircleIcon from "@patternfly/react-icons/dist/esm/icons/exclamation-circle-icon";
@@ -37,6 +40,7 @@ import {
 
 export function EngineSettingsPage() {
     const [config, setConfig] = useState<SystemConfig | null>(null);
+    const [summaryError, setSummaryError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [selectedDefaultEngine, setSelectedDefaultEngine] = useState("");
@@ -104,6 +108,21 @@ export function EngineSettingsPage() {
             .finally(() => setSaving(false));
     };
 
+    const summaryEngine: string = config.summaryEngine || "";
+    const summaryModel: string = config.summaryModel || "";
+    const summaryModels: string[] = engines.find((e) => e.type === (summaryEngine || defaultEngine))?.models || [];
+
+    const saveSummarySettings = (engine: string, model: string): void => {
+        setSaving(true);
+        setSummaryError(null);
+        updateSystemConfig({ defaultEngine: config.defaultEngine || "", summaryEngine: engine, summaryModel: model })
+            .then((updated: SystemConfig) => setConfig(updated))
+            .catch((error: unknown) => {
+                setSummaryError(error instanceof Error ? error.message : "Failed to update run summary settings.");
+            })
+            .finally(() => setSaving(false));
+    };
+
     return (
         <PageSection>
             <Title headingLevel="h1" style={{ marginBottom: 24 }}>
@@ -144,6 +163,61 @@ export function EngineSettingsPage() {
                                             />
                                         ))}
                                     </FormSelect>
+                                </FormGroup>
+                            </Form>
+                        </CardBody>
+                    </Card>
+                </FlexItem>
+
+                <FlexItem>
+                    <Card>
+                        <CardTitle>Run summaries</CardTitle>
+                        <CardBody>
+                            {summaryError && (
+                                <Alert
+                                    variant="danger"
+                                    isInline
+                                    title={summaryError}
+                                    actionClose={<AlertActionCloseButton onClose={() => setSummaryError(null)} />}
+                                    style={{ marginBottom: 12 }}
+                                />
+                            )}
+                            <Form>
+                                <FormGroup label="Summary engine" fieldId="summary-engine">
+                                    <FormSelect
+                                        id="summary-engine"
+                                        value={summaryEngine}
+                                        onChange={(_e: FormEvent<HTMLSelectElement>, value: string) =>
+                                            saveSummarySettings(value, "")}
+                                        isDisabled={saving}
+                                    >
+                                        <FormSelectOption value="" label="System default" />
+                                        {engines.map((engine: EngineInfo) => (
+                                            <FormSelectOption key={engine.type} value={engine.type} label={engine.label} />
+                                        ))}
+                                    </FormSelect>
+                                </FormGroup>
+                                <FormGroup label="Summary model" fieldId="summary-model">
+                                    <FormSelect
+                                        id="summary-model"
+                                        value={summaryModel}
+                                        onChange={(_e: FormEvent<HTMLSelectElement>, value: string) =>
+                                            saveSummarySettings(summaryEngine, value)}
+                                        isDisabled={saving}
+                                    >
+                                        <FormSelectOption value="" label="Engine default" />
+                                        {summaryModels.map((model: string) => (
+                                            <FormSelectOption key={model} value={model} label={model} />
+                                        ))}
+                                    </FormSelect>
+                                    <FormHelperText>
+                                        <HelperText>
+                                            <HelperTextItem>
+                                                Summaries are generated only for workflows that opt in. Empty values
+                                                use the system default engine and that engine's default model.
+                                            </HelperTextItem>
+                                        </HelperText>
+                                    </FormHelperText>
                                 </FormGroup>
                             </Form>
                         </CardBody>

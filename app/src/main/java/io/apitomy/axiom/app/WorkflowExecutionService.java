@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.beans.OutputSchema;
+import io.apitomy.axiom.app.summary.RunSummaryService;
 import io.apitomy.axiom.core.entities.ActionTypeEntity;
 import io.apitomy.axiom.core.entities.ActivityLogEntity;
 import io.apitomy.axiom.core.entities.SubjectEntity;
@@ -90,6 +91,9 @@ public class WorkflowExecutionService {
 
     @Inject
     SdkCallService sdkCallService;
+
+    @Inject
+    RunSummaryService runSummaryService;
 
     private WorkflowEngine workflowEngine;
 
@@ -252,6 +256,7 @@ public class WorkflowExecutionService {
             }
             completeRunTrace(entity,
                     instance.status() == InstanceStatus.COMPLETED ? "completed" : "failed");
+            onRunTerminal(entity);
         }
 
         logActivity(subjectId, "workflow-started",
@@ -534,6 +539,7 @@ public class WorkflowExecutionService {
         } else if (advanced.status() == InstanceStatus.COMPLETED) {
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "completed");
+            onRunTerminal(entity);
             logActivity(entity.subjectId, "workflow-completed",
                     "Workflow completed", entity.traceId);
         } else if (advanced.status() == InstanceStatus.FAILED) {
@@ -541,6 +547,7 @@ public class WorkflowExecutionService {
             orphanedHumanTaskCleanup.cancelPendingHumanTasks(entity.id, "failed");
             entity.completedOn = Instant.now();
             completeRunTrace(entity, "failed");
+            onRunTerminal(entity);
             logActivity(entity.subjectId, "workflow-failed",
                     "Workflow failed: " + advanced.failureReason(), entity.traceId);
             sseEvents.fire(SseEvent.notification(
@@ -635,6 +642,7 @@ public class WorkflowExecutionService {
         orphanedHumanTaskCleanup.cancelPendingHumanTasks(entity.id, "cancelled");
         entity.completedOn = Instant.now();
         completeRunTrace(entity, "cancelled");
+        onRunTerminal(entity);
 
         List<TaskEntity> activeTasks = TaskEntity
                 .<TaskEntity>find("workflowRunId = ?1 and status in ?2",
@@ -715,6 +723,15 @@ public class WorkflowExecutionService {
             LOG.warnf(e, "Failed to complete parked trace node for workflow run %d", entity.id);
         }
         return null;
+    }
+
+    /** Shared hook for every transition of a run into a terminal state. */
+    private void onRunTerminal(WorkflowRunEntity entity) {
+        try {
+            runSummaryService.enqueueIfEnabled(entity);
+        } catch (RuntimeException e) {
+            LOG.warnf(e, "Failed to queue the AI summary of run %d", entity.id);
+        }
     }
 
     /** Best-effort completion of a run's execution trace. */

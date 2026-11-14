@@ -7452,6 +7452,44 @@
           }
         }
       }
+    },
+    "/workflow/runs/{runId}/ai-summary": {
+      "post": {
+        "tags": [
+          "WorkflowRuns"
+        ],
+        "summary": "Generate or regenerate the AI summary of a finished run",
+        "operationId": "generateWorkflowRunAiSummary",
+        "responses": {
+          "202": {
+            "description": "Summary generation queued",
+            "content": {
+              "application/json": {}
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "The run is not finished, or its summary is being generated"
+          },
+          "503": {
+            "description": "Run summaries are disabled"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "runId",
+          "in": "path",
+          "description": "Workflow run ID",
+          "required": true,
+          "schema": {
+            "format": "int64",
+            "type": "integer"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -7948,6 +7986,12 @@
             "description": "Global default warning window for expiring secrets, in days",
             "format": "int32",
             "type": "integer"
+          },
+          "summaryEngine": {
+            "type": "string"
+          },
+          "summaryModel": {
+            "type": "string"
           }
         }
       },
@@ -7959,6 +8003,12 @@
         "properties": {
           "defaultEngine": {
             "description": "The default AI engine type identifier",
+            "type": "string"
+          },
+          "summaryEngine": {
+            "type": "string"
+          },
+          "summaryModel": {
             "type": "string"
           }
         }
@@ -10983,6 +11033,9 @@
           "updatedOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "summarizeRuns": {
+            "type": "boolean"
           }
         }
       },
@@ -10997,6 +11050,9 @@
           },
           "description": {
             "type": "string"
+          },
+          "summarizeRuns": {
+            "type": "boolean"
           }
         }
       },
@@ -11085,6 +11141,9 @@
           },
           "description": {
             "type": "string"
+          },
+          "summarizeRuns": {
+            "type": "boolean"
           }
         }
       },
@@ -11327,6 +11386,9 @@
             "items": {
               "$ref": "#/components/schemas/WorkflowRunResume"
             }
+          },
+          "aiSummary": {
+            "$ref": "#/components/schemas/WorkflowRunAiSummary"
           }
         }
       },
@@ -11450,6 +11512,9 @@
           "completedOn": {
             "format": "date-time",
             "type": "string"
+          },
+          "aiSummary": {
+            "$ref": "#/components/schemas/WorkflowRunAiSummary"
           }
         }
       },
@@ -13823,6 +13888,51 @@
             "description": "`docker` is available."
           }
         }
+      },
+      "WorkflowRunAiSummary": {
+        "type": "object",
+        "description": "The AI-generated summary of a workflow run.",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "generating",
+              "ready",
+              "failed"
+            ]
+          },
+          "headline": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string",
+            "description": "Markdown"
+          },
+          "error": {
+            "type": "string"
+          },
+          "engine": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "manual"
+            ]
+          },
+          "completedOn": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "status"
+        ]
       }
     },
     "responses": {

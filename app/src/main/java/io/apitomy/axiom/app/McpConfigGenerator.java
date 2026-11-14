@@ -12,9 +12,11 @@ import io.apitomy.axiom.app.mcp.ClaudeMcpConfigWriter;
 import io.apitomy.axiom.app.mcp.McpEnvironmentIsolation;
 import io.apitomy.axiom.app.mcp.McpServerDefinition;
 import io.apitomy.axiom.app.mcp.McpServerResolver;
+import io.apitomy.axiom.app.summary.RunSummaryMcp;
 import io.apitomy.axiom.agents.spi.process.BoundedProcessRunner;
 import io.apitomy.axiom.core.services.EnvironmentResolver;
 import io.apitomy.axiom.core.services.MissingSecretException;
+import io.quarkus.runtime.Startup;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -51,8 +53,10 @@ import java.util.Map;
  * for the Claude Code and Copilot engines, via the {@link io.apitomy.axiom.agents.claudecode.ClaudeCodeMcpManager}
  * / {@link io.apitomy.axiom.agents.copilot.CopilotMcpManager} delegate pattern. On
  * initialization, it registers itself as the MCP config delegate for both engines
- * (both consume the same {@code mcpServers} JSON config format).</p>
+ * (both consume the same {@code mcpServers} JSON config format). The bean is created at startup so the
+ * delegates are in place before anything other than a workflow task (e.g. run summaries) uses an engine.</p>
  */
+@Startup
 @ApplicationScoped
 public class McpConfigGenerator {
 
@@ -91,6 +95,9 @@ public class McpConfigGenerator {
 
     @Inject
     CopilotMcpManager copilotMcpManager;
+
+    @Inject
+    RunSummaryMcp runSummaryMcp;
 
     /** Lazily resolved path to the installed MCP server subject directory. */
     private volatile Path mcpServerDir;
@@ -409,11 +416,14 @@ public class McpConfigGenerator {
         }
 
         // Script tools → axiom-tools local MCP server
-        List<ToolDefinitionEntity> scriptTools = ToolDefinitionEntity.<ToolDefinitionEntity>listAll()
-                .stream()
-                .filter(t -> !hasRestrictions
-                        || allowedTools.contains(AXIOM_TOOLS_PREFIX + t.name))
-                .toList();
+        // Database reads join the caller's transaction or open a short one (run summaries register servers
+        // outside any transaction, so installs and OpenCode calls never hold one open).
+        List<ToolDefinitionEntity> scriptTools = io.quarkus.narayana.jta.QuarkusTransaction.joiningExisting()
+                .call(() -> ToolDefinitionEntity.<ToolDefinitionEntity>listAll()
+                        .stream()
+                        .filter(t -> !hasRestrictions
+                                || allowedTools.contains(AXIOM_TOOLS_PREFIX + t.name))
+                        .toList());
 
         if (!scriptTools.isEmpty()) {
             String toolsJsonContent = buildToolsJson(scriptTools);
@@ -429,8 +439,20 @@ public class McpConfigGenerator {
             }
         }
 
+        // Read-only run summary server, only for agents restricted to its tools
+        if (hasRestrictions && allowedTools.stream()
+                .anyMatch(a -> a.startsWith("mcp__" + RunSummaryMcp.SERVER_NAME + "__"))) {
+            try {
+                servers.put(RunSummaryMcp.SERVER_NAME, runSummaryMcp.serverDefinition());
+            } catch (Exception e) {
+                LOG.errorf(e, "Failed to prepare the run summary MCP server");
+            }
+        }
+
         // External MCP servers
-        mcpServerResolver.resolveForAllowedTools(allowedTools).forEach(servers::putIfAbsent);
+        io.quarkus.narayana.jta.QuarkusTransaction.joiningExisting()
+                .call(() -> mcpServerResolver.resolveForAllowedTools(allowedTools))
+                .forEach(servers::putIfAbsent);
 
         List<McpServerConfig> configs = new ArrayList<>();
         environmentIsolation.isolateAll(servers).forEach((name, def) -> configs.add(toOpenCodeConfig(name, def)));
@@ -455,7 +477,7 @@ public class McpConfigGenerator {
      *
      * @param file the file
      */
-    private static void restrictToOwner(Path file) {
+    public static void restrictToOwner(Path file) {
         try {
             Files.setPosixFilePermissions(file, java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
         } catch (UnsupportedOperationException | IOException e) {

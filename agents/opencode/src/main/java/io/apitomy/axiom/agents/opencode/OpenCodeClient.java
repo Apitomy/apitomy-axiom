@@ -210,9 +210,7 @@ public class OpenCodeClient {
         // a boolean (true = allowed), not an array of names.
         if (permissions != null && !permissions.isEmpty()) {
             ObjectNode toolsNode = body.putObject("tools");
-            for (Map.Entry<String, Object> entry : permissions.entrySet()) {
-                toolsNode.put(entry.getKey(), "allow".equals(entry.getValue()));
-            }
+            toToolsMap(permissions).forEach(toolsNode::put);
         }
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -232,6 +230,19 @@ public class OpenCodeClient {
         }
 
         return MAPPER.readTree(response.body());
+    }
+
+    /**
+     * Converts an OpenCode permission config (see {@link OpenCodePermissionMapper}) to the {@code tools} map
+     * sent with a prompt: {@code true} for {@code "allow"}, {@code false} for anything else.
+     *
+     * @param permissions the permission config
+     * @return the tools map, in the permission config's order
+     */
+    public static Map<String, Boolean> toToolsMap(Map<String, Object> permissions) {
+        Map<String, Boolean> tools = new java.util.LinkedHashMap<>();
+        permissions.forEach((key, value) -> tools.put(key, "allow".equals(value)));
+        return tools;
     }
 
     /**

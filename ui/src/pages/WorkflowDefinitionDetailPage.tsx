@@ -5,6 +5,7 @@ import {
     Alert,
     AlertActionCloseButton,
     Breadcrumb,
+    Checkbox,
     BreadcrumbItem,
     Button,
     EmptyState,
@@ -112,7 +113,7 @@ export function WorkflowDefinitionDetailPage() {
     const [runsLoading, setRunsLoading] = useState(false);
     const [runsLoaded, setRunsLoaded] = useState(false);
     const [editMetadataOpen, setEditMetadataOpen] = useState(false);
-    const [metadataForm, setMetadataForm] = useState({ name: "", description: "" });
+    const [metadataForm, setMetadataForm] = useState({ name: "", description: "", summarizeRuns: false });
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [compareBaseVersion, setCompareBaseVersion] = useState<number | null>(null);
@@ -257,6 +258,7 @@ export function WorkflowDefinitionDetailPage() {
         setMetadataForm({
             name: definition.name,
             description: definition.description || "",
+            summarizeRuns: definition.summarizeRuns ?? false,
         });
         setEditMetadataOpen(true);
     };
@@ -265,6 +267,7 @@ export function WorkflowDefinitionDetailPage() {
         const updates: UpdateWorkflowDefinition = {
             name: metadataForm.name,
             description: metadataForm.description || undefined,
+            summarizeRuns: metadataForm.summarizeRuns,
         };
         updateWorkflowDefinition(id, updates)
             .then((updated) => {
@@ -779,6 +782,15 @@ export function WorkflowDefinitionDetailPage() {
                                 value={metadataForm.description}
                                 onChange={(_e, v) => setMetadataForm({ ...metadataForm, description: v })}
                                 rows={3}
+                            />
+                        </FormGroup>
+                        <FormGroup fieldId="summarize-runs">
+                            <Checkbox
+                                id="summarize-runs"
+                                label="Generate AI summaries for completed and failed runs"
+                                isChecked={metadataForm.summarizeRuns}
+                                onChange={(_e, checked: boolean) =>
+                                    setMetadataForm({ ...metadataForm, summarizeRuns: checked })}
                             />
                         </FormGroup>
                     </Form>

@@ -36,4 +36,15 @@ public interface AgentMcpManager {
      */
     default void cleanup(Long workItemId) {
     }
+
+    /**
+     * Reports whether the named MCP server is currently registered with the agent. Only meaningful for agents
+     * that register servers dynamically (OpenCode); file-based agents always return {@code true}.
+     *
+     * @param serverName the MCP server name
+     * @return whether the server is registered
+     */
+    default boolean isServerRegistered(String serverName) {
+        return true;
+    }
 }

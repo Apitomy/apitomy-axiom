@@ -15,4 +15,12 @@ public class SystemConfigEntity extends PanacheEntity {
 
     @Column(name = "default_engine", nullable = false)
     public String defaultEngine;
+
+    /** Engine used for run summaries; null means the system default engine. */
+    @Column(name = "summary_engine")
+    public String summaryEngine;
+
+    /** Model used for run summaries; null means the engine's configured default model. */
+    @Column(name = "summary_model")
+    public String summaryModel;
 }

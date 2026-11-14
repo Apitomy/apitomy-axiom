@@ -2,6 +2,7 @@ import type { KeyboardEvent } from "react";
 import { Button, Label } from "@patternfly/react-core";
 import type { WorkflowRunSummary } from "../../config/api";
 import { STATUS_COLORS } from "../../components/workflowRun";
+import { RunAiSummaryHeadline } from "../../components/RunAiSummaryCard";
 
 /**
  * Summarises a run of the workbench's workflow: its subject, then its title when it has one.
@@ -56,6 +57,7 @@ export function RunsList({ runs, published, error, onOpenRun, onAskAi }: RunsLis
                             {/* All runs here share the workflow, so a run is named by its subject, then its title.
                                 The summary takes the remaining width and is truncated, so the row never scrolls sideways. */}
                             <span className="axiom-test-strip__summary" title={runSummary(run)}>{runSummary(run)}</span>
+                            <RunAiSummaryHeadline summary={run.aiSummary} />
                             <span className="axiom-text-subtle">v{run.definitionVersion}</span>
                             <span className="axiom-text-subtle">
                                 {new Date(run.startedOn).toLocaleString()}

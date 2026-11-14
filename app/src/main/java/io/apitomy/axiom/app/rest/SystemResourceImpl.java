@@ -184,6 +184,11 @@ public class SystemResourceImpl implements SystemResource {
         config.setDefaultEngine(defaultType);
         config.setFeatures(new Features());
         config.setSecretExpiryWarningDays(secretExpiryWarningDays);
+        SystemConfigEntity stored = SystemConfigEntity.<SystemConfigEntity>findAll().firstResult();
+        if (stored != null) {
+            config.setSummaryEngine(stored.summaryEngine);
+            config.setSummaryModel(stored.summaryModel);
+        }
 
         // Build per-engine info
         List<EngineInfo> engineInfos = new ArrayList<>();
@@ -255,6 +260,18 @@ public class SystemResourceImpl implements SystemResource {
             entity = new SystemConfigEntity();
         }
         entity.defaultEngine = defaultEngine;
+        if (data.getSummaryEngine() != null) {
+            String summaryEngine = data.getSummaryEngine().trim();
+            if (!summaryEngine.isEmpty() && agentRegistry.getAllAgents().stream()
+                    .noneMatch(agent -> summaryEngine.equals(agent.getType()))) {
+                throw new WebApplicationException("Unknown engine type: " + summaryEngine, 400);
+            }
+            entity.summaryEngine = summaryEngine.isEmpty() ? null : summaryEngine;
+        }
+        if (data.getSummaryModel() != null) {
+            String summaryModel = data.getSummaryModel().trim();
+            entity.summaryModel = summaryModel.isEmpty() ? null : summaryModel;
+        }
         entity.persist();
         agentRegistry.setDefaultAgentType(defaultEngine);
         return getSystemConfig();

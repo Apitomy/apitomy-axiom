@@ -86,10 +86,18 @@ export interface SystemConfig {
     engines?: EngineInfo[];
     features: Record<string, boolean>;
     checks?: StartupCheck[];
+    /** Engine used for run summaries; absent means the default engine. */
+    summaryEngine?: string;
+    /** Model used for run summaries; absent means the engine's default. */
+    summaryModel?: string;
 }
 
 export interface UpdateSystemConfigRequest {
     defaultEngine: string;
+    /** Summary engine; an empty string clears it. */
+    summaryEngine?: string;
+    /** Summary model; an empty string clears it. */
+    summaryModel?: string;
 }
 
 export interface SearchResults<T> {
@@ -1789,6 +1797,8 @@ export interface WorkflowDefinition {
     description?: string;
     content?: any;
     currentVersion?: number;
+    /** Whether finished runs get an AI-generated summary. */
+    summarizeRuns?: boolean;
     createdOn: string;
     updatedOn: string;
 }
@@ -1801,6 +1811,8 @@ export interface NewWorkflowDefinition {
 export interface UpdateWorkflowDefinition {
     name?: string;
     description?: string;
+    /** Whether finished runs get an AI-generated summary; absent leaves it unchanged. */
+    summarizeRuns?: boolean;
 }
 
 export interface WorkflowDefinitionVersion {
@@ -1932,6 +1944,8 @@ export interface WorkflowInstanceInfo {
     currentNodeId?: string;
     currentNodeName?: string;
     failureReason?: string;
+    /** AI-generated summary of the run, when one exists. */
+    aiSummary?: WorkflowRunAiSummary;
     workflowContent: any;
     context: Record<string, any>;
     history: HistoryEntryInfo[];
@@ -1989,6 +2003,29 @@ export async function rerunWorkflowRun(runId: number): Promise<WorkflowInstanceI
     return response.json();
 }
 
+/** The AI-generated summary of a workflow run. */
+export interface WorkflowRunAiSummary {
+    status: "pending" | "generating" | "ready" | "failed";
+    headline?: string;
+    body?: string;
+    error?: string;
+    engine?: string;
+    model?: string;
+    trigger?: "auto" | "manual";
+    completedOn?: string;
+}
+
+/**
+ * Requests generation (or regeneration) of a finished run's AI summary.
+ * @param runId the run
+ */
+export async function generateWorkflowRunAiSummary(runId: number): Promise<void> {
+    const response: Response = await fetch(`${API}/workflow/runs/${runId}/ai-summary`, { method: "POST" });
+    if (!response.ok) {
+        throw new Error(await extractErrorMessage(response, "Failed to request the run summary"));
+    }
+}
+
 /**
  * Replaces a workflow run's labels.
  * @param runId the run
@@ -2039,6 +2076,8 @@ export interface WorkflowRunSummary {
     triggerLedgerId?: number;
     startedOn: string;
     completedOn?: string;
+    /** AI summary status and headline, when one exists. */
+    aiSummary?: WorkflowRunAiSummary;
 }
 
 /** Optional filters for listing workflow runs. */

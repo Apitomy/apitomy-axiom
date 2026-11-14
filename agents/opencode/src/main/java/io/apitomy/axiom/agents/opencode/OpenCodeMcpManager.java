@@ -39,7 +39,7 @@ public class OpenCodeMcpManager implements AgentMcpManager {
     OpenCodeAgent agent;
 
     /** Built-in Axiom servers: registered once per OpenCode process, never disconnected. */
-    private static final Set<String> BUILT_IN_SERVERS = Set.of("axiom-tools", "axiom-sdk");
+    private static final Set<String> BUILT_IN_SERVERS = Set.of("axiom-tools", "axiom-sdk", "axiom-run-summary");
 
     /** Registered server name to config fingerprint, for the current OpenCode server instance. */
     private final Map<String, Integer> registeredServers = new HashMap<>();
@@ -191,10 +191,21 @@ public class OpenCodeMcpManager implements AgentMcpManager {
 
         } catch (Exception e) {
             LOG.errorf(e, "Failed to register MCP servers for work item %d", workItemId);
+            // The server's state is unknown now: forget it so callers do not trust stale registrations.
+            synchronized (this) {
+                registeredServers.clear();
+                registeredOn = null;
+            }
         }
 
         // OpenCode doesn't use config files -- return null
         return null;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized boolean isServerRegistered(String serverName) {
+        return registeredServers.containsKey(serverName);
     }
 
     /** {@inheritDoc} */

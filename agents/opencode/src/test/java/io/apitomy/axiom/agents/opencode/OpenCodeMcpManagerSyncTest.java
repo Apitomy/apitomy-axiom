@@ -10,6 +10,8 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests that the OpenCode task MCP manager keeps the OpenCode server's MCP registrations in sync with
@@ -40,6 +42,26 @@ class OpenCodeMcpManagerSyncTest {
 
     private static McpServerConfig local(String name, String... command) {
         return McpServerConfig.local(name, List.of(command), Map.of());
+    }
+
+    @Test
+    void registrationStateReflectsSuccessfulAddsOnly() {
+        OpenCodeMcpManager.McpRegistrar failing = new OpenCodeMcpManager.McpRegistrar() {
+            @Override
+            public void add(String name, Map<String, Object> config) throws Exception {
+                if ("bad".equals(name)) {
+                    throw new IllegalStateException("boom");
+                }
+            }
+
+            @Override
+            public void disconnect(String name) {
+            }
+        };
+        manager.sync(server, failing, List.of(local("gh", "npx", "a"), local("bad", "npx", "b")), null);
+        assertTrue(manager.isServerRegistered("gh"));
+        assertFalse(manager.isServerRegistered("bad"));
+        assertFalse(manager.isServerRegistered("never"));
     }
 
     @Test
@@ -85,6 +107,13 @@ class OpenCodeMcpManagerSyncTest {
         manager.sync(server, registrar, List.of(local("axiom-tools", "node", "/t/1/tools.json")), Set.of());
         manager.sync(server, registrar, List.of(local("axiom-tools", "node", "/t/2/tools.json")), Set.of());
         assertEquals(List.of("add axiom-tools [node, /t/1/tools.json]"), calls);
+    }
+
+    @Test
+    void runSummaryServerIsBuiltInAndNeverDisconnected() {
+        manager.sync(server, registrar, List.of(local("axiom-run-summary", "node", "server.js")), Set.of());
+        manager.sync(server, registrar, List.of(), Set.of());
+        assertEquals(List.of("add axiom-run-summary [node, server.js]"), calls);
     }
 
     @Test

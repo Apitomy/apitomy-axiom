@@ -28,4 +28,8 @@ public class WorkflowDefinitionEntity extends PanacheEntity {
 
     @Column(name = "updated_on", nullable = false)
     public Instant updatedOn;
+
+    /** Whether finished (completed or failed) runs of this workflow get an AI summary; off by default. */
+    @Column(name = "summarize_runs", nullable = false, columnDefinition = "boolean default false")
+    public boolean summarizeRuns = false;
 }

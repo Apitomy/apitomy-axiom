@@ -35,6 +35,7 @@ import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
+import io.apitomy.axiom.app.summary.RunSummaryService;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
@@ -60,6 +61,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     ObjectMapper objectMapper;
 
     @Inject
+    RunSummaryService runSummaryService;
+
+    @Inject
     WorkflowRunBeanMapper runBeanMapper;
 
     @Inject
@@ -75,6 +79,18 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     WorkflowDashboardService dashboardService;
 
     // ── List ────────────────────────────────────────────────────────
+
+    /**
+     * Queues generation of the AI summary of a finished run.
+     *
+     * @param runId the workflow run ID
+     * @return 202 Accepted
+     */
+    @Override
+    public Response generateWorkflowRunAiSummary(long runId) {
+        runSummaryService.request(runId);
+        return Response.accepted().build();
+    }
 
     /**
      * {@inheritDoc}
@@ -118,6 +134,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         WorkflowDefinitionEntity entity = new WorkflowDefinitionEntity();
         entity.name = data.getName();
         entity.description = data.getDescription();
+        entity.summarizeRuns = Boolean.TRUE.equals(data.getSummarizeRuns());
         entity.content = createEmptyWorkflowContent(data.getName());
         entity.createdOn = Instant.now();
         entity.updatedOn = Instant.now();
@@ -153,6 +170,9 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         }
         if (data.getDescription() != null) {
             entity.description = data.getDescription();
+        }
+        if (data.getSummarizeRuns() != null) {
+            entity.summarizeRuns = data.getSummarizeRuns();
         }
         entity.updatedOn = Instant.now();
 
@@ -394,6 +414,7 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
         WorkflowDefinition bean = new WorkflowDefinition();
         bean.setId(entity.id);
         bean.setName(entity.name);
+        bean.setSummarizeRuns(entity.summarizeRuns);
         bean.setDescription(entity.description);
         if (entity.content != null) {
             try {
