@@ -59,8 +59,8 @@ export function parseListState(params: URLSearchParams, config: ListStateConfig)
         if (!filterBy || !value) {
             return;
         }
-        if (filterBy.options && filterBy.options.length > 0
-            && !filterBy.options.some((o) => o.value === value)) {
+        const option = filterBy.options?.find((o) => o.value === value);
+        if (filterBy.options && filterBy.options.length > 0 && !option) {
             return;
         }
         if (multi.has(key)) {
@@ -70,7 +70,9 @@ export function parseListState(params: URLSearchParams, config: ListStateConfig)
         } else {
             filters = filters.filter((f) => f.filterBy.value !== key);
         }
-        filters.push({ filterBy, filterValue: value });
+        filters.push(option && option.label !== value
+            ? { filterBy, filterValue: value, filterLabel: option.label }
+            : { filterBy, filterValue: value });
     });
     const defaultPerPage: number = config.defaultPerPage ?? DEFAULT_PER_PAGE;
     const perPage: number | null = parsePositiveInt(params.get(PER_PAGE_PARAM));

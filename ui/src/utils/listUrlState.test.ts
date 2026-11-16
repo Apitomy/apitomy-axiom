@@ -37,6 +37,11 @@ describe("parseListState", () => {
         expect(state.filters.map((f) => f.filterValue)).toEqual(["a"]);
     });
 
+    it("labels option-backed filters with the option's display label", () => {
+        const state = parseListState(new URLSearchParams("source=jira"), CONFIG);
+        expect(state.filters[0].filterLabel).toBe("Jira");
+    });
+
     it("drops values not among a filter type's options", () => {
         const state = parseListState(new URLSearchParams("source=jira&source=nope"), CONFIG);
         expect(state.filters.map((f) => f.filterValue)).toEqual(["jira"]);

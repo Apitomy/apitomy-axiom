@@ -141,3 +141,11 @@ describe("MatchIndicator", () => {
         expect(container).toBeEmptyDOMElement();
     });
 });
+
+describe("EventStreamPage URL state", () => {
+    it("loads filters and page from the URL", async () => {
+        renderWithRouter(<EventStreamPage />, "/?type=issue.opened&actor=bob&page=3");
+        await waitFor(() => expect(api.fetchStreamEvents).toHaveBeenCalledWith(
+            3, 20, "issue.opened", undefined, undefined, "bob"));
+    });
+});

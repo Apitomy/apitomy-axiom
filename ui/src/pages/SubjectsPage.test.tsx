@@ -1,7 +1,8 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SubjectsPage } from "./SubjectsPage";
 import { renderWithRouter } from "../test/renderWithRouter";
+import * as api from "../config/api";
 
 vi.mock("../config/api", () => ({
     fetchSubjects: vi.fn().mockResolvedValue({
@@ -28,5 +29,13 @@ describe("SubjectsPage", () => {
         renderWithRouter(<SubjectsPage />, "/subjects");
         expect(await screen.findByText("Repo issue 42")).toBeInTheDocument();
         expect(screen.getByText("Active")).toBeInTheDocument();
+    });
+});
+
+describe("SubjectsPage URL state", () => {
+    it("loads filters and page from the URL", async () => {
+        renderWithRouter(<SubjectsPage />, "/?name=widget&labels=a&labels=b&page=2");
+        await waitFor(() => expect(api.fetchSubjects).toHaveBeenCalledWith(
+            2, 20, "widget", undefined, "a,b"));
     });
 });

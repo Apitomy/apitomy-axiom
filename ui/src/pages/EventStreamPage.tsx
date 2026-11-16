@@ -30,6 +30,8 @@ import {
     fetchEventSources,
     fetchStreamEvents,
 } from "../config/api";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 
 const SOURCE_COLORS: Record<string, "blue" | "green" | "orange" | "grey"> = {
@@ -99,13 +101,12 @@ export function EventStreamPage() {
     const navigate = useNavigate();
     const [events, setEvents] = useState<StreamEvent[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
 
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
     const [eventSources, setEventSources] = useState<EventSourceConfig[] | null>(null);
     const filterTypes = useMemo(() => buildFilterTypes(eventSources), [eventSources]);
+    const listConfig: ListStateConfig = useMemo(() => ({ filterTypes }), [filterTypes]);
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(listConfig);
 
     useEffect(() => {
         let cancelled = false;
@@ -161,18 +162,15 @@ export function EventStreamPage() {
         const withoutSame = filters.filter((f) => f.filterBy.value !== criteria.filterBy.value);
         withoutSame.push(criteria);
         setFilters(withoutSame);
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     return (
@@ -199,7 +197,7 @@ export function EventStreamPage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>
