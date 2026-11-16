@@ -24,8 +24,10 @@ import {
     ChipFilterInput,
     FilterChips,
 } from "@apitomy/common-ui-components";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { type AiUsage, fetchUsage } from "../config/api";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const TYPE_COLORS: Record<string, "blue" | "green"> = {
     task: "green",
@@ -48,27 +50,18 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "traceId", label: "Trace ID", testId: "usage-filter-traceId" },
 ];
 
-const DEEP_LINK_FILTERS = ["traceId"];
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES };
 
 export function AiUsagePage() {
     const [records, setRecords] = useState<AiUsage[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
 
-    const [searchParams] = useSearchParams();
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
-        // Deep link: ?traceId= presets the matching filter
-        return DEEP_LINK_FILTERS.flatMap((key) => {
-            const value = searchParams.get(key);
-            return value
-                ? [{ filterBy: FILTER_TYPES.find((t) => t.value === key)!, filterValue: value }]
-                : [];
-        });
-    });
-    const [filterDateFrom, setFilterDateFrom] = useState("");
-    const [filterDateTo, setFilterDateTo] = useState("");
+    const { filters, page, perPage, setFilters, setPage, setPerPage, getParam, setParams } =
+        useListUrlState(LIST_CONFIG);
+    const filterDateFrom: string = getParam("from") ?? "";
+    const filterDateTo: string = getParam("to") ?? "";
 
     // Summary stats
     const [totalCost, setTotalCost] = useState(0);
@@ -86,9 +79,7 @@ export function AiUsagePage() {
     const onThisMonth = (): void => {
         const now: Date = new Date();
         const month: string = String(now.getMonth() + 1).padStart(2, "0");
-        setFilterDateFrom(`${now.getFullYear()}-${month}-01`);
-        setFilterDateTo("");
-        setPage(1);
+        setParams({ from: `${now.getFullYear()}-${month}-01`, to: undefined }, { resetPage: true });
     };
 
     const isFiltered = filters.length > 0 || !!filterDateFrom || !!filterDateTo;
@@ -126,20 +117,16 @@ export function AiUsagePage() {
         const withoutSame = filters.filter((f) => f.filterBy.value !== criteria.filterBy.value);
         withoutSame.push(criteria);
         setFilters(withoutSame);
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
-        setFilters([]);
-        setFilterDateFrom("");
-        setFilterDateTo("");
-        setPage(1);
+        setParams(Object.fromEntries([...FILTER_TYPES.map((t) => [String(t.value), undefined]),
+            ["from", undefined], ["to", undefined]]), { resetPage: true });
     };
 
     return (
@@ -217,13 +204,13 @@ export function AiUsagePage() {
                     <ToolbarItem variant="label" style={{ alignSelf: "center" }}>From</ToolbarItem>
                     <ToolbarItem>
                         <TextInput type="date" aria-label="From date" value={filterDateFrom}
-                            onChange={(_e, v) => { setFilterDateFrom(v); setPage(1); }}
+                            onChange={(_e, v) => setParams({ from: v }, { resetPage: true })}
                             style={{ width: "160px" }} />
                     </ToolbarItem>
                     <ToolbarItem variant="label" style={{ alignSelf: "center" }}>To</ToolbarItem>
                     <ToolbarItem>
                         <TextInput type="date" aria-label="To date" value={filterDateTo}
-                            onChange={(_e, v) => { setFilterDateTo(v); setPage(1); }}
+                            onChange={(_e, v) => setParams({ to: v }, { resetPage: true })}
                             style={{ width: "160px" }} />
                     </ToolbarItem>
                     <ToolbarItem variant="pagination" align={{ default: "alignEnd" }}>
@@ -232,7 +219,7 @@ export function AiUsagePage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>
