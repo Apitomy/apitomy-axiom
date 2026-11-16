@@ -214,6 +214,9 @@ A few interactions work the same way throughout the UI:
   toolbar.
 - **Pagination** — large lists are paginated. Use the controls in the toolbar to change
   page size or navigate between pages.
+- **Shareable list views** — list pages keep their filters, page, and page size in the address bar (plus
+  page-specific options such as the AI Usage date range or Disk Usage sort order). Browser Back, reloading
+  the page, bookmarks, and shared links all reopen the same view.
 - **Clickable rows** — table rows are clickable and navigate to the item's detail page.
 - **Labels** — many items support labels for organization. Clicking a label chip in a
   table adds it as a filter. Labels can be edited from detail pages.
