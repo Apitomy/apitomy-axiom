@@ -1,12 +1,17 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { render } from "@testing-library/react";
 import { normalizeRunFilter, resolveWorkflowFilter, WorkflowRunsPage } from "./WorkflowRunsPage";
 import { renderWithRouter } from "../test/renderWithRouter";
 import { labelColor } from "../components/ColoredLabel";
 import * as api from "../config/api";
+
+function BackButton() {
+    const navigate = useNavigate();
+    return <button onClick={() => navigate(-1)}>back</button>;
+}
 
 function run(runId: number, title?: string) {
     return {
@@ -121,5 +126,29 @@ describe("WorkflowRunsPage", () => {
         expect(resolveWorkflowFilter("triage", defs)).toBe(2);
         expect(resolveWorkflowFilter("7", defs)).toBe(7);
         expect(resolveWorkflowFilter("nope", defs)).toBe(-1);
+    });
+
+    it("loads filters and page from the URL", async () => {
+        renderWithRouter(<WorkflowRunsPage />, "/?status=failed&label=a&label=b&page=2&perPage=50");
+        await waitFor(() => expect(api.fetchWorkflowRuns).toHaveBeenCalledWith(2, 50,
+            expect.objectContaining({ status: "failed", labels: ["a", "b"] })));
+        expect(screen.getByText("Filters")).toBeInTheDocument();
+    });
+
+    it("restores filters when returning from a run with Back", async () => {
+        render(
+            <MemoryRouter initialEntries={["/runs"]}>
+                <Routes>
+                    <Route path="/runs" element={<WorkflowRunsPage />} />
+                    <Route path="/runs/:runId" element={<BackButton />} />
+                </Routes>
+            </MemoryRouter>);
+        await screen.findByText("Run A");
+        await userEvent.click(screen.getAllByRole("button", { name: "Filter by status: completed" })[0]);
+        await waitFor(() => expect(lastFilters().status).toBe("completed"));
+        await userEvent.click(screen.getByText("Subject 2"));
+        await userEvent.click(await screen.findByRole("button", { name: "back" }));
+        await waitFor(() => expect(lastFilters().status).toBe("completed"));
+        expect(screen.getByText("Filters")).toBeInTheDocument();
     });
 });
