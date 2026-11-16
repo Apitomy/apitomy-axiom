@@ -79,4 +79,16 @@ describe("useListUrlState", () => {
         act(() => navigate(-1));
         expect(loc()).toBe("/list?page=2&keep=1");
     });
+
+    it("does not add a history entry when a setter leaves the URL unchanged", () => {
+        setup("/detail");
+        act(() => navigate("/list?status=x"));
+        act(() => hook.setPage(1));
+        act(() => hook.setFilters([{ filterBy: STATUS, filterValue: "x" }]));
+        act(() => hook.setPerPage(20));
+        act(() => hook.setParams({ from: undefined }, { resetPage: true }));
+        expect(loc()).toBe("/list?status=x");
+        act(() => navigate(-1));
+        expect(loc()).toBe("away");
+    });
 });

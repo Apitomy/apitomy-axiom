@@ -5,7 +5,8 @@ import {
     PAGE_PARAM, parseListState, writeListState, type ListState, type ListStateConfig,
 } from "../utils/listUrlState";
 
-/** List state backed by the URL, plus setters that each push one history entry. */
+/** List state backed by the URL, plus setters that each push at most one history entry (none when the URL
+ * would not change). */
 export interface ListUrlState extends ListState {
     /** Replaces the filter chips and returns to page 1. */
     setFilters: (filters: ChipFilterCriteria[]) => void;
@@ -31,28 +32,36 @@ export function useListUrlState(config: ListStateConfig): ListUrlState {
     const [searchParams, setSearchParams]: [URLSearchParams, SetURLSearchParams] = useSearchParams();
     const state: ListState = useMemo(() => parseListState(searchParams, config), [searchParams, config]);
 
+    /**
+     * Navigates to the given query parameters, unless they equal the current ones: React Router would
+     * otherwise push a duplicate history entry and the user's next Back press would appear to do nothing.
+     */
+    const navigateTo = useCallback((next: URLSearchParams, replace: boolean): void => {
+        if (next.toString() !== searchParams.toString()) {
+            setSearchParams(next, { replace });
+        }
+    }, [searchParams, setSearchParams]);
+
     const commit = useCallback((patch: Partial<ListState>): void => {
-        setSearchParams((prev: URLSearchParams) =>
-            writeListState(prev, { ...parseListState(prev, config), ...patch }, config));
-    }, [setSearchParams, config]);
+        navigateTo(writeListState(searchParams,
+            { ...parseListState(searchParams, config), ...patch }, config), false);
+    }, [navigateTo, searchParams, config]);
 
     const setParams = useCallback((updates: Record<string, string | undefined>,
         options?: { resetPage?: boolean; replace?: boolean }): void => {
-        setSearchParams((prev: URLSearchParams) => {
-            const next: URLSearchParams = new URLSearchParams(prev);
-            Object.entries(updates).forEach(([key, value]: [string, string | undefined]) => {
-                if (value === undefined || value === "") {
-                    next.delete(key);
-                } else {
-                    next.set(key, value);
-                }
-            });
-            if (options?.resetPage) {
-                next.delete(PAGE_PARAM);
+        const next: URLSearchParams = new URLSearchParams(searchParams);
+        Object.entries(updates).forEach(([key, value]: [string, string | undefined]) => {
+            if (value === undefined || value === "") {
+                next.delete(key);
+            } else {
+                next.set(key, value);
             }
-            return next;
-        }, { replace: options?.replace ?? false });
-    }, [setSearchParams]);
+        });
+        if (options?.resetPage) {
+            next.delete(PAGE_PARAM);
+        }
+        navigateTo(next, options?.replace ?? false);
+    }, [navigateTo, searchParams]);
 
     return {
         ...state,
