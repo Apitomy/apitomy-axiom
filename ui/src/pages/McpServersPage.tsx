@@ -48,6 +48,8 @@ import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { StringListEditor } from "../components/StringListEditor";
 import { McpTestResultPanel } from "../components/McpTestResultPanel";
 import { parseMcpServersJson } from "../utils/mcpServerJson";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 import { McpCatalogModal } from "../components/McpCatalogModal";
 import { mcpServerNameError } from "../utils/mcpServerName";
 
@@ -280,11 +282,16 @@ function CreateMcpServerModal({ isOpen, onClose, onCreated }: {
     );
 }
 
+/** URL list-state config for the MCP servers page: only the `q` search text is kept. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: [] };
+
 export function McpServersPage() {
     const navigate = useNavigate();
     const [servers, setServers] = useState<McpServer[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState("");
+    const { getParam, setParams } = useListUrlState(LIST_CONFIG);
+    const search: string = getParam("q") ?? "";
+    const setSearch = (value: string): void => setParams({ q: value }, { replace: true });
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isCatalogOpen, setIsCatalogOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
