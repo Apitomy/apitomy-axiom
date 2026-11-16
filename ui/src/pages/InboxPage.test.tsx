@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as api from "../config/api";
@@ -111,5 +111,14 @@ describe("InboxPage task description", () => {
         await screen.findByRole("dialog");
         expect(screen.getByRole("grid", { name: "Task inputs" }).className).toContain("pf-m-striped");
         expect(screen.getByRole("link", { name: /example\.com/ })).toHaveAttribute("target", "_blank");
+    });
+});
+
+describe("InboxPage URL state", () => {
+    it("loads the page from the URL", async () => {
+        vi.mocked(api.fetchInboxItems).mockResolvedValue({ items: [], totalCount: 0 } as
+            unknown as api.SearchResults<api.InboxItem>);
+        renderAt("/inbox?page=2&perPage=50");
+        await waitFor(() => expect(api.fetchInboxItems).toHaveBeenCalledWith(2, 50));
     });
 });

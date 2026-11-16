@@ -25,6 +25,8 @@ import { type Task, fetchAllTasks, cancelTask } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import { LineageModal } from "../components/LineageModal";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "red"> = {
     Pending: "blue",
@@ -40,14 +42,14 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "status", label: "Status", testId: "task-filter-status" },
 ];
 
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES, multiValueFilters: new Set<string>(["status"]) };
+
 export function TasksPage() {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
 
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
 
     // Execution log modal
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -61,9 +63,11 @@ export function TasksPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const lineageTaskId = searchParams.get("taskId");
     const setLineageTaskId = (taskId: number | null) => {
-        const next = new URLSearchParams(searchParams);
-        if (taskId == null) next.delete("taskId"); else next.set("taskId", String(taskId));
-        setSearchParams(next, { replace: true });
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            if (taskId == null) next.delete("taskId"); else next.set("taskId", String(taskId));
+            return next;
+        }, { replace: true });
     };
 
     const filterActionType = filters.find((f) => f.filterBy.value === "actionType")?.filterValue;
@@ -104,18 +108,15 @@ export function TasksPage() {
             updated.push(criteria);
             setFilters(updated);
         }
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     const handleViewLog = (subjectId: number, taskId: number) => {
@@ -164,7 +165,7 @@ export function TasksPage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>
@@ -230,7 +231,6 @@ export function TasksPage() {
                                                 if (!already) {
                                                     const statusType = FILTER_TYPES.find((t) => t.value === "status")!;
                                                     setFilters([...filters, { filterBy: statusType, filterValue: task.status }]);
-                                                    setPage(1);
                                                 }
                                             }}>
                                             {task.status}

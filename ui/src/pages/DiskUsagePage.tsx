@@ -24,10 +24,16 @@ import {
     FilterChips,
 } from "@apitomy/common-ui-components";
 import { type DiskUsageSubject, fetchDiskUsage, formatBytes } from "../config/api";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Subject Name", testId: "disk-filter-name" },
 ];
+
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES };
+
+const SORT_KEYS: readonly ("name" | "diskUsageBytes")[] = ["name", "diskUsageBytes"];
 
 export function DiskUsagePage() {
     const navigate = useNavigate();
@@ -35,19 +41,18 @@ export function DiskUsagePage() {
     const [totalCount, setTotalCount] = useState(0);
     const [totalDiskUsageBytes, setTotalDiskUsageBytes] = useState(0);
     const [subjectCount, setSubjectCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
-    const [activeSortIndex, setActiveSortIndex] = useState(0);
-    const [activeSortDirection, setActiveSortDirection] = useState<"asc" | "desc">("asc");
 
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const { filters, page, perPage, setFilters, setPage, setPerPage, getParam, setParams } =
+        useListUrlState(LIST_CONFIG);
+    const sortParam: string | null = getParam("sort");
+    const activeSortIndex: number = Math.max(0, SORT_KEYS.indexOf(sortParam as "name" | "diskUsageBytes"));
+    const activeSortDirection: "asc" | "desc" = getParam("dir") === "desc" ? "desc" : "asc";
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
     const isFiltered = filters.length > 0;
 
-    const columnSortKeys: ("name" | "diskUsageBytes")[] = ["name", "diskUsageBytes"];
-    const sortBy = columnSortKeys[activeSortIndex];
+    const sortBy = SORT_KEYS[activeSortIndex];
 
     const loadData = useCallback(() => {
         setLoading(true);
@@ -69,24 +74,22 @@ export function DiskUsagePage() {
         const withoutSame = filters.filter((f) => f.filterBy.value !== criteria.filterBy.value);
         withoutSame.push(criteria);
         setFilters(withoutSame);
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     const onSort = (_event: React.MouseEvent, columnIndex: number, direction: "asc" | "desc") => {
-        setActiveSortIndex(columnIndex);
-        setActiveSortDirection(direction);
-        setPage(1);
+        setParams({
+            sort: columnIndex === 0 ? undefined : SORT_KEYS[columnIndex],
+            dir: direction === "asc" ? undefined : direction,
+        }, { resetPage: true });
     };
 
     return (
@@ -140,7 +143,7 @@ export function DiskUsagePage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>
