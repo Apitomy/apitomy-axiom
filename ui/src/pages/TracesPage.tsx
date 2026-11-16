@@ -23,20 +23,23 @@ import {
 import { type Trace, fetchTraces } from "../config/api";
 import { STATUS_COLORS, formatDuration } from "../components/TraceGraphNode";
 import { traceTypeColor, traceTypeLabel } from "../components/traceTypes";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "traceType", label: "Type", testId: "trace-filter-type" },
     { value: "status", label: "Status", testId: "trace-filter-status" },
 ];
 
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES, multiValueFilters: new Set<string>(["status"]) };
+
 export function TracesPage() {
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const navigate = useNavigate();
     const [traces, setTraces] = useState<Trace[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
 
     const filterTraceType = filters.find((f) => f.filterBy.value === "traceType")?.filterValue;
     const filterStatuses = filters
@@ -74,18 +77,15 @@ export function TracesPage() {
             updated.push(criteria);
             setFilters(updated);
         }
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     return (
@@ -110,7 +110,7 @@ export function TracesPage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>
