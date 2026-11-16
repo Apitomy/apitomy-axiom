@@ -238,10 +238,33 @@ const FILTER_TYPES: ChipFilterType[] = [
     page={page}
     perPage={perPage}
     onSetPage={(_e, p) => setPage(p)}
-    onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+    onPerPageSelect={(_e, pp) => setPerPage(pp)}
     isCompact
 />
 ```
+
+### List Page State
+
+List pages keep their filters, page, and page size in the URL query string so Back, reload, and shared
+links restore the view. Use the `useListUrlState` hook (`ui/src/hooks/useListUrlState.ts`) instead of
+`useState` for these values; `ui/src/pages/WorkflowRunsPage.tsx` is the canonical example:
+
+```typescript
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES, multiValueFilters: MULTI_VALUE_FILTERS };
+
+const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
+```
+
+- Declare the `ListStateConfig` as a module-level constant. If the filter types are built dynamically,
+  wrap the config in `useMemo` so its identity is stable.
+- Always change state through the hook's setters. `setFilters` and `setPerPage` already reset the page to
+  1, so never call `setPage(1)` after them.
+- For page-specific extras (date ranges, sort order, search text), use the hook's `getParam` and
+  `setParams`. Pass `{ replace: true }` for free-text typing so each keystroke does not add a history
+  entry. Update several values in a single `setParams` call (for example, a "clear all" that resets
+  filters and dates together).
+- Derive primitive values from `filters` before using them in `useCallback`/`useEffect` dependencies;
+  the `filters` array changes identity whenever the URL changes.
 
 ### Clickable Table Rows
 

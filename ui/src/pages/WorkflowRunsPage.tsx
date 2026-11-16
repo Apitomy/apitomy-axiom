@@ -35,6 +35,8 @@ import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { STATUS_COLORS } from "../components/workflowRun";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { RunAiSummaryHeadline } from "../components/RunAiSummaryCard";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "status", label: "Status", testId: "runs-filter-status" },
@@ -45,6 +47,9 @@ const FILTER_TYPES: ChipFilterType[] = [
 
 /** Filter types that can appear several times (each value is an extra condition); the others replace. */
 const MULTI_VALUE_FILTERS: ReadonlySet<string> = new Set<string>(["label"]);
+
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES, multiValueFilters: MULTI_VALUE_FILTERS };
 
 /**
  * Normalises a filter value typed by the user, or returns null when it is not valid for the filter type.
@@ -158,10 +163,8 @@ export function WorkflowRunsPage() {
     const navigate = useNavigate();
     const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
     const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
 
     useEffect(() => {
@@ -218,7 +221,6 @@ export function WorkflowRunsPage() {
             ? filters.filter((f) => !(f.filterBy.value === type && f.filterValue === value))
             : filters.filter((f) => f.filterBy.value !== type);
         setFilters([...kept, { filterBy: criteria.filterBy, filterValue: value }]);
-        setPage(1);
     };
 
     const addFilter = (type: string, value: string) => {
@@ -231,12 +233,10 @@ export function WorkflowRunsPage() {
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     return (
@@ -261,7 +261,7 @@ export function WorkflowRunsPage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>

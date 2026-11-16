@@ -43,6 +43,8 @@ import {
 import { executionModeColor } from "../components/executionModeColor";
 import { ColoredLabel } from "../components/ColoredLabel";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 // Default templates sent when creating an action type so the POST is complete and
 // passes server-side validation. Users refine these on the detail page afterward.
@@ -64,7 +66,11 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "labels", label: "Labels", testId: "action-type-filter-labels" },
 ];
 
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES, multiValueFilters: new Set<string>(["labels"]) };
+
 export function ActionTypesPage() {
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const navigate = useNavigate();
     const [actionTypes, setActionTypes] = useState<ActionType[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -73,10 +79,6 @@ export function ActionTypesPage() {
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
     const [newName, setNewName] = useState("");
     const [newMode, setNewMode] = useState("agent");
-
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
     const filterMode = filters.find((f) => f.filterBy.value === "mode")?.filterValue;
@@ -111,18 +113,15 @@ export function ActionTypesPage() {
             updated.push(criteria);
             setFilters(updated);
         }
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     const addLabelFilter = (label: string) => {
@@ -130,7 +129,6 @@ export function ActionTypesPage() {
         if (!already) {
             const labelType = FILTER_TYPES.find((t) => t.value === "labels")!;
             setFilters([...filters, { filterBy: labelType, filterValue: label }]);
-            setPage(1);
         }
     };
 
@@ -139,7 +137,6 @@ export function ActionTypesPage() {
         const withoutMode = filters.filter((f) => f.filterBy.value !== "mode");
         withoutMode.push({ filterBy: modeType, filterValue: mode });
         setFilters(withoutMode);
-        setPage(1);
     };
 
     const handleCreate = () => {
@@ -204,7 +201,7 @@ export function ActionTypesPage() {
                             perPage={perPage}
                             page={page}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>

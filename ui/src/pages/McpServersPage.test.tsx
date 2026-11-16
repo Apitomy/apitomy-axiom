@@ -169,4 +169,15 @@ describe("McpServersPage create modal", () => {
         expect(within(dialog).getByText("github")).toBeInTheDocument();
         expect(within(dialog).getByText(/This server is in use \(2 reference/)).toBeInTheDocument();
     });
+
+    it("initialises the search from ?q=", async () => {
+        vi.mocked(api.fetchMcpServers).mockResolvedValue([
+            { id: 9, name: "gh", transport: "stdio", serverCommand: "npx", enabled: true },
+            { id: 10, name: "github", transport: "stdio", serverCommand: "npx", enabled: true },
+        ] as never);
+        renderWithRouter(<McpServersPage />, "/?q=git");
+        expect(await screen.findByDisplayValue("git")).toBeInTheDocument();
+        expect(await screen.findByRole("button", { name: "Delete github" })).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Delete gh" })).not.toBeInTheDocument();
+    });
 });

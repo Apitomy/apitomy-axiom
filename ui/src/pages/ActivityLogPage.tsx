@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
     Button,
     EmptyState,
@@ -23,6 +23,8 @@ import {
 import { type ActivityLogEntry, fetchActivityLog } from "../config/api";
 import { ExecutionLogModal } from "../components/ExecutionLogModal";
 import { activityTypePresentation } from "../config/activityTypes";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "eventId", label: "Event ID", testId: "activity-filter-eventId" },
@@ -32,26 +34,19 @@ const FILTER_TYPES: ChipFilterType[] = [
     { value: "subjectId", label: "Subject ID", testId: "activity-filter-subjectId" },
 ];
 
-const DEEP_LINK_FILTERS = ["traceId"];
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = {
+    filterTypes: FILTER_TYPES,
+    multiValueFilters: new Set<string>(["entryType"]),
+};
 
 export function ActivityLogPage() {
     const navigate = useNavigate();
     const [entries, setEntries] = useState<ActivityLogEntry[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
 
-    const [searchParams] = useSearchParams();
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>(() => {
-        // Deep link: ?traceId= presets the matching filter
-        return DEEP_LINK_FILTERS.flatMap((key) => {
-            const value = searchParams.get(key);
-            return value
-                ? [{ filterBy: FILTER_TYPES.find((t) => t.value === key)!, filterValue: value }]
-                : [];
-        });
-    });
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
 
     // Execution log modal state
     const [isLogModalOpen, setIsLogModalOpen] = useState(false);
@@ -113,18 +108,15 @@ export function ActivityLogPage() {
             updated.push(criteria);
             setFilters(updated);
         }
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     return (
@@ -149,7 +141,7 @@ export function ActivityLogPage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>
@@ -231,7 +223,6 @@ export function ActivityLogPage() {
                                                     f.filterBy.value === "entryType" && f.filterValue === entry.entryType);
                                                 if (!already) {
                                                     setFilters([...filters, { filterBy: entryTypeType, filterValue: entry.entryType }]);
-                                                    setPage(1);
                                                 }
                                             }}>
                                             {activityTypePresentation(entry.entryType).label}

@@ -36,12 +36,15 @@ import {
 import { sseClient, type AxiomSseEvent } from "../config/sse";
 import { FromNow } from "../components/FromNow";
 import { DynamicFormRenderer } from "../components/DynamicFormRenderer";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
+
+const LIST_CONFIG: ListStateConfig = { filterTypes: [] };
 
 export function InboxPage() {
     const [items, setItems] = useState<InboxItem[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
+    const { page, perPage, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const [loading, setLoading] = useState(true);
 
     // Detail modal state
@@ -115,9 +118,11 @@ export function InboxPage() {
 
     const clearDeepLink = () => {
         if (searchParams.has("task")) {
-            const next = new URLSearchParams(searchParams);
-            next.delete("task");
-            setSearchParams(next, { replace: true });
+            setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete("task");
+                return next;
+            }, { replace: true });
         }
     };
 
@@ -208,7 +213,7 @@ export function InboxPage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>

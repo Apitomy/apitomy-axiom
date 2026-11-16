@@ -49,15 +49,21 @@ import {
     deleteEventSource,
     fetchSecrets,
 } from "../config/api";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "event-source-filter-name" },
     { value: "type", label: "Type", testId: "event-source-filter-type" },
 ];
 
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES };
+
 const SLUG_PATTERN = /^[a-z0-9-]*$/;
 
 export function EventSourcesPage() {
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const navigate = useNavigate();
     const [eventSources, setEventSources] = useState<EventSourceConfig[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -75,10 +81,6 @@ export function EventSourcesPage() {
     const [reposText, setReposText] = useState("");
     const [projectsText, setProjectsText] = useState("");
     const [jiraEmail, setJiraEmail] = useState("");
-
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
     const filterType = filters.find((f) => f.filterBy.value === "type")?.filterValue;
@@ -106,18 +108,15 @@ export function EventSourcesPage() {
         const withoutSame = updated.filter((f) => f.filterBy.value !== criteria.filterBy.value);
         withoutSame.push(criteria);
         setFilters(withoutSame);
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     const addTypeFilter = (type: string) => {
@@ -125,7 +124,6 @@ export function EventSourcesPage() {
         const withoutType = filters.filter((f) => f.filterBy.value !== "type");
         withoutType.push({ filterBy: typeFilterType, filterValue: type });
         setFilters(withoutType);
-        setPage(1);
     };
 
     const openCreate = () => {
@@ -219,7 +217,7 @@ export function EventSourcesPage() {
                             perPage={perPage}
                             page={page}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>

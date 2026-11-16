@@ -46,21 +46,27 @@ import {
     createSubject,
     deleteSubject,
 } from "../config/api";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "subject-filter-name" },
     { value: "labels", label: "Labels", testId: "subject-filter-labels" },
 ];
 
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = {
+    filterTypes: FILTER_TYPES,
+    multiValueFilters: new Set<string>(["labels"]),
+};
+
 export function SubjectsPage() {
     const navigate = useNavigate();
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
     const [loading, setLoading] = useState(true);
 
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const [showInactive, setShowInactive] = useState(
         () => localStorage.getItem("axiom.subjects.showInactive") !== "false"
     );
@@ -113,18 +119,15 @@ export function SubjectsPage() {
             updated.push(criteria);
             setFilters(updated);
         }
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     const addLabelFilter = (label: string) => {
@@ -132,7 +135,6 @@ export function SubjectsPage() {
         if (!already) {
             const labelType = FILTER_TYPES.find((t) => t.value === "labels")!;
             setFilters([...filters, { filterBy: labelType, filterValue: label }]);
-            setPage(1);
         }
     };
 
@@ -206,7 +208,7 @@ export function SubjectsPage() {
                             page={page}
                             perPage={perPage}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>

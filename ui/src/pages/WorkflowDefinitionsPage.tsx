@@ -42,12 +42,18 @@ import {
     deleteWorkflowDefinition,
 } from "../config/api";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "workflow-definition-filter-name" },
 ];
 
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES };
+
 export function WorkflowDefinitionsPage() {
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const navigate = useNavigate();
     const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -57,10 +63,6 @@ export function WorkflowDefinitionsPage() {
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [newName, setNewName] = useState("");
     const [newDescription, setNewDescription] = useState("");
-
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
     const isFiltered = filters.length > 0;
@@ -90,18 +92,15 @@ export function WorkflowDefinitionsPage() {
             updated.push(criteria);
             setFilters(updated);
         }
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     const handleCreate = () => {
@@ -191,7 +190,7 @@ export function WorkflowDefinitionsPage() {
                             perPage={perPage}
                             page={page}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>

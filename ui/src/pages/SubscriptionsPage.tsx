@@ -41,12 +41,18 @@ import {
     createSubscription,
     deleteSubscription,
 } from "../config/api";
+import { useListUrlState } from "../hooks/useListUrlState";
+import type { ListStateConfig } from "../utils/listUrlState";
 
 const FILTER_TYPES: ChipFilterType[] = [
     { value: "name", label: "Name", testId: "subscription-filter-name" },
 ];
 
+/** URL binding of this page's filters and paging. */
+const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES };
+
 export function SubscriptionsPage() {
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const navigate = useNavigate();
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [totalCount, setTotalCount] = useState(0);
@@ -57,10 +63,6 @@ export function SubscriptionsPage() {
     });
 
     const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-
-    const [filters, setFilters] = useState<ChipFilterCriteria[]>([]);
-    const [page, setPage] = useState(1);
-    const [perPage, setPerPage] = useState(20);
 
     const filterName = filters.find((f) => f.filterBy.value === "name")?.filterValue;
     const isFiltered = filters.length > 0;
@@ -83,18 +85,15 @@ export function SubscriptionsPage() {
         const withoutSame = filters.filter((f) => f.filterBy.value !== criteria.filterBy.value);
         withoutSame.push(criteria);
         setFilters(withoutSame);
-        setPage(1);
     };
 
     const onRemoveFilterCriteria = (criteria: ChipFilterCriteria) => {
         setFilters(filters.filter((f) =>
             !(f.filterBy.value === criteria.filterBy.value && f.filterValue === criteria.filterValue)));
-        setPage(1);
     };
 
     const onClearAllFilters = () => {
         setFilters([]);
-        setPage(1);
     };
 
     const openCreate = () => {
@@ -156,7 +155,7 @@ export function SubscriptionsPage() {
                             perPage={perPage}
                             page={page}
                             onSetPage={(_e, p) => setPage(p)}
-                            onPerPageSelect={(_e, pp) => { setPerPage(pp); setPage(1); }}
+                            onPerPageSelect={(_e, pp) => setPerPage(pp)}
                             isCompact
                         />
                     </ToolbarItem>
