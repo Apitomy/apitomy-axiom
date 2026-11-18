@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ComponentType } from "react";
+import { useState, useEffect, useCallback, useMemo, type ComponentType } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Button,
@@ -38,18 +38,42 @@ import { RunAiSummaryHeadline } from "../components/RunAiSummaryCard";
 import { useListUrlState } from "../hooks/useListUrlState";
 import type { ListStateConfig } from "../utils/listUrlState";
 
-const FILTER_TYPES: ChipFilterType[] = [
-    { value: "status", label: "Status", testId: "runs-filter-status" },
-    { value: "workflow", label: "Workflow", testId: "runs-filter-workflow" },
-    { value: "subject", label: "Subject ID", testId: "runs-filter-subject" },
-    { value: "label", label: "Label", testId: "runs-filter-label" },
-];
+/** Page size used when loading all workflow definitions for the Workflow filter. */
+const DEFINITION_PAGE_SIZE = 100;
+
+/**
+ * Builds the filter types for the runs list. When workflow definitions are known, the Workflow filter offers
+ * them as a select (value = definition id, label = name); otherwise it falls back to free text.
+ *
+ * @param definitions the known workflow definitions, or null while they are loading
+ * @returns the filter types
+ */
+export function buildFilterTypes(definitions: WorkflowDefinition[] | null): ChipFilterType[] {
+    return [
+        { value: "status", label: "Status", testId: "runs-filter-status" },
+        {
+            value: "workflow", label: "Workflow", testId: "runs-filter-workflow",
+            options: definitions?.map((d) => ({ value: String(d.id), label: d.name || `Workflow #${d.id}` })),
+        },
+        { value: "subject", label: "Subject ID", testId: "runs-filter-subject" },
+        { value: "label", label: "Label", testId: "runs-filter-label" },
+    ];
+}
+
+/** Loads every workflow definition, following pagination. */
+async function fetchAllDefinitions(): Promise<WorkflowDefinition[]> {
+    const all: WorkflowDefinition[] = [];
+    for (let page = 1; ; page++) {
+        const results = await fetchWorkflowDefinitions(page, DEFINITION_PAGE_SIZE);
+        all.push(...results.items);
+        if (results.items.length < DEFINITION_PAGE_SIZE || all.length >= results.totalCount) {
+            return all;
+        }
+    }
+}
 
 /** Filter types that can appear several times (each value is an extra condition); the others replace. */
 const MULTI_VALUE_FILTERS: ReadonlySet<string> = new Set<string>(["label"]);
-
-/** URL binding of this page's filters and paging. */
-const LIST_CONFIG: ListStateConfig = { filterTypes: FILTER_TYPES, multiValueFilters: MULTI_VALUE_FILTERS };
 
 /**
  * Normalises a filter value typed by the user, or returns null when it is not valid for the filter type.
@@ -76,13 +100,17 @@ export function normalizeRunFilter(type: string, raw: string): string | null {
 }
 
 /**
- * Resolves a "Workflow" filter value (a workflow name, case-insensitive, or a numeric id) to a definition id.
+ * Resolves a "Workflow" filter value (a definition id, as selected from the filter, or — for older links — a
+ * workflow name, case-insensitive) to a definition id.
  *
  * @param value the filter value
  * @param definitions the known workflow definitions
  * @returns the definition id, or -1 when nothing matches (so the list shows no runs)
  */
 export function resolveWorkflowFilter(value: string, definitions: WorkflowDefinition[]): number {
+    if (/^\d+$/.test(value) && definitions.some((d) => d.id === Number(value))) {
+        return Number(value);
+    }
     const byName: WorkflowDefinition | undefined = definitions.find(
         (d) => d.name.toLowerCase() === value.toLowerCase());
     if (byName) {
@@ -113,17 +141,12 @@ export function describeRunWorkflow(run: WorkflowRunSummary): string {
 }
 
 /**
- * Returns the "Workflow" filter value for a run: the workflow name when it uniquely resolves back to the run's
- * definition, otherwise the numeric definition id.
+ * Returns the "Workflow" filter value for a run: its definition id (matching the Workflow filter's options).
  *
  * @param run the run summary
- * @param definitions the known workflow definitions
  * @returns the filter value
  */
-export function workflowFilterValue(run: WorkflowRunSummary, definitions: WorkflowDefinition[]): string {
-    if (run.definitionName && resolveWorkflowFilter(run.definitionName, definitions) === run.definitionId) {
-        return run.definitionName;
-    }
+export function workflowFilterValue(run: WorkflowRunSummary): string {
     return String(run.definitionId);
 }
 
@@ -163,14 +186,20 @@ export function WorkflowRunsPage() {
     const navigate = useNavigate();
     const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
     const [totalCount, setTotalCount] = useState(0);
-    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(LIST_CONFIG);
     const [loading, setLoading] = useState(true);
-    const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
+    const [loadedDefinitions, setLoadedDefinitions] = useState<WorkflowDefinition[] | null>(null);
+    const definitions: WorkflowDefinition[] = useMemo(() => loadedDefinitions ?? [], [loadedDefinitions]);
+    const filterTypes: ChipFilterType[] = useMemo(() => buildFilterTypes(loadedDefinitions), [loadedDefinitions]);
+    const listConfig: ListStateConfig = useMemo(
+        () => ({ filterTypes, multiValueFilters: MULTI_VALUE_FILTERS }), [filterTypes]);
+    const { filters, page, perPage, setFilters, setPage, setPerPage } = useListUrlState(listConfig);
 
     useEffect(() => {
-        fetchWorkflowDefinitions(1, 100)
-            .then((results) => setDefinitions(results.items))
+        let cancelled = false;
+        fetchAllDefinitions()
+            .then((items) => { if (!cancelled) setLoadedDefinitions(items); })
             .catch(console.error);
+        return () => { cancelled = true; };
     }, []);
 
     const valueOf = (type: string): string | undefined => filters.find((f) => f.filterBy.value === type)?.filterValue;
@@ -220,11 +249,14 @@ export function WorkflowRunsPage() {
         const kept: ChipFilterCriteria[] = MULTI_VALUE_FILTERS.has(type)
             ? filters.filter((f) => !(f.filterBy.value === type && f.filterValue === value))
             : filters.filter((f) => f.filterBy.value !== type);
-        setFilters([...kept, { filterBy: criteria.filterBy, filterValue: value }]);
+        const label: string | undefined = criteria.filterBy.options?.find((o) => o.value === value)?.label;
+        setFilters([...kept, label && label !== value
+            ? { filterBy: criteria.filterBy, filterValue: value, filterLabel: label }
+            : { filterBy: criteria.filterBy, filterValue: value }]);
     };
 
     const addFilter = (type: string, value: string) => {
-        const filterBy: ChipFilterType | undefined = FILTER_TYPES.find((t) => t.value === type);
+        const filterBy: ChipFilterType | undefined = filterTypes.find((t) => t.value === type);
         if (filterBy) {
             onAddFilterCriteria({ filterBy, filterValue: value });
         }
@@ -248,7 +280,7 @@ export function WorkflowRunsPage() {
             <Toolbar>
                 <ToolbarContent>
                     <ToolbarItem>
-                        <ChipFilterInput filterTypes={FILTER_TYPES} onAddCriteria={onAddFilterCriteria} />
+                        <ChipFilterInput filterTypes={filterTypes} onAddCriteria={onAddFilterCriteria} />
                     </ToolbarItem>
                     <ToolbarItem>
                         <Button variant="control" aria-label="Refresh" onClick={loadData}>
@@ -314,7 +346,7 @@ export function WorkflowRunsPage() {
                                     <Button variant="link" isInline aria-label={`Filter by workflow: ${describeRunWorkflow(run)}`}
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            addFilter("workflow", workflowFilterValue(run, definitions));
+                                            addFilter("workflow", workflowFilterValue(run));
                                         }}>
                                         {describeRunWorkflow(run)}
                                     </Button>
