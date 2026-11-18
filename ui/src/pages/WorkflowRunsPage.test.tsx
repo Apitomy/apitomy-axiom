@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { render } from "@testing-library/react";
-import { normalizeRunFilter, resolveWorkflowFilter, WorkflowRunsPage } from "./WorkflowRunsPage";
+import { buildFilterTypes, normalizeRunFilter, resolveWorkflowFilter, WorkflowRunsPage } from "./WorkflowRunsPage";
 import { renderWithRouter } from "../test/renderWithRouter";
 import { labelColor } from "../components/ColoredLabel";
 import * as api from "../config/api";
@@ -126,6 +126,13 @@ describe("WorkflowRunsPage", () => {
         expect(resolveWorkflowFilter("triage", defs)).toBe(2);
         expect(resolveWorkflowFilter("7", defs)).toBe(7);
         expect(resolveWorkflowFilter("nope", defs)).toBe(-1);
+    });
+
+    it("offers known workflows as Workflow filter options (value = id, label = name)", () => {
+        const defs = [{ id: 2, name: "Triage" }, { id: 5, name: "" }] as never;
+        const workflow = buildFilterTypes(defs).find((t) => t.value === "workflow");
+        expect(workflow?.options).toEqual([{ value: "2", label: "Triage" }, { value: "5", label: "Workflow #5" }]);
+        expect(buildFilterTypes(null).find((t) => t.value === "workflow")?.options).toBeUndefined();
     });
 
     it("loads filters and page from the URL", async () => {
