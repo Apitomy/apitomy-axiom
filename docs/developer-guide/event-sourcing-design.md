@@ -263,6 +263,7 @@ items of an attempt stay on that attempt's outcome and never appear on a later a
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/stream/events` | Browse events (paginated; filters `filterType`, `filterEventSourceId`, `filterRef`, `filterActor`) |
+| POST | `/stream/events` | Publish an event under the `sdk` event source (backs the `axiom_fire_event` MCP tool) |
 | GET | `/stream/events/{eventId}` | Get a single event with full typed payload |
 | GET | `/stream/events/{eventId}/processing` | Ledger entries, routing outcomes and items for the event |
 | POST | `/stream/events/{eventId}/processing/{ledgerId}/retry` | Retry a `failed` or `exhausted` ledger entry |

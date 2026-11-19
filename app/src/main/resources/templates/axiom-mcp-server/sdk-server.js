@@ -35,12 +35,19 @@ async function axiomApi(method, path, body, { contentType = "application/json", 
 // Metadata (name, description, parameters) is fetched from the registry API.
 const HANDLERS = {
     axiom_fire_event: async (args) => {
-        return await axiomApi("POST", "/events", {
+        let payload = args.payload;
+        if (typeof payload === "string") {
+            try {
+                payload = payload.trim() ? JSON.parse(payload) : {};
+            } catch (e) {
+                throw new Error(`payload is not valid JSON: ${e.message}`);
+            }
+        }
+        return await axiomApi("POST", "/stream/events", {
             source: args.source,
             eventType: args.eventType,
-            issueRef: args.issueRef || null,
-            repository: args.repository || null,
-            payload: args.payload,
+            ref: args.issueRef || null,
+            payload: payload ?? {},
         });
     },
     axiom_list_subjects: async (args) => {

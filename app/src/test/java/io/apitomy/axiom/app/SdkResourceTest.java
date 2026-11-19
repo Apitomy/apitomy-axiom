@@ -197,6 +197,28 @@ class SdkResourceTest {
         assertFalse(missing.success());
     }
 
+    /**
+     * axiom_fire_event copies the declared issueRef parameter into the event's top-level ref.
+     */
+    @Test
+    void fireEventSetsTopLevelRefFromIssueRef() {
+        SdkCallService.SdkCallResult result = QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_fire_event", Map.of(
+                        "source", "internal",
+                        "eventType", "sdk.ref.test",
+                        "issueRef", "maven:com.example:lib:1.2.3",
+                        "payload", "{}")));
+        assertTrue(result.success(), result.output());
+
+        java.util.UUID eventId = java.util.UUID.fromString((String) result.outputMap().get("eventId"));
+        String ref = QuarkusTransaction.requiringNew().call(() ->
+                io.apitomy.axiom.core.entities.StreamEventEntity
+                        .<io.apitomy.axiom.core.entities.StreamEventEntity>findById(eventId).ref);
+        QuarkusTransaction.requiringNew().run(() ->
+                io.apitomy.axiom.core.entities.StreamEventEntity.deleteById(eventId));
+        assertEquals("maven:com.example:lib:1.2.3", ref);
+    }
+
     private static java.util.List<String> runLabels(long runId) {
         return QuarkusTransaction.requiringNew().call(() ->
                 new java.util.ArrayList<>(WorkflowRunEntity.<WorkflowRunEntity>findById(runId).labels));

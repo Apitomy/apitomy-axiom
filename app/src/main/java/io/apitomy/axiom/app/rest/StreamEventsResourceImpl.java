@@ -7,6 +7,7 @@ import io.apitomy.axiom.app.EventOperationsService;
 import io.apitomy.axiom.app.EventStreamOrchestrator;
 import io.apitomy.axiom.app.RunLabels;
 import io.apitomy.axiom.app.RunRequest;
+import io.apitomy.axiom.app.SystemEventPublisher;
 import io.apitomy.axiom.app.WorkflowRunBeanMapper;
 import io.apitomy.axiom.api.beans.Actor;
 import io.apitomy.axiom.api.beans.EventProcessingEntry;
@@ -14,6 +15,7 @@ import io.apitomy.axiom.api.beans.EventProcessingOutcome;
 import io.apitomy.axiom.api.beans.EventProcessingOutcomeItem;
 import io.apitomy.axiom.api.beans.EventProcessingSearchResults;
 import io.apitomy.axiom.api.beans.EventVolumeBucket;
+import io.apitomy.axiom.api.beans.NewStreamEvent;
 import io.apitomy.axiom.api.beans.Payload;
 import io.apitomy.axiom.api.beans.ProcessingFailure;
 import io.apitomy.axiom.api.beans.SourceData;
@@ -37,6 +39,7 @@ import io.quarkus.panache.common.Sort;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.ws.rs.WebApplicationException;
 import org.jboss.logging.Logger;
 
@@ -51,8 +54,8 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Implementation of the Stream Events REST API. Provides read-only,
- * paginated, filterable access to the normalized event stream.
+ * Implementation of the Stream Events REST API. Provides paginated, filterable access to the
+ * normalized event stream, and publishing of SDK events.
  */
 @ApplicationScoped
 @RunOnVirtualThread
@@ -74,6 +77,9 @@ public class StreamEventsResourceImpl implements StreamResource {
 
     @Inject
     WorkflowRunBeanMapper runBeanMapper;
+
+    @Inject
+    SystemEventPublisher systemEventPublisher;
 
     /** Escapes LIKE wildcards (and the escape character) in a literal pattern fragment. */
     private static String likeEscape(String text) {
@@ -213,6 +219,34 @@ public class StreamEventsResourceImpl implements StreamResource {
     @Override
     public List<ProcessingFailure> listProcessingFailures(BigInteger limit, Date since) {
         return eventOperations.failures(limit != null ? limit.intValue() : null, since);
+    }
+
+    /**
+     * Publishes a new event into the stream under the {@code sdk} event source, so it is processed
+     * by event subscriptions and waiting workflows like any external event.
+     *
+     * @param data the event to publish
+     * @return the published event
+     */
+    @Override
+    @Transactional
+    public StreamEvent createStreamEvent(NewStreamEvent data) {
+        if (data.getSource() == null || data.getSource().isBlank()) {
+            throw new WebApplicationException("Missing required 'source' field", 400);
+        }
+        if (data.getEventType() == null || data.getEventType().isBlank()) {
+            throw new WebApplicationException("Missing required 'eventType' field", 400);
+        }
+        String payloadJson;
+        try {
+            payloadJson = data.getPayload() != null ? objectMapper.writeValueAsString(data.getPayload()) : "{}";
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new WebApplicationException("Invalid 'payload' field", 400);
+        }
+        String ref = data.getRef() != null ? data.getRef() : "";
+        UUID eventId = systemEventPublisher.publish("sdk", data.getSource(), data.getEventType(), ref,
+                "{\"login\":\"sdk\"}", payloadJson, Instant.now());
+        return toBean(StreamEventEntity.findById(eventId));
     }
 
     @Override

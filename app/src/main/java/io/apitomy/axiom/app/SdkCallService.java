@@ -166,7 +166,7 @@ public class SdkCallService {
         if (payload == null) payload = "{}";
 
         java.util.UUID eventId = systemEventPublisher.publish("sdk", source, eventType,
-                toString(params.getOrDefault("ref", "")), "{\"login\":\"workflow\"}", payload, Instant.now());
+                toString(params.getOrDefault("issueRef", "")), "{\"login\":\"workflow\"}", payload, Instant.now());
 
         return SdkCallResult.ok("Event fired: " + eventType,
                 Map.of("eventId", eventId.toString()));
