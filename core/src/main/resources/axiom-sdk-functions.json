@@ -5,8 +5,7 @@
     "parameters": [
       { "name": "source", "type": "string", "description": "Event source type (e.g. 'github', 'jira', 'internal')", "required": true },
       { "name": "eventType", "type": "string", "description": "Event type (e.g. 'issue-created', 'custom')", "required": true },
-      { "name": "issueRef", "type": "string", "description": "Issue reference (e.g. 'owner/repo#123')", "required": false },
-      { "name": "repository", "type": "string", "description": "Repository identifier (e.g. 'owner/repo')", "required": false },
+      { "name": "issueRef", "type": "string", "description": "Event reference, stored as the event's top-level ref (e.g. 'owner/repo#123')", "required": false },
       { "name": "payload", "type": "string", "description": "JSON payload with event details", "required": true }
     ],
     "sdkCallSupported": true

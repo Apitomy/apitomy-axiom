@@ -160,13 +160,21 @@ public class SdkCallService {
     private SdkCallResult fireEvent(Map<String, Object> params) {
         String source = toString(params.get("source"));
         String eventType = toString(params.get("eventType"));
-        String payload = toString(params.get("payload"));
         if (source == null) return SdkCallResult.error("source is required");
         if (eventType == null) return SdkCallResult.error("eventType is required");
-        if (payload == null) payload = "{}";
+        String payload;
+        try {
+            payload = toPayloadJson(params.get("payload"));
+        } catch (JsonProcessingException e) {
+            return SdkCallResult.error("payload is not valid JSON: " + e.getOriginalMessage());
+        }
+
+        // 'issueRef' is the declared parameter; 'ref' is accepted for workflows written before it was honored.
+        Object ref = params.get("issueRef") != null ? params.get("issueRef") : params.get("ref");
+        String refValue = ref != null ? ref.toString() : "";
 
         java.util.UUID eventId = systemEventPublisher.publish("sdk", source, eventType,
-                toString(params.getOrDefault("ref", "")), "{\"login\":\"workflow\"}", payload, Instant.now());
+                refValue, "{\"login\":\"workflow\"}", payload, Instant.now());
 
         return SdkCallResult.ok("Event fired: " + eventType,
                 Map.of("eventId", eventId.toString()));
@@ -364,6 +372,23 @@ public class SdkCallService {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * Normalizes an event payload to a JSON string. Strings are parsed to verify they are valid JSON;
+     * structured values (e.g. maps from workflow YAML) are serialized. Missing or blank payloads become {@code {}}.
+     *
+     * @param value the raw payload parameter
+     * @return the payload as a JSON string
+     * @throws JsonProcessingException if a string payload is not valid JSON
+     */
+    private String toPayloadJson(Object value) throws JsonProcessingException {
+        if (value == null) return "{}";
+        if (value instanceof String s) {
+            if (s.isBlank()) return "{}";
+            return objectMapper.writeValueAsString(objectMapper.readTree(s));
+        }
+        return objectMapper.writeValueAsString(value);
     }
 
     private String toString(Object value) {

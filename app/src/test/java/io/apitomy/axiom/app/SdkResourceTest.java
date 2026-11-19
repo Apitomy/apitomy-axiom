@@ -4,11 +4,13 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
+import io.apitomy.axiom.core.entities.StreamEventEntity;
 import io.apitomy.axiom.core.entities.WorkflowRunEntity;
 import io.quarkus.narayana.jta.QuarkusTransaction;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -195,6 +197,72 @@ class SdkResourceTest {
         SdkCallService.SdkCallResult missing = QuarkusTransaction.requiringNew().call(() ->
                 sdkCallService.execute("axiom_add_run_label", Map.of("runId", 99999999L, "label", "x")));
         assertFalse(missing.success());
+    }
+
+    /**
+     * axiom_fire_event copies the declared issueRef parameter into the event's top-level ref.
+     */
+    @Test
+    void fireEventSetsTopLevelRefFromIssueRef() {
+        StreamEventEntity event = fireEvent(Map.of(
+                "source", "internal",
+                "eventType", "sdk.ref.test",
+                "issueRef", "maven:com.example:lib:1.2.3",
+                "payload", "{}"));
+        assertEquals("maven:com.example:lib:1.2.3", event.ref);
+    }
+
+    /**
+     * axiom_fire_event still honors the legacy 'ref' parameter when 'issueRef' is absent.
+     */
+    @Test
+    void fireEventFallsBackToLegacyRef() {
+        StreamEventEntity event = fireEvent(Map.of(
+                "source", "internal",
+                "eventType", "sdk.ref.legacy",
+                "ref", "owner/repo#42",
+                "payload", "{}"));
+        assertEquals("owner/repo#42", event.ref);
+    }
+
+    /**
+     * axiom_fire_event serializes a structured (map) payload to JSON instead of calling toString().
+     */
+    @Test
+    void fireEventSerializesMapPayload() {
+        StreamEventEntity event = fireEvent(Map.of(
+                "source", "internal",
+                "eventType", "sdk.payload.map",
+                "payload", Map.of("version", "1.2.3")));
+        assertEquals("{\"version\":\"1.2.3\"}", event.payload.replace(" ", ""));
+    }
+
+    /**
+     * axiom_fire_event rejects a string payload that is not valid JSON.
+     */
+    @Test
+    void fireEventRejectsInvalidJsonPayload() {
+        SdkCallService.SdkCallResult result = QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_fire_event", Map.of(
+                        "source", "internal",
+                        "eventType", "sdk.payload.invalid",
+                        "payload", "{not json")));
+        assertFalse(result.success());
+    }
+
+    /**
+     * Fires an event through the SDK, then loads and deletes the persisted event.
+     */
+    private StreamEventEntity fireEvent(Map<String, Object> params) {
+        SdkCallService.SdkCallResult result = QuarkusTransaction.requiringNew().call(() ->
+                sdkCallService.execute("axiom_fire_event", params));
+        assertTrue(result.success(), result.output());
+
+        UUID eventId = UUID.fromString((String) result.outputMap().get("eventId"));
+        StreamEventEntity event = QuarkusTransaction.requiringNew().call(() ->
+                StreamEventEntity.<StreamEventEntity>findById(eventId));
+        QuarkusTransaction.requiringNew().run(() -> StreamEventEntity.deleteById(eventId));
+        return event;
     }
 
     private static java.util.List<String> runLabels(long runId) {

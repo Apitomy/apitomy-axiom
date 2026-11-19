@@ -36,6 +36,41 @@ class StreamEventsResourceTest {
                 .body("items", is(empty()));
     }
 
+    /**
+     * POST /stream/events publishes an SDK event with the given ref and payload.
+     */
+    @Test
+    void createStreamEventPublishesSdkEvent() {
+        String id = given()
+                .contentType(ContentType.JSON)
+                .body("{\"source\":\"internal\",\"eventType\":\"rest.fire.test\","
+                        + "\"ref\":\"maven:com.example:lib:1.2.3\",\"payload\":{\"version\":\"1.2.3\"}}")
+            .when()
+                .post("/api/v1/stream/events")
+            .then()
+                // TODO: the spec declares 201, but the generated JAX-RS interface returns 200 for all
+                // create endpoints. Update this assertion if the generator starts honoring 201.
+                .statusCode(200)
+                .body("eventSourceId", is("sdk"))
+                .body("source", is("internal"))
+                .body("type", is("rest.fire.test"))
+                .body("ref", is("maven:com.example:lib:1.2.3"))
+                .body("payload.version", is("1.2.3"))
+                .extract().path("id");
+        QuarkusTransaction.requiringNew().run(() -> StreamEventEntity.deleteById(UUID.fromString(id)));
+    }
+
+    /**
+     * POST /stream/events rejects a request without the required source and event type.
+     */
+    @Test
+    void createStreamEventRequiresSourceAndType() {
+        given().contentType(ContentType.JSON).body("{\"eventType\":\"x\"}")
+                .post("/api/v1/stream/events").then().statusCode(400);
+        given().contentType(ContentType.JSON).body("{\"source\":\"internal\",\"eventType\":\" \"}")
+                .post("/api/v1/stream/events").then().statusCode(400);
+    }
+
     @Test
     void testGetStreamEventNotFound() {
         given()

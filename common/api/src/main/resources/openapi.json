@@ -4970,6 +4970,39 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "StreamEvents"
+        ],
+        "summary": "Fire a stream event",
+        "description": "Publishes a new event into the event stream (event source `sdk`) for processing by event subscriptions and waiting workflows. Used by the `axiom_fire_event` SDK function.",
+        "operationId": "createStreamEvent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewStreamEvent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The event was published",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
       }
     },
     "/stream/events/histogram": {
@@ -11882,6 +11915,33 @@
             "description": "Per-state counts of this event's event/subscription pairs in the processing ledger. Absent when the event has no ledger entries, which happens both when no subscription was eligible and when the event has not been evaluated yet (the two cases are not distinguished). Populated by the list endpoint only."
           }
         }
+      },
+      "NewStreamEvent": {
+        "required": [
+          "source",
+          "eventType"
+        ],
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Event source type (e.g. 'github', 'jira', 'internal')"
+          },
+          "eventType": {
+            "type": "string",
+            "description": "Event type (e.g. 'maven.dependency.upgraded')"
+          },
+          "ref": {
+            "type": "string",
+            "description": "Event reference, stored as the event's top-level ref"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "Event payload; defaults to an empty object"
+          }
+        },
+        "description": "An event to publish into the event stream."
       },
       "StreamEventProcessingStates": {
         "type": "object",
