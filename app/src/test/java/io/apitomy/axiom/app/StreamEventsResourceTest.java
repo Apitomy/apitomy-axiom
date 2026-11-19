@@ -48,6 +48,8 @@ class StreamEventsResourceTest {
             .when()
                 .post("/api/v1/stream/events")
             .then()
+                // TODO: the spec declares 201, but the generated JAX-RS interface returns 200 for all
+                // create endpoints. Update this assertion if the generator starts honoring 201.
                 .statusCode(200)
                 .body("eventSourceId", is("sdk"))
                 .body("source", is("internal"))

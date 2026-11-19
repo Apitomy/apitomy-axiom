@@ -1,5 +1,6 @@
 package io.apitomy.axiom.app.rest;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.apitomy.axiom.api.StreamResource;
@@ -240,8 +241,9 @@ public class StreamEventsResourceImpl implements StreamResource {
         String payloadJson;
         try {
             payloadJson = data.getPayload() != null ? objectMapper.writeValueAsString(data.getPayload()) : "{}";
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new WebApplicationException("Invalid 'payload' field", 400);
+        } catch (JsonProcessingException e) {
+            // The payload was already deserialized from JSON, so failing to re-serialize it is a server error.
+            throw new IllegalStateException("Failed to serialize event payload", e);
         }
         String ref = data.getRef() != null ? data.getRef() : "";
         UUID eventId = systemEventPublisher.publish("sdk", data.getSource(), data.getEventType(), ref,
