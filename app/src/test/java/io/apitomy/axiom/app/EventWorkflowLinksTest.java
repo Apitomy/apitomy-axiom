@@ -284,6 +284,20 @@ class EventWorkflowLinksTest {
                 .body("items[0].outcomes[0].items[0].type", equalTo("workflow-resumed"))
                 .body("items[0].outcomes[0].items[0].workflowRunId", equalTo(run.id.intValue()))
                 .body("items[0].outcomes[0].items[0].traceId", equalTo(run.traceId.toString()));
+        // The run is listed for the resuming event via the eventId filter, but not via triggerEventId
+        given()
+            .when()
+                .get("/api/v1/workflow/runs?eventId=" + eventId)
+            .then()
+                .statusCode(200)
+                .body("items", hasSize(1))
+                .body("items[0].runId", equalTo(run.id.intValue()));
+        given()
+            .when()
+                .get("/api/v1/workflow/runs?triggerEventId=" + eventId)
+            .then()
+                .statusCode(200)
+                .body("items", hasSize(0));
     }
 
     @Test

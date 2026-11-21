@@ -497,17 +497,27 @@ public class WorkflowDefinitionsResourceImpl implements WorkflowResource {
     @Override
     public io.apitomy.axiom.api.beans.WorkflowRunSearchResults listWorkflowRuns(
             Long subjectId, String status, Long definitionId, java.util.List<String> label,
-            String triggerEventId, java.math.BigInteger page, java.math.BigInteger limit) {
-        java.util.UUID eventId = null;
-        if (triggerEventId != null && !triggerEventId.isBlank()) {
-            try {
-                eventId = java.util.UUID.fromString(triggerEventId);
-            } catch (IllegalArgumentException e) {
-                throw new WebApplicationException("Invalid triggerEventId: " + triggerEventId,
-                        Response.Status.BAD_REQUEST);
-            }
+            String triggerEventId, String eventId, java.math.BigInteger page, java.math.BigInteger limit) {
+        return runBeanMapper.search(subjectId, definitionId, status, label,
+                parseEventId("triggerEventId", triggerEventId), parseEventId("eventId", eventId), page, limit);
+    }
+
+    /**
+     * Parses an optional UUID query parameter, rejecting malformed values with a 400.
+     *
+     * @param name  the parameter name (for the error message)
+     * @param value the raw parameter value (nullable)
+     * @return the parsed UUID, or {@code null} when absent/blank
+     */
+    private static java.util.UUID parseEventId(String name, String value) {
+        if (value == null || value.isBlank()) {
+            return null;
         }
-        return runBeanMapper.search(subjectId, definitionId, status, label, eventId, page, limit);
+        try {
+            return java.util.UUID.fromString(value);
+        } catch (IllegalArgumentException e) {
+            throw new WebApplicationException("Invalid " + name + ": " + value, Response.Status.BAD_REQUEST);
+        }
     }
 
     /**

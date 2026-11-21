@@ -4471,6 +4471,15 @@
             }
           },
           {
+            "name": "eventId",
+            "in": "query",
+            "description": "Filter by a stream event that either triggered or resumed the run",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {

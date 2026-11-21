@@ -257,13 +257,13 @@ const RUN_STATUS_COLORS: Record<string, "blue" | "green" | "orange" | "grey" | "
     cancelled: "grey",
 };
 
-/** Lists the workflow runs started from an event; refreshes on workflow-updated SSE events. */
+/** Lists the workflow runs started or resumed by an event; refreshes on workflow-updated SSE events. */
 function EventRunsTab({ eventId, refreshKey }: { eventId: string; refreshKey: number }) {
     const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
     const [loading, setLoading] = useState(true);
 
     const load = useCallback(() => {
-        fetchWorkflowRuns(1, 100, { triggerEventId: eventId })
+        fetchWorkflowRuns(1, 100, { eventId })
             .then((r) => setRuns(r.items))
             .catch(console.error)
             .finally(() => setLoading(false));
@@ -286,15 +286,16 @@ function EventRunsTab({ eventId, refreshKey }: { eventId: string; refreshKey: nu
         return <EmptyState><EmptyStateBody>Loading runs...</EmptyStateBody></EmptyState>;
     }
     if (runs.length === 0) {
-        return <EmptyState><EmptyStateBody>No runs were started from this event.</EmptyStateBody></EmptyState>;
+        return <EmptyState><EmptyStateBody>No runs were started or resumed by this event.</EmptyStateBody></EmptyState>;
     }
     return (
-        <Table aria-label="Runs started from this event" variant="compact">
+        <Table aria-label="Runs started or resumed by this event" variant="compact">
             <Thead>
                 <Tr>
                     <Th>Status</Th>
                     <Th>Title</Th>
                     <Th>Workflow</Th>
+                    <Th>Relation</Th>
                     <Th>Started</Th>
                 </Tr>
             </Thead>
@@ -311,6 +312,11 @@ function EventRunsTab({ eventId, refreshKey }: { eventId: string; refreshKey: nu
                             )}
                         </Td>
                         <Td dataLabel="Workflow">{r.definitionName ?? `#${r.definitionId}`}</Td>
+                        <Td dataLabel="Relation">
+                            {r.triggerEventId === eventId
+                                ? <Label isCompact color="blue">started</Label>
+                                : <Label isCompact color="teal">resumed</Label>}
+                        </Td>
                         <Td dataLabel="Started">{new Date(r.startedOn).toLocaleString()}</Td>
                     </Tr>
                 ))}
