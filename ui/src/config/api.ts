@@ -2090,6 +2090,8 @@ export interface WorkflowRunFilters {
     labels?: string[];
     /** Id (UUID) of the stream event that started the runs. */
     triggerEventId?: string;
+    /** Id (UUID) of a stream event that either started or resumed the runs. */
+    eventId?: string;
 }
 
 export async function fetchWorkflowRuns(
@@ -2103,6 +2105,7 @@ export async function fetchWorkflowRuns(
     if (filters.definitionId != null) params.set("definitionId", String(filters.definitionId));
     (filters.labels ?? []).forEach((l) => params.append("label", l));
     if (filters.triggerEventId) params.set("triggerEventId", filters.triggerEventId);
+    if (filters.eventId) params.set("eventId", filters.eventId);
     const response = await fetch(`${API}/workflow/runs?${params}`);
     if (!response.ok) throw new Error(`Failed to fetch workflow runs: ${response.status}`);
     return response.json();
