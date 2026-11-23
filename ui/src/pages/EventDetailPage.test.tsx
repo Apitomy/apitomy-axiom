@@ -38,7 +38,7 @@ beforeEach(() => {
         items: [
             { runId: 11, title: "Manual run", subjectId: 7, definitionId: 2, definitionName: "Triage",
                 definitionVersion: 1, status: "running", startedOn: "2026-10-01T00:00:00Z",
-                labels: ["trigger:manual"] },
+                labels: ["trigger:manual"], triggerEventId: EVENT_ID },
             { runId: 12, title: "Routed run", subjectId: 7, definitionId: 2, definitionName: "Triage",
                 definitionVersion: 1, status: "completed", startedOn: "2026-10-01T00:00:00Z" },
         ], totalCount: 2, page: 1, limit: 100,
@@ -88,19 +88,22 @@ describe("EventDetailPage", () => {
         expect(await screen.findByTestId("lineage-panel")).toHaveTextContent("inline");
     });
 
-    it("lists the runs started from the event on the Runs tab with the manual label", async () => {
+    it("lists the runs started or resumed by the event on the Runs tab with their labels", async () => {
         renderPage();
         await userEvent.click(await screen.findByRole("tab", { name: "Runs" }));
         expect(await screen.findByRole("link", { name: "Manual run" })).toHaveAttribute("href", "/runs/11");
         expect(screen.getByRole("link", { name: "Routed run" })).toBeInTheDocument();
         expect(screen.getAllByText("manual")).toHaveLength(1);
-        expect(api.fetchWorkflowRuns).toHaveBeenCalledWith(1, 100, { triggerEventId: EVENT_ID });
+        expect(screen.getAllByText("started")).toHaveLength(1);
+        expect(screen.getAllByText("resumed")).toHaveLength(1);
+        expect(api.fetchWorkflowRuns).toHaveBeenCalledWith(1, 100, { eventId: EVENT_ID });
     });
 
-    it("shows an empty state when no runs were started from the event", async () => {
+    it("shows an empty state when no runs were started or resumed by the event", async () => {
         vi.mocked(api.fetchWorkflowRuns).mockResolvedValue({ items: [], totalCount: 0, page: 1, limit: 100 } as never);
         renderPage();
         await userEvent.click(await screen.findByRole("tab", { name: "Runs" }));
-        await waitFor(() => expect(screen.getByText("No runs were started from this event.")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByText("No runs were started or resumed by this event."))
+            .toBeInTheDocument());
     });
 });
