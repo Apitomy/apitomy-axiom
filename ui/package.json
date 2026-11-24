@@ -23,7 +23,7 @@
         "echarts": "6.1.0",
         "elkjs": "0.12.1",
         "mermaid": "12.3.0",
-        "monaco-editor": "0.57.0",
+        "monaco-editor": "0.58.0",
         "react": "19.3.1",
         "react-dom": "19.3.1",
         "react-grid-layout": "2.3.0",
