@@ -254,19 +254,10 @@ public class EventStreamOrchestrator {
         for (SubscriptionWithFilters sub : subscriptions) {
             if (shuttingDown) break;
 
-            // Find events that have no ledger entry for this subscription.
-            // Use a NOT IN subquery for efficiency.
-            // Filter by processEventsFrom against the event's timestamp (when it
-            // occurred in the source system), not createdOn (when Axiom ingested it).
             // Every failure creates a ledger entry, so a failing pair leaves this query
             // and is retried (with backoff and a cap) by the retry pass only.
             List<StreamEventEntity> unprocessed = QuarkusTransaction.requiringNew().call(() ->
-                StreamEventEntity.<StreamEventEntity>find(
-                    "timestamp >= ?1 AND id NOT IN (SELECT l.eventId FROM EventProcessingLedgerEntity l " +
-                    "WHERE l.subscriptionId = ?2) ORDER BY timestamp ASC",
-                    sub.processEventsFrom, sub.id)
-                    .page(0, BATCH_SIZE).list()
-            );
+                    findUnledgeredEvents(sub.processEventsFrom, sub.id));
 
             for (StreamEventEntity event : unprocessed) {
                 if (shuttingDown) break;
@@ -275,6 +266,30 @@ public class EventStreamOrchestrator {
                 }
             }
         }
+    }
+
+    /**
+     * Finds up to {@link #BATCH_SIZE} stream events, oldest first, that have no ledger entry
+     * for the given subscription. Filters by the event's {@code timestamp} (when it occurred
+     * in the source system), not {@code createdOn} (when Axiom ingested it). Must be called
+     * within a transaction.
+     * <p>
+     * Uses a correlated {@code NOT EXISTS}, which is one unique-index lookup on
+     * {@code (event_id, subscription_id)} per event. Do not use {@code NOT IN}: H2 re-runs an
+     * uncorrelated subquery for every outer row whenever the ledger was modified after the
+     * statement started (e.g. by a concurrent cleanup commit), which is quadratic (#703).
+     *
+     * @param processEventsFrom the earliest event timestamp to consider
+     * @param subscriptionId the subscription to check ledger entries for
+     * @return the unledgered events, ordered by timestamp
+     */
+    List<StreamEventEntity> findUnledgeredEvents(Instant processEventsFrom, Long subscriptionId) {
+        return StreamEventEntity.<StreamEventEntity>find(
+                "FROM StreamEventEntity e WHERE e.timestamp >= ?1 AND NOT EXISTS ("
+                + "SELECT 1 FROM EventProcessingLedgerEntity l "
+                + "WHERE l.eventId = e.id AND l.subscriptionId = ?2) ORDER BY e.timestamp ASC",
+                processEventsFrom, subscriptionId)
+                .page(0, BATCH_SIZE).list();
     }
 
     /**
