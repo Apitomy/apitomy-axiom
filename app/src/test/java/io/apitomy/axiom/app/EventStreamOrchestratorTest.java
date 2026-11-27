@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -473,5 +474,95 @@ class EventStreamOrchestratorTest {
         long count = QuarkusTransaction.requiringNew().call(() ->
             EventProcessingLedgerEntity.count("subscriptionId", subId));
         assertEquals(0, count, "Disabled subscription should not create ledger entries");
+    }
+
+    // ── findUnledgeredEvents ─────────────────────────────────────────
+
+    private static EventProcessingLedgerEntity newLedgerEntry(UUID eventId, Long subscriptionId) {
+        EventProcessingLedgerEntity entry = new EventProcessingLedgerEntity();
+        entry.eventId = eventId;
+        entry.subscriptionId = subscriptionId;
+        entry.status = EventProcessingLedgerEntity.SKIPPED;
+        entry.createdOn = Instant.now();
+        return entry;
+    }
+
+    private static StreamEventEntity newStreamEvent(Instant timestamp) {
+        StreamEventEntity event = new StreamEventEntity();
+        event.id = UUID.randomUUID();
+        event.sourceEventId = "unledgered-" + event.id;
+        event.source = "github";
+        event.eventSourceId = "test-source";
+        event.type = "issue.created";
+        event.ref = "https://github.com/test/repo/issues/1";
+        event.timestamp = timestamp;
+        event.actor = "{\"login\":\"testuser\"}";
+        event.payload = "{}";
+        event.createdOn = Instant.now();
+        return event;
+    }
+
+    @Test
+    void testFindUnledgeredEventsReturnsOnlyEventsWithoutLedgerEntryForSubscription() {
+        Long subId = insertSubscription("find-unledgered", "type == 'none'", false, "{}");
+        Long otherSubId = insertSubscription("find-unledgered-other", "type == 'none'", false, "{}");
+        Instant base = Instant.parse("2026-01-01T00:00:00Z");
+
+        UUID[] ids = QuarkusTransaction.requiringNew().call(() -> {
+            StreamEventEntity beforeCutoff = newStreamEvent(base.minusSeconds(60));
+            StreamEventEntity ledgered = newStreamEvent(base.plusSeconds(1));
+            StreamEventEntity ledgeredForOther = newStreamEvent(base.plusSeconds(3));
+            StreamEventEntity unledgered = newStreamEvent(base.plusSeconds(2));
+            beforeCutoff.persist();
+            ledgered.persist();
+            ledgeredForOther.persist();
+            unledgered.persist();
+            newLedgerEntry(ledgered.id, subId).persist();
+            newLedgerEntry(ledgeredForOther.id, otherSubId).persist();
+            return new UUID[] {unledgered.id, ledgeredForOther.id};
+        });
+
+        List<UUID> found = QuarkusTransaction.requiringNew().call(() ->
+                orchestrator.findUnledgeredEvents(base, subId).stream().map(e -> e.id).toList());
+
+        assertEquals(List.of(ids[0], ids[1]), found,
+                "Only events at/after the cutoff without a ledger entry for this subscription, "
+                + "oldest first");
+    }
+
+    /**
+     * Regression test for #703. H2 re-runs a {@code NOT IN} subquery for every outer row once
+     * its cached result is invalid: after a concurrent commit to the ledger (the hourly
+     * cleanup) or, deterministically, after a ledger write in the same transaction. With
+     * thousands of ledgered events that is quadratic and exceeded the transaction timeout.
+     */
+    @Test
+    void testFindUnledgeredEventsStaysFastAfterLedgerWriteInSameTransaction() {
+        int eventCount = 4000;
+        Long subId = insertSubscription("find-unledgered-perf", "type == 'none'", false, "{}");
+        Instant base = Instant.parse("2026-01-01T00:00:00Z");
+
+        QuarkusTransaction.requiringNew().run(() -> {
+            for (int i = 0; i < eventCount; i++) {
+                StreamEventEntity event = newStreamEvent(base.plusSeconds(i));
+                event.persist();
+                newLedgerEntry(event.id, subId).persist();
+            }
+        });
+
+        long elapsedMillis = QuarkusTransaction.requiringNew().call(() -> {
+            StreamEventEntity latest = newStreamEvent(base.plusSeconds(eventCount));
+            latest.persist();
+            newLedgerEntry(latest.id, subId).persist();
+            StreamEventEntity.flush();
+
+            long start = System.nanoTime();
+            assertTrue(orchestrator.findUnledgeredEvents(base, subId).isEmpty());
+            return (System.nanoTime() - start) / 1_000_000;
+        });
+
+        assertTrue(elapsedMillis < 1000,
+                "findUnledgeredEvents took " + elapsedMillis + " ms for " + eventCount
+                + " ledgered events");
     }
 }
